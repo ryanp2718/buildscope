@@ -39,7 +39,7 @@ def main():
         print(__doc__)
         return 2
     state, bps_id = sys.argv[1].zfill(2), sys.argv[2]
-    frame = dict(((x["state"], x["bps_id"]), x) for x in S.rd(S.FRAME))
+    frame = {(x["state"], x["bps_id"]): x for x in S.rd(S.FRAME)}
     fr = frame.get((state, bps_id))
     if fr is None:
         print("%s|%s is not in the BPS frame - refusing to invent an office"
@@ -61,18 +61,18 @@ def main():
     for y in sorted(months):
         r = months[y]
         usable = "N" if r["source"] in S.IMPUTED_SOURCES else "Y"
-        added.append(dict(
-            state=state, bps_id=bps_id, place_name=fr["place_name"], yymm=y,
-            survey_date=r["date"], source=r["source"], usable=usable,
-            units=r["units"], u1=r["u1"], u2=r["u2"], u34=r["u34"],
-            u5p=r["u5p"], catalog="", tier=fr.get("bps_tier", ""),
-            rationale="added by step1_oracle_add"))
+        added.append({
+            "state": state, "bps_id": bps_id, "place_name": fr["place_name"], "yymm": y,
+            "survey_date": r["date"], "source": r["source"], "usable": usable,
+            "units": r["units"], "u1": r["u1"], "u2": r["u2"], "u34": r["u34"],
+            "u5p": r["u5p"], "catalog": "", "tier": fr.get("bps_tier", ""),
+            "rationale": "added by step1_oracle_add"})
 
     with io.open(OUT, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, FIELDS)
         w.writeheader()
         for r in existing + added:
-            w.writerow(dict((k, r.get(k, "")) for k in FIELDS))
+            w.writerow({k: r.get(k, "") for k in FIELDS})
 
     ok = sum(1 for r in added if r["usable"] == "Y")
     print("%s  %s|%s" % (fr["place_name"], state, bps_id))

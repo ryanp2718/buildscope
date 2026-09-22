@@ -35,7 +35,7 @@ def live_fields(body, platform):
         return set(d[0].keys()) if d else set()
     if "error" in d:
         raise RuntimeError(json.dumps(d["error"])[:300])
-    names = set(f["name"] for f in d.get("fields", []))
+    names = {f["name"] for f in d.get("fields", [])}
     for f in d.get("features", []):
         names |= set(f.get("attributes", {}).keys())
     return names

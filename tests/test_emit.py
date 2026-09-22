@@ -372,11 +372,11 @@ class TestEmitterAlarm(unittest.TestCase):
     def test_implied_units_tracked_separately_by_column(self):
         path = os.path.join(self.tmp, "cols.jsonl")
         with emit.Emitter(path, "test") as e:
-            for i in range(10):
+            for _i in range(10):
                 r = self._good()
                 r.units(1, "implied_by_structure_code")
                 e.emit(r)
-            for i in range(10):
+            for _i in range(10):
                 e.emit(self._good())
             self.assertEqual(e.by_column["u1"], 20)
             self.assertEqual(e.by_column_implied["u1"], 10)
@@ -384,7 +384,7 @@ class TestEmitterAlarm(unittest.TestCase):
     def test_records_are_on_disk_after_close(self):
         path = os.path.join(self.tmp, "disk.jsonl")
         with emit.Emitter(path, "test") as e:
-            for i in range(5):
+            for _i in range(5):
                 e.emit(self._good())
         with io.open(path, encoding="utf-8") as fh:
             lines = fh.read().strip().splitlines()

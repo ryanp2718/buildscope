@@ -90,15 +90,15 @@ def main():
         # masquerade as rendered markup
         markup = re.sub(rb"(?is)<script.*?</script>", b" ", body)
         low = markup.lower()
-        ui = sorted(set(k for k in SEARCH_UI if k.encode() in low))
-        vend = sorted(set(v for v in VENDORS if v.encode() in body.lower()))
+        ui = sorted({k for k in SEARCH_UI if k.encode() in low})
+        vend = sorted({v for v in VENDORS if v.encode() in body.lower()})
         pdfs = low.count(b".pdf")
         name = "%s_%s_%d.html" % (st, bid, abs(hash(url)) % 10 ** 8)
         if not err:
             io.open(os.path.join(HTML, name), "wb").write(body)
-        res.append(dict(state=st, bps_id=bid, place=place, label=label, url=url,
-                        code=code, bytes=len(body), search_ui=ui, vendors=vend,
-                        pdf_links=pdfs, saved=None if err else name))
+        res.append({"state": st, "bps_id": bid, "place": place, "label": label, "url": url,
+                        "code": code, "bytes": len(body), "search_ui": ui, "vendors": vend,
+                        "pdf_links": pdfs, "saved": None if err else name})
         print("%-22s %-32s %-4s %7db  ui=%-22s vend=%-14s pdf=%d"
               % (place[:22], label[:32], code, len(body),
                  ",".join(ui)[:22] or "-", ",".join(vend)[:14] or "-", pdfs))

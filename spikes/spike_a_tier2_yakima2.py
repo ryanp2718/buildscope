@@ -54,10 +54,10 @@ def run(label, extra, save):
     d["wapato_mentions"] = len(re.findall(r"(?i)\bwapato\b", txt))
     d["record_ids"] = sorted(set(re.findall(r"\b[A-Z]{2,5}[-/]?\d{2,4}[-/]\d{3,6}\b",
                                             txt)))[:8]
-    d["cities_seen"] = sorted(set(
+    d["cities_seen"] = sorted({
         c.upper() for c in re.findall(
             r"(?i)\b(WAPATO|YAKIMA|TOPPENISH|SUNNYSIDE|SELAH|UNION GAP|ZILLAH|"
-            r"GRANDVIEW|MOXEE|TIETON|NACHES|HARRAH|MABTON|GRANGER)\b", txt)))
+            r"GRANDVIEW|MOXEE|TIETON|NACHES|HARRAH|MABTON|GRANGER)\b", txt)})
     print("     wapato=%-3d ids=%s" % (d["wapato_mentions"], ",".join(d["record_ids"][:4])))
     print("     cities in result page: %s" % (", ".join(d["cities_seen"]) or "-"))
     return d

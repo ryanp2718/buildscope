@@ -317,7 +317,7 @@ class TestFailedCallsReachTheLedger(unittest.TestCase):
     def test_a_success_is_marked_and_priced(self):
         c = self.client(_FakeMessage("hello", input_tokens=1000,
                                      output_tokens=200))
-        text, usage, meta = c.message("claude-opus-5", "s", "u", 100,
+        text, _usage, _meta = c.message("claude-opus-5", "s", "u", 100,
                                       "synthesis")
         self.assertEqual(text, "hello")
         row = c.ledger.rows()[0]

@@ -26,6 +26,8 @@ import os
 import sys
 import unittest
 
+from tests import requires_raw_store
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
@@ -157,6 +159,7 @@ class TestSpikeCReproduces(unittest.TestCase):
         return files
 
     def test_corpus_present(self):
+        requires_raw_store(self, "the Spike C reproduction")
         self.assertGreater(len(self.corpus()), 20,
                            "Spike A corpus missing; the published fingerprint "
                            "numbers cannot be reproduced without it")

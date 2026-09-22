@@ -106,8 +106,8 @@ def pull(keys):
             k = (p[C_STATE].strip().zfill(2), p[C_ID].strip())
             if k not in want:
                 continue
-            row = dict(yymm=yymm, date=p[C_DATE].strip(),
-                       source=p[C_SOURCE].strip(), name=p[C_NAME].strip())
+            row = {"yymm": yymm, "date": p[C_DATE].strip(),
+                       "source": p[C_SOURCE].strip(), "name": p[C_NAME].strip()}
             tot = 0
             for lab, i in STRUCT.items():
                 try:
@@ -163,14 +163,14 @@ def main():
                  len(bad), ("imputed: " + ",".join(bad)) if bad else ""))
         for y in sorted(m):
             r = m[y]
-            rows.append(dict(state=s, bps_id=b,
-                             place_name=frame[(s, b)]["place_name"],
-                             yymm=y, survey_date=r["date"], source=r["source"],
-                             usable="Y" if r["source"] not in IMPUTED_SOURCES
+            rows.append({"state": s, "bps_id": b,
+                             "place_name": frame[(s, b)]["place_name"],
+                             "yymm": y, "survey_date": r["date"], "source": r["source"],
+                             "usable": "Y" if r["source"] not in IMPUTED_SOURCES
                              else "N",
-                             units=r["units"], u1=r["u1"], u2=r["u2"],
-                             u34=r["u34"], u5p=r["u5p"], catalog=cat,
-                             tier=tier, rationale=why))
+                             "units": r["units"], "u1": r["u1"], "u2": r["u2"],
+                             "u34": r["u34"], "u5p": r["u5p"], "catalog": cat,
+                             "tier": tier, "rationale": why})
 
     p = os.path.join(OUT, "bps_months.csv")
     with io.open(p, "w", encoding="utf-8", newline="") as f:

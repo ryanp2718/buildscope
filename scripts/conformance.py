@@ -92,7 +92,6 @@ import ast
 import csv
 import io
 import json
-import math
 import os
 import re
 import subprocess
@@ -486,7 +485,7 @@ def run_synth(src_path, page_paths, timeout=300, runner_name="_runner.py"):
     runner = os.path.join(SYNTH, runner_name)
     with io.open(runner, "w", encoding="utf-8") as fh:
         fh.write(RUNNER)
-    cmd = [sys.executable, runner, src_path] + list(page_paths)
+    cmd = [sys.executable, runner, src_path, *list(page_paths)]
     try:
         p = subprocess.run(cmd, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -509,7 +508,7 @@ def validate_scorer(target, rows):
     supposed to move and leave the others alone.
     """
     out = []
-    ident = [dict((role, r.get(col)) for role, col in target.roles.items())
+    ident = [{role: r.get(col) for role, col in target.roles.items()}
              for r in rows]
     s = score(target, rows, ident)
     out.append(("identity -> recall 1.0", s["recall"] == 1.0))
@@ -522,12 +521,12 @@ def validate_scorer(target, rows):
     out.append(("drop 3 records -> recall falls", s2["recall"] < 1.0))
     out.append(("drop 3 records -> precision holds", s2["precision"] == 1.0))
 
-    invented = ident + [dict(ident[0], native_id="ZZZ-NOT-A-PERMIT")]
+    invented = [*ident, dict(ident[0], native_id="ZZZ-NOT-A-PERMIT")]
     s3 = score(target, rows, invented)
     out.append(("invent 1 record -> precision falls", s3["precision"] < 1.0))
     out.append(("invent 1 record -> recall holds", s3["recall"] == 1.0))
 
-    fld = [k for k in target.roles if k != "native_id"][0]
+    fld = next(k for k in target.roles if k != "native_id")
     bent = [dict(r) for r in ident]
     for r in bent[:5]:
         r[fld] = (r.get(fld) or "") + " XX"
@@ -598,7 +597,7 @@ def matrix(targets, args):
             pages = corpus(t)
             if not pages:
                 continue
-            refs = dict((fn, t.reference(read(p))) for fn, p in pages)
+            refs = {fn: t.reference(read(p)) for fn, p in pages}
             win, _, _ = window(read(pages[0][1]), args.synth_window)
             s_usd += infer.estimate(
                 model, infer.tokens(SYNTH_SYSTEM) + infer.tokens(win),
@@ -738,7 +737,7 @@ def main():
                   % (fn, n_in / 1000.0, cap / 1000.0, usd))
         rep = report["targets"][target.key] = {
             "pages": len(pages), "reference_records": total,
-            "plan": dict((k, v) for k, v in pl.items() if k != "direct"),
+            "plan": {k: v for k, v in pl.items() if k != "direct"},
         }
         if args.run:
             run_target(client, target, pages, refs, args, rep)
@@ -771,9 +770,9 @@ def main():
             runs["%s|%s|%s" % (key, arm, model)] = rep[arm]
     out = {"runs": runs, "prices_as_of": infer.PRICES_AS_OF,
            "note": report["note"],
-           "reference": dict((k, {"pages": v["pages"],
-                                  "records": v["reference_records"]})
-                             for k, v in report["targets"].items())}
+           "reference": {k: {"pages": v["pages"],
+                                  "records": v["reference_records"]}
+                             for k, v in report["targets"].items()}}
     out["reference"].update(prior.get("reference", {}))
     with io.open(path, "w", encoding="utf-8") as fh:
         fh.write(json.dumps(out, indent=1, sort_keys=True, default=str))
@@ -800,7 +799,7 @@ def run_variance(client, target, pages, refs, args):
     every page. Anything less is a failure. A strict criterion is the honest
     one when the alternative is partial credit nobody can act on.
     """
-    win, frac, at = window(read(pages[0][1]), args.synth_window)
+    win, _frac, _at = window(read(pages[0][1]), args.synth_window)
     tier = args.synth_model.replace("claude-", "").split("-2")[0]
     prompt = ("Portal page excerpt (one page of the result grid, stripped of "
               "scripts, styles and non-structural attributes):\n\n" + win)
@@ -1113,7 +1112,7 @@ def variance_report():
                if d.get("outcome") != "not_attempted"]
         if not det:
             continue
-        counts = dict((k, 0) for k in ORDER)
+        counts = dict.fromkeys(ORDER, 0)
         for d in det:
             counts[failure_mode(d)] = counts.get(failure_mode(d), 0) + 1
         n = len(det)
@@ -1174,7 +1173,7 @@ def variance_pool(target_key, model=None):
     except ValueError:
         return []
     out = []
-    for key, cell in sorted(cells.items()):
+    for _key, cell in sorted(cells.items()):
         if cell.get("target") != target_key:
             continue
         if model and cell.get("model") != model:
@@ -1260,7 +1259,7 @@ def run_drift(args):
               "draws)" % (len(cands), len(cands) - len(pool), len(pool)))
 
         rows = {}
-        for name, fn in [("clean", lambda x: x)] + MUTATORS:
+        for name, fn in [("clean", lambda x: x), *MUTATORS]:
             muts = drift_pages(target, pages, name, fn)
             lost = sum(faithful(target, refs[f], m)[0] for f, _, _, m in muts)
             tot = sum(faithful(target, refs[f], m)[1] for f, _, _, m in muts)
@@ -1305,9 +1304,10 @@ def run_drift(args):
                 }
             rows[name] = cell
             print("    %-14s %s" % (name, "  ".join(
-                "%s=%s" % (l.split()[-1],
-                           "OK " if cell[l].get("survived") else "BREAK")
-                for l, _ in cands)))
+                "%s=%s" % (name.split()[-1],
+                           "OK " if cell[name].get("survived")
+                           else "BREAK")
+                for name, _ in cands)))
         report[target.key] = {"pages": len(pages), "reference_records": n_ref,
                               "candidates": [c for c, _ in cands],
                               "pool": [c for c, _ in pool],
@@ -1328,8 +1328,8 @@ def _as_rows(target, rows):
     """Adapter output re-keyed into the role names the scorer compares."""
     out = []
     for r in rows:
-        out.append(dict((role, r.get(col))
-                        for role, col in target.roles.items()))
+        out.append({role: r.get(col)
+                        for role, col in target.roles.items()})
     return out
 
 
@@ -1386,7 +1386,7 @@ def summarize_drift(report):
 
 def run_target(client, target, pages, refs, args, rep):
     # ---- arm S ---------------------------------------------------------
-    win, frac, at = window(read(pages[0][1]), args.synth_window)
+    win, frac, _at = window(read(pages[0][1]), args.synth_window)
     tier = args.synth_model.replace("claude-", "").split("-2")[0]
     text, usage, meta = client.message(
         args.synth_model, SYNTH_SYSTEM,

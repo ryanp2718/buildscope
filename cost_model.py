@@ -83,7 +83,8 @@ print('  gate @ fallback=5%%, x2 contingency      : $%.2f' % (gate * 2))
 print()
 print('  SENSITIVITY -- gate cost vs fallback fraction (x2 contingency):')
 for f in (0.02, 0.05, 0.10, 0.25, 0.50, 1.00):
-    base = sum(n * u * (f if 'FALLBACK' in l else 1.0) for l, n, u in items)
+    base = sum(n * u * (f if 'FALLBACK' in label else 1.0)
+               for label, n, u in items)
     flag = 'OVER CAP' if base * 2 > 40 else ''
     print('    fallback %5.0f%% -> $%7.2f  %s' % (f * 100, base * 2, flag))
 print()

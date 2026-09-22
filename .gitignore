@@ -6,8 +6,17 @@
 # raw store is deliberately private: prompts and cached responses carry page
 # content fetched from municipal portals, and ADR-0015 keeps that on the
 # machine that fetched it. `docs/evidence/` publishes the derived numbers;
-# `tests/fixtures/` carries the small redistributable slice the suite needs.
-data/
+# `docs/evidence/` publishes the derived numbers.
+data/*
+data/spike_a/*
+
+# ...with one exception. `classification.csv` is 28 rows of derived public
+# data - office names, FIPS codes, portal buckets, demonstrated verdicts - with
+# no page content in it. Fourteen tests recompute published figures directly
+# from this file, so committing it is what lets a fresh clone verify the
+# coverage arithmetic instead of taking it on trust.
+!data/spike_a/
+!data/spike_a/classification.csv
 
 # Interview prep, resume bullets, self-red-team, pitch. Working notes about
 # the author, not about the project.

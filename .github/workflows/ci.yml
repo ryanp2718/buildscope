@@ -1,0 +1,54 @@
+name: CI
+
+# The suite replays over stored pages and makes no network calls, so this
+# needs no secrets and cannot spend money. What it cannot do is run the ~28
+# tests that read the private raw store; those skip here and run locally.
+# See tests/__init__.py and ADR-0015.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the floor declared in pyproject.toml, 3.13 is what the
+        # project is developed on. Testing both is what makes the floor a
+        # claim rather than a guess.
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Check the docs
+        # The ADR index matches the files on disk, statuses come from the
+        # permitted vocabulary, every relative link inside docs/ resolves, and
+        # every evidence report names a producer and a non-empty
+        # "What this does not establish".
+        run: uv run python scripts/check_docs.py

@@ -44,9 +44,9 @@ def load():
         html = io.open(p, encoding="utf-8", errors="replace").read()
         fp, pset, npaths, nodes = fingerprint(html)
         juris = r["jurisdiction"].replace("accela:", "")
-        pages[fn] = dict(fp=fp, set=pset, paths=npaths, juris=juris,
-                         vendor=r["vendor"], ptype=r["page_type"],
-                         bytes=int(r["bytes"]), imported=r["request_method"] == "IMPORT")
+        pages[fn] = {"fp": fp, "set": pset, "paths": npaths, "juris": juris,
+                         "vendor": r["vendor"], "ptype": r["page_type"],
+                         "bytes": int(r["bytes"]), "imported": r["request_method"] == "IMPORT"}
     return rows, cur, pages
 
 
@@ -154,12 +154,12 @@ def main():
     print("  min=%.3f p25=%.3f median=%.3f p75=%.3f p95=%.3f max=%.3f"
           % (min(c5), q(c5, .25), q(c5, .5), q(c5, .75), q(c5, .95), max(c5)))
 
-    res["controls"] = dict(
-        c1=dict(n=len(c1), min=min(c1) if c1 else None, max=max(c1) if c1 else None),
-        c2=dict(n=len(c2), min=min(c2) if c2 else None, max=max(c2) if c2 else None),
-        c3=dict(n=len(c3), min=min(c3) if c3 else None, max=max(c3) if c3 else None),
-        c4="NOT RUN - no non-Accela index page in corpus",
-        c5=dict(n=len(c5), median=q(c5, .5), p95=q(c5, .95)))
+    res["controls"] = {
+        "c1": {"n": len(c1), "min": min(c1) if c1 else None, "max": max(c1) if c1 else None},
+        "c2": {"n": len(c2), "min": min(c2) if c2 else None, "max": max(c2) if c2 else None},
+        "c3": {"n": len(c3), "min": min(c3) if c3 else None, "max": max(c3) if c3 else None},
+        "c4": "NOT RUN - no non-Accela index page in corpus",
+        "c5": {"n": len(c5), "median": q(c5, .5), "p95": q(c5, .95)}}
 
     # ---------------------------------------------- which baseline is valid
     # C5 was pre-registered to land near median 0.04 / p95 0.08, from Spike C's
@@ -179,9 +179,9 @@ def main():
     print("      pairs are mostly same-vendor pairs and cannot serve as a")
     print("      negative control. Using Spike C's heterogeneous baseline")
     print("      p95=%.3f instead; both are reported." % B_HETERO)
-    res["baseline"] = dict(self_p95=B_SELF, hetero_p95=B_HETERO,
-                           used="spike_c_heterogeneous",
-                           note="C5 as computed here is circular: mono-vendor corpus")
+    res["baseline"] = {"self_p95": B_SELF, "hetero_p95": B_HETERO,
+                           "used": "spike_c_heterogeneous",
+                           "note": "C5 as computed here is circular: mono-vendor corpus"}
 
     # -------------------------------------------- instrument verdict first
     print("\n" + "=" * 78)
@@ -228,15 +228,15 @@ def main():
             print("  BIMODAL: largest gap %.3f at %.3f/%.3f" % (gap, sv[gi], sv[gi + 1]))
             print("    low  mode: n=%-3d %.3f - %.3f" % (len(lo), min(lo), max(lo)))
             print("    high mode: n=%-3d %.3f - %.3f" % (len(hi), min(hi), max(hi)))
-            hi_pairs = sorted(set(
+            hi_pairs = sorted({
                 tuple(sorted((pages[a]["juris"], pages[b]["juris"])))
-                for a, b, j in rr if j >= sv[gi + 1]))
+                for a, b, j in rr if j >= sv[gi + 1]})
             print("    high-mode jurisdiction pairs: %s"
                   % ", ".join("%s~%s" % p for p in hi_pairs))
-            res.setdefault("bimodal", {})[ptype] = dict(
-                gap=gap, low_n=len(lo), low_max=max(lo),
-                high_n=len(hi), high_min=min(hi),
-                high_pairs=["%s~%s" % p for p in hi_pairs])
+            res.setdefault("bimodal", {})[ptype] = {
+                "gap": gap, "low_n": len(lo), "low_max": max(lo),
+                "high_n": len(hi), "high_min": min(hi),
+                "high_pairs": ["%s~%s" % p for p in hi_pairs]}
         if med >= P - 0.10:
             verdict = "COHORT COLLAPSE CONFIRMED"
         elif med > B:
@@ -245,8 +245,8 @@ def main():
             verdict = "NO COLLAPSE EVEN WITHIN VENDOR"
         print("  median=%.3f   positive floor P=%.3f   baseline B=%.3f  ->  %s"
               % (med, P, B, verdict))
-        res["A"][ptype] = dict(n=len(vals), median=med, min=min(vals),
-                               max=max(vals), P=P, B=B, verdict=verdict)
+        res["A"][ptype] = {"n": len(vals), "median": med, "min": min(vals),
+                               "max": max(vals), "P": P, "B": B, "verdict": verdict}
 
     # ----------------------------------------- cohort size (B)
     print("\n" + "=" * 78)
@@ -257,7 +257,7 @@ def main():
     keys = sorted(sea)
     sets = {k: sea[k]["set"] for k in keys}
     print("  tenancies: %d" % len(keys))
-    res["B"] = dict(tenancies=len(keys), thresholds={})
+    res["B"] = {"tenancies": len(keys), "thresholds": {}}
     for t in THRESHOLDS:
         cl = cluster(keys, sets, t)
         sizes = sorted((len(c) for c in cl), reverse=True)
@@ -268,13 +268,13 @@ def main():
                 if len(c) > 1:
                     print("        cohort(%d): %s"
                           % (len(c), ", ".join(sorted(sea[m]["juris"] for m in c))))
-        res["B"]["thresholds"]["%.2f" % t] = dict(
-            clusters=len(cl), mean_size=len(keys) / float(len(cl)),
-            sizes=sizes,
-            members={str(i): sorted(sea[m]["juris"] for m in c)
-                     for i, c in enumerate(cl)})
+        res["B"]["thresholds"]["%.2f" % t] = {
+            "clusters": len(cl), "mean_size": len(keys) / float(len(cl)),
+            "sizes": sizes,
+            "members": {str(i): sorted(sea[m]["juris"] for m in c)
+                     for i, c in enumerate(cl)}}
     # exact fingerprints
-    exact = len(set(sea[k]["fp"] for k in keys))
+    exact = len({sea[k]["fp"] for k in keys})
     print("  exact identical fingerprints: %d distinct over %d tenancies"
           % (exact, len(keys)))
     res["B"]["exact_distinct"] = exact

@@ -25,6 +25,8 @@ import subprocess
 import sys
 import unittest
 
+from tests import requires_raw_store
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
@@ -57,7 +59,7 @@ def script(name, *args):
             break
     else:
         raise AssertionError("no such script: %s" % name)
-    return subprocess.run([sys.executable, path] + list(args),
+    return subprocess.run([sys.executable, path, *list(args)],
                           capture_output=True, text=True, cwd=ROOT)
 
 
@@ -91,8 +93,13 @@ class TestClassificationShape(unittest.TestCase):
     def test_identity_matches_the_frame(self):
         """ADR-0007. The name is not the identity and must never be joined on,
         but as a redundant field it is the only thing that makes the identity
-        falsifiable - which is how 7 silently-substituted offices were found."""
-        frame = dict(((r["state"], r["bps_id"]), r) for r in rows(FRAME))
+        falsifiable - which is how 7 silently-substituted offices were found.
+
+        The classification table is published and the 20,069-row Census frame
+        it joins against is not, so this one cross-check is the only test in
+        the class that a fresh clone cannot run."""
+        requires_raw_store(self, "the identity cross-check against the frame")
+        frame = {(r["state"], r["bps_id"]): r for r in rows(FRAME)}
         for r in self.rows:
             key = (r["state"], r["bps_id"])
             with self.subTest(office=r["place_name"]):
@@ -201,11 +208,12 @@ class TestCaptureInvariant(unittest.TestCase):
                 yield t, man, os.path.join(DATA, t, "pages")
 
     def test_at_least_one_tree_exists(self):
+        requires_raw_store(self, "the capture-invariant check")
         self.assertTrue(list(self.trees()), "no capture trees on disk")
 
     def test_no_page_without_a_manifest_row(self):
         for t, man, pages in self.trees():
-            named = set(r["file"] for r in rows(man) if r.get("file"))
+            named = {r["file"] for r in rows(man) if r.get("file")}
             disk = set(os.listdir(pages)) if os.path.isdir(pages) else set()
             with self.subTest(tree=t):
                 self.assertEqual(
@@ -216,7 +224,7 @@ class TestCaptureInvariant(unittest.TestCase):
 
     def test_no_manifest_row_naming_a_missing_page(self):
         for t, man, pages in self.trees():
-            named = set(r["file"] for r in rows(man) if r.get("file"))
+            named = {r["file"] for r in rows(man) if r.get("file")}
             disk = set(os.listdir(pages)) if os.path.isdir(pages) else set()
             with self.subTest(tree=t):
                 self.assertEqual(sorted(named - disk), [])
@@ -261,6 +269,7 @@ class TestRecordStore(unittest.TestCase):
                 if f.endswith(".jsonl")]
 
     def test_records_exist(self):
+        requires_raw_store(self, "the record-store check")
         self.assertTrue(self.jsonl(), "no step-1 record files")
 
     def test_every_record_is_wellformed_and_identified(self):

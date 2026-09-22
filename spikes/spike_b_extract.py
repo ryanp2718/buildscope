@@ -56,39 +56,39 @@ MONTHS = [("2601", "2026-01-01", "2026-02-01"),
 AUSTIN_CLASSES = ("R- 101", "R- 102", "R- 103", "R- 104", "C- 105", "R- 105")
 
 JOBS = [
-    dict(key="austin", state="48", bps_id="033000", label="Austin TX",
-         platform="socrata",
-         base="https://data.austintexas.gov/resource/3syk-w9eu.json",
-         date="issue_date", units="housing_units",
-         where="permittype='BP' AND work_class='New' AND (" + " OR ".join(
+    {"key": "austin", "state": "48", "bps_id": "033000", "label": "Austin TX",
+         "platform": "socrata",
+         "base": "https://data.austintexas.gov/resource/3syk-w9eu.json",
+         "date": "issue_date", "units": "housing_units",
+         "where": "permittype='BP' AND work_class='New' AND (" + " OR ".join(
              "starts_with(permit_class,'%s')" % c for c in AUSTIN_CLASSES) + ")",
-         group="permit_class"),
-    dict(key="seattle", state="53", bps_id="475000", label="Seattle WA",
-         platform="socrata",
-         base="https://data.seattle.gov/resource/8tqq-u7ib.json",
-         date="issueddate", units="housingunits",
-         where="permitclassmapped='Residential' AND permittypedesc='New'",
-         group=None),
-    dict(key="charlotte", state="37", bps_id="379000",
-         label="Mecklenburg County NC", platform="arcgis",
-         base="https://meckgis.mecklenburgcountync.gov/server/rest/services/"
+         "group": "permit_class"},
+    {"key": "seattle", "state": "53", "bps_id": "475000", "label": "Seattle WA",
+         "platform": "socrata",
+         "base": "https://data.seattle.gov/resource/8tqq-u7ib.json",
+         "date": "issueddate", "units": "housingunits",
+         "where": "permitclassmapped='Residential' AND permittypedesc='New'",
+         "group": None},
+    {"key": "charlotte", "state": "37", "bps_id": "379000",
+         "label": "Mecklenburg County NC", "platform": "arcgis",
+         "base": "https://meckgis.mecklenburgcountync.gov/server/rest/services/"
               "BuildingPermits/FeatureServer/0",
-         date="issuedate", units="numunits",
-         where="worktype='New' AND numunits>0", group="permittype"),
-    dict(key="columbus", state="39", bps_id="135700", label="Columbus OH",
-         platform="arcgis",
-         base="https://services1.arcgis.com/9yy6msODkIBzkUXU/arcgis/rest/"
+         "date": "issuedate", "units": "numunits",
+         "where": "worktype='New' AND numunits>0", "group": "permittype"},
+    {"key": "columbus", "state": "39", "bps_id": "135700", "label": "Columbus OH",
+         "platform": "arcgis",
+         "base": "https://services1.arcgis.com/9yy6msODkIBzkUXU/arcgis/rest/"
               "services/Building_Permits/FeatureServer/0",
-         date="ISSUED_DT", units="UNITS",
-         where="GENERAL_TYPE IN ('1,2,3 Family - New Structure',"
-               "'Multi Family - New Structure')", group="GENERAL_TYPE"),
-    dict(key="nashville", state="47", bps_id="605000",
-         label="Nashville-Davidson TN", platform="arcgis",
-         base="https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/"
+         "date": "ISSUED_DT", "units": "UNITS",
+         "where": "GENERAL_TYPE IN ('1,2,3 Family - New Structure',"
+               "'Multi Family - New Structure')", "group": "GENERAL_TYPE"},
+    {"key": "nashville", "state": "47", "bps_id": "605000",
+         "label": "Nashville-Davidson TN", "platform": "arcgis",
+         "base": "https://services2.arcgis.com/HdTo6HJqh92wn4D8/arcgis/rest/"
               "services/Building_Permits_Issued_2/FeatureServer/0",
-         date="Date_Issued", units=None,
-         where="Permit_Type_Description='Building Residential - New'",
-         group="Permit_Subtype_Description"),
+         "date": "Date_Issued", "units": None,
+         "where": "Permit_Type_Description='Building Residential - New'",
+         "group": "Permit_Subtype_Description"},
 ]
 
 
@@ -133,7 +133,7 @@ def parse(html, platform, group):
         if u:
             units += u
         if group:
-            split[str(r.get(group, ""))[:44]] = dict(n=c, units=u)
+            split[str(r.get(group, ""))[:44]] = {"n": c, "units": u}
     return n, units, split
 
 
@@ -144,21 +144,21 @@ def main():
     print("SPIKE B - new residential units by month\n")
     for job in JOBS:
         print("\n%s  [%s]" % (job["label"], job["platform"]))
-        out[job["key"]] = dict(label=job["label"], state=job["state"],
-                               bps_id=job["bps_id"], months={},
-                               units_field=job["units"], rule=job["where"])
+        out[job["key"]] = {"label": job["label"], "state": job["state"],
+                               "bps_id": job["bps_id"], "months": {},
+                               "units_field": job["units"], "rule": job["where"]}
         for yymm, lo, hi in MONTHS:
             url = (soc(job, lo, hi) if job["platform"] == "socrata"
                    else arc(job, lo, hi))
             html, row = mf.fetch(op, url, "ex_%s_%s" % (job["key"], yymm),
                                  job["key"], job["platform"], "API-DATA")
             if html is None or row["verdict"] != "ok":
-                out[job["key"]]["months"][yymm] = dict(
-                    error=row["verdict_reason"] if row else "no response")
+                out[job["key"]]["months"][yymm] = {
+                    "error": row["verdict_reason"] if row else "no response"}
                 continue
             n, units, split = parse(html, job["platform"], job["group"])
-            out[job["key"]]["months"][yymm] = dict(permits=n, units=units,
-                                                   split=split)
+            out[job["key"]]["months"][yymm] = {"permits": n, "units": units,
+                                                   "split": split}
             print("    %s  permits=%-6d units=%s" %
                   (yymm, n, units if job["units"] else "n/a (no unit field)"))
 

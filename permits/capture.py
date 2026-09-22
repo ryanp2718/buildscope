@@ -142,7 +142,7 @@ def verify(page_type, html, status):
         except Exception:                                   # noqa: BLE001
             grids = []
         if grids:
-            tid, wide, dated = max(grids, key=lambda g: len(g[2]))
+            tid, _wide, dated = max(grids, key=lambda g: len(g[2]))
             return "ok", "result grid %s, %d dated rows" % (tid[:40], len(dated))
         return "rejected", "no rendered result list"
     if page_type in ("API-CATALOG", "API-DATA"):
@@ -190,7 +190,7 @@ def _opener():
 def robots_ok(url, op):
     """Read robots.txt once per host. Recorded per page, never silently."""
     host = urllib.parse.urlsplit(url)[:2]
-    key = urllib.parse.urlunsplit(host + ("", "", ""))
+    key = urllib.parse.urlunsplit((*host, "", "", ""))
     if key in _robots:
         return _robots[key]
     try:
@@ -298,12 +298,12 @@ def fetch(op, url, name, jurisdiction, vendor, page_type, data=None,
 
 def _row(url, final, status, ctype, nbytes, sha, juris, vendor, ptype,
          verdict, reason, method, rob, fn, mark=""):
-    return dict(fetched_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                url=url, final_url=final, http_status=status or "",
-                content_type=ctype, bytes=nbytes, sha256=sha,
-                jurisdiction=juris, vendor=vendor, page_type=ptype,
-                verdict=verdict, verdict_reason=reason, request_method=method,
-                robots_ok=rob, file=fn, fp=mark)
+    return {"fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "url": url, "final_url": final, "http_status": status or "",
+                "content_type": ctype, "bytes": nbytes, "sha256": sha,
+                "jurisdiction": juris, "vendor": vendor, "page_type": ptype,
+                "verdict": verdict, "verdict_reason": reason, "request_method": method,
+                "robots_ok": rob, "file": fn, "fp": mark}
 
 
 def _migrate(path):
@@ -335,7 +335,7 @@ def _migrate(path):
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         for r in rows:
-            w.writerow(dict((k, r.get(k, "")) for k in FIELDS))
+            w.writerow({k: r.get(k, "") for k in FIELDS})
     print("  manifest migrated: %s gained %s"
           % (os.path.basename(path), ", ".join(c for c in FIELDS
                                                if c not in have)))

@@ -129,8 +129,6 @@ def asserted(text, start, end):
     return not MARKERS.search(_paragraph(text, start, end))
 
 
-
-
 def check_spend():
     total, n = ledger_total()
     if total is None:
@@ -155,10 +153,9 @@ def check_tests():
     n = test_count()
     if n is None:
         return
-    targets = internal_files() + [
-        os.path.join(ROOT, "DESIGN.md"),
-        os.path.join(ROOT, "docs", "design", "testing.md"),
-    ]
+    targets = [*internal_files(),
+               os.path.join(ROOT, "DESIGN.md"),
+               os.path.join(ROOT, "docs", "design", "testing.md")]
     for path in targets:
         if not os.path.exists(path):
             continue
@@ -190,12 +187,21 @@ def check_records():
 
 # Figures formally withdrawn. Discussing one is fine and expected; asserting
 # one is the error. `asserted()` draws that line.
+#
+# The multiplication signs and en dashes below are deliberate and must
+# not be normalized to ASCII: these patterns match how the figures were
+# actually typed in the documents, and the documents use the
+# typographic characters.
 WITHDRAWN = [
-    (r"\b340\s*[x×]", "340x cost reduction (invented, never measured)"),
-    (r"\b20\s*[-–]\s*60\s*[x×]", "20-60x amortization (withdrawn by Spike C)"),
+    (r"\b340\s*[x×]",  # noqa: RUF001
+     "340x cost reduction (invented, never measured)"),
+    (r"\b20\s*[-–]\s*60\s*[x×]",  # noqa: RUF001
+     "20-60x amortization (withdrawn by Spike C)"),
     (r"\b28\.5%\s+enumerable", "28.5% enumerable (superseded by St. Johns)"),
     (r"floor is 39\.2%", "39.2% fallback floor (superseded)"),
 ]
+
+
 def check_withdrawn():
     for path in internal_files():
         text = read(path)
@@ -207,8 +213,12 @@ def check_withdrawn():
 
 
 def main():
-    if not os.path.isdir(INTERNAL):
-        sys.stdout.write("no INTERNAL/ directory; nothing to check\n")
+    if not internal_files():
+        sys.stdout.write(
+            "INTERNAL check skipped: no INTERNAL/*.md in this checkout. "
+            "Those are working notes about the author rather than about the "
+            "project and are not published, so there is nothing here to "
+            "cross-check against the ledger.\n")
         return 0
     check_spend()
     check_tests()

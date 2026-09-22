@@ -107,9 +107,9 @@ def main():
                 drop = "degenerate: %d unique paths" % len(pset)
             else:
                 kept += 1
-            rows.append(dict(file=name, dir=os.path.basename(d), state=st or "",
-                             title=title[:70], paths=len(pset),
-                             keep="" if drop else "Y", drop_reason=drop or ""))
+            rows.append({"file": name, "dir": os.path.basename(d), "state": st or "",
+                             "title": title[:70], "paths": len(pset),
+                             "keep": "" if drop else "Y", "drop_reason": drop or ""})
 
     with io.open(MANIFEST, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["file", "dir", "state", "title",
@@ -131,7 +131,7 @@ def main():
     for k, v in sorted(reasons.items(), key=lambda kv: -kv[1]):
         print("    %-50s %3d" % (k, v))
     print("\n  KEPT JURISDICTIONS: %d"
-          % len(set(r["state"] for r in rows if r["keep"])))
+          % len({r["state"] for r in rows if r["keep"]}))
     print("\n  examples of what was dropped as not-a-municipal-site:")
     for r in rows:
         if "REJECTED" in r["drop_reason"] and r["title"]:

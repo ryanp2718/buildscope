@@ -65,7 +65,7 @@ class TestDrawIsInTheKeyAndNotTheRequest(unittest.TestCase):
     def test_the_draw_index_never_reaches_the_wire(self):
         """It is a label on a sample, not part of the question asked."""
         import json
-        for d in (0, 1, 7):
+        for _d in (0, 1, 7):
             self.assertNotIn("draw", json.dumps(
                 self.c.build("claude-opus-5", "s", "u", 8000)))
 

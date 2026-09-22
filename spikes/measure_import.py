@@ -62,17 +62,17 @@ def main():
         dst = "imported_" + src
         io.open(os.path.join(mf.PAGES, dst), "w", encoding="utf-8",
                 newline="").write(html)
-        mf._write(dict(
-            fetched_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            url="file://data/spike_a/html/" + src,
-            final_url="file://data/spike_a/html/" + src,
-            http_status=200, content_type="text/html", bytes=len(raw),
-            sha256=hashlib.sha256(raw).hexdigest(), jurisdiction=juris,
-            vendor=vendor, page_type=ptype, verdict=verdict,
-            verdict_reason=("IMPORTED from Spike A; verdict assigned at import "
+        mf._write({
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "url": "file://data/spike_a/html/" + src,
+            "final_url": "file://data/spike_a/html/" + src,
+            "http_status": 200, "content_type": "text/html", "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(), "jurisdiction": juris,
+            "vendor": vendor, "page_type": ptype, "verdict": verdict,
+            "verdict_reason": ("IMPORTED from Spike A; verdict assigned at import "
                             "from stored bytes, not at capture. %s. %s"
                             % (why, reason)),
-            request_method="IMPORT", robots_ok=True, file=dst))
+            "request_method": "IMPORT", "robots_ok": True, "file": dst})
         print("  %-9s %-44s %-9s %s" % (verdict.upper(), src, ptype, why))
         n += 1
     print("\nimported %d pages, 0 HTTP requests" % n)

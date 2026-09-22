@@ -15,9 +15,9 @@ first and the only one meant to be read front to back.
 
 ## The three-way split, and why it is not the usual two
 
-The conventional split is ADRs for decisions and design docs for mechanism. That is
-[crosstick](../../crosstick/docs)'s structure and it is sound; this project keeps it. What crosstick
-does not need and this project cannot do without is a home for **measured numbers**.
+The conventional split is ADRs for decisions and design docs for mechanism. That is sound and this
+project keeps it. What that split does not provide, and this project cannot do without, is a home for
+**measured numbers**.
 
 Nearly every load-bearing claim here is empirical - `16.63% of national authorized units`,
 `0.90% of offices`, `443 publisher names adjudicated`, `$9.36 to reach the decision gate`. Each is the

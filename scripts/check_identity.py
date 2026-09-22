@@ -129,6 +129,18 @@ def scan_json(path, frame):
 
 
 def main():
+    if not os.path.exists(FRAME):
+        # Every office identity in this project is a key into the Census
+        # frame, and the frame is part of the unpublished raw store. Without
+        # it there is no oracle, so there is nothing to check and nothing to
+        # complain about - a checker that tracebacks on a missing input is
+        # reporting its own bug, not a finding.
+        sys.stdout.write(
+            "identity check skipped: %s is not in this checkout. The raw "
+            "store is not published (ADR-0015), so there is no frame to "
+            "resolve office identities against.\n"
+            % os.path.relpath(FRAME, ROOT).replace("\\", "/"))
+        return 0
     frame = load_frame()
     reg = load_corrections()
     failures, known, scanned = [], [], 0
@@ -152,7 +164,7 @@ def main():
     print("identity check: %d artifacts scanned, %d frame offices" %
           (scanned, len(frame)))
     if known:
-        arts = len(set(k[0] for k in known))
+        arts = len({k[0] for k in known})
         coll = sum(1 for k in known if k[4].startswith("frame says"))
         print("  %d registered corrections across %d artifacts "
               "(%d of them silent collisions with a real office)"
@@ -161,7 +173,7 @@ def main():
         print("  no unregistered identity mismatches")
         return 0
     print("\n%d UNREGISTERED identity mismatches:" % len(failures))
-    for rel, key, name, where, why in failures:
+    for rel, key, name, _where, why in failures:
         print("  %-42s %-11s %-34s %s" % (rel, key, (name or "-")[:34], why))
     print("\nEither the key is wrong, or the name is. Fix the artifact if it "
           "is live;\nregister it in data/corrections.csv if it is a dated "

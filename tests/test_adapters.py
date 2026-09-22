@@ -32,6 +32,8 @@ import os
 import sys
 import unittest
 
+from tests import requires_raw_store
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
@@ -85,7 +87,7 @@ class TestStJohnsIndex(unittest.TestCase):
         total = 0
         for f in self.files:
             with io.open(f, encoding="utf-8", errors="replace") as fh:
-                rows, trunc = stjohns.parse_index(fh.read())
+                rows, _trunc = stjohns.parse_index(fh.read())
             with self.subTest(page=os.path.basename(f)):
                 self.assertIsInstance(rows, list)
                 total += len(rows)
@@ -300,7 +302,15 @@ class TestGoldenCorpus(unittest.TestCase):
     an absent raw store is a different problem from a broken adapter. But a
     suite of skips reports `OK`, so the absence has to be asserted somewhere,
     once, loudly. This is that place.
+
+    The distinction that makes this work on a fresh clone: **no raw store at
+    all** is a skip, because there is nothing to be loud about and the pages
+    are deliberately not published. **A raw store that exists but has lost
+    these pages** is a failure, because that is a capture that went missing.
     """
+
+    def setUp(self):
+        requires_raw_store(self, "the golden-corpus presence check")
 
     def test_raw_store_present(self):
         self.assertTrue(os.path.isdir(PAGES),

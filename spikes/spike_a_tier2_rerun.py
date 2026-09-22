@@ -46,61 +46,61 @@ PORTAL_HINT = ("permit search", "search permits", "permit lookup", "permit statu
 
 # key -> researched issuing authority for that BPS place
 ISSUER = {
-    ("53", "573000"): dict(
-        place="Wapato, WA", issuer="City of Wapato",
-        level="place", basis="Incorporated city; wapato-city.org carries its own "
+    ("53", "573000"): {
+        "place": "Wapato, WA", "issuer": "City of Wapato",
+        "level": "place", "basis": "Incorporated city; wapato-city.org carries its own "
         "licenses/permits page. Yakima County Building and Fire Safety covers the "
         "UNINCORPORATED county only.",
-        urls=["https://wapato-city.org/business/licenses_and_permits.php",
+        "urls": ["https://wapato-city.org/business/licenses_and_permits.php",
               "https://wapato-city.org/departments/city_hall.php",
-              "https://www.yakimacounty.us/1181/Building"]),
-    ("55", "007500"): dict(
-        place="Ahnapee town, WI", issuer="Kewaunee County / town zoning administrator",
-        level="county+contract", basis="Town has a named zoning administrator "
+              "https://www.yakimacounty.us/1181/Building"]},
+    ("55", "007500"): {
+        "place": "Ahnapee town, WI", "issuer": "Kewaunee County / town zoning administrator",
+        "level": "county+contract", "basis": "Town has a named zoning administrator "
         "(an individual). Kewaunee County Land and Water Conservation issues zoning "
         "and sanitary permits. WI UDC 1-2 family permits run through a certified "
         "inspection agency.",
-        urls=["https://townofahnapee.org/",
+        "urls": ["https://townofahnapee.org/",
               "https://www.kewauneeco.org/departments/land-water-conservation/zoning/forms_and_documents/",
-              "https://www.kewauneeco.org/"]),
-    ("31", "064000"): dict(
-        place="Brownville village, NE", issuer="Village of Brownville",
-        level="place", basis="Village Hall issues. Nemaha County has no building "
+              "https://www.kewauneeco.org/"]},
+    ("31", "064000"): {
+        "place": "Brownville village, NE", "issuer": "Village of Brownville",
+        "level": "place", "basis": "Village Hall issues. Nemaha County has no building "
         "department; Nebraska counties are not required to adopt building codes.",
-        urls=["https://nemahacountyne.gov/"]),
-    ("02", "329000"): dict(
-        place="Kotzebue, AK", issuer="City of Kotzebue",
-        level="place", basis="Northwest Arctic Borough Title 9 land use permits "
+        "urls": ["https://nemahacountyne.gov/"]},
+    ("02", "329000"): {
+        "place": "Kotzebue, AK", "issuer": "City of Kotzebue",
+        "level": "place", "basis": "Northwest Arctic Borough Title 9 land use permits "
         "EXPLICITLY EXCLUDE the City of Kotzebue, so the borough is not an "
         "alternative issuing level here.",
-        urls=["https://www.nwabor.org/departments/planning/title-9-permits/"]),
-    ("08", "251000"): dict(
-        place="Garden City town, CO", issuer="Town of Garden City",
-        level="place", basis="Town Hall issues its own. Weld County Building "
+        "urls": ["https://www.nwabor.org/departments/planning/title-9-permits/"]},
+    ("08", "251000"): {
+        "place": "Garden City town, CO", "issuer": "Town of Garden City",
+        "level": "place", "basis": "Town Hall issues its own. Weld County Building "
         "serves the unincorporated county.",
-        urls=["https://www.townofgardencity.com/building-permits",
-              "https://www.weld.gov/Live-Work/Property/Permits-Records"]),
-    ("23", "139000"): dict(
-        place="Eastbrook town, ME", issuer="Town of Eastbrook (likely none)",
-        level="none", basis="Pop 416. MUBEC adoption/enforcement is mandatory only "
+        "urls": ["https://www.townofgardencity.com/building-permits",
+              "https://www.weld.gov/Live-Work/Property/Permits-Records"]},
+    ("23", "139000"): {
+        "place": "Eastbrook town, ME", "issuer": "Town of Eastbrook (likely none)",
+        "level": "none", "basis": "Pop 416. MUBEC adoption/enforcement is mandatory only "
         "at 4,000+; roughly 370 of Maine's 488 municipalities are under that and "
         "are not required to enforce codes or issue building permits at all.",
-        urls=["https://www.maine.gov/dps/fmo/building-codes"]),
-    ("06", "009000"): dict(
-        place="Amador City, CA", issuer="Amador City, inspection contracted to WGA Inc",
-        level="place+contract", basis="Amador City is incorporated and runs its own "
+        "urls": ["https://www.maine.gov/dps/fmo/building-codes"]},
+    ("06", "009000"): {
+        "place": "Amador City, CA", "issuer": "Amador City, inspection contracted to WGA Inc",
+        "level": "place+contract", "basis": "Amador City is incorporated and runs its own "
         "building office 9 hrs/week; the inspector's address is l.white@wgainc.net, "
         "a private firm. Amador County's portal serves the UNINCORPORATED county, "
         "so it does not cover Amador City.",
-        urls=["https://www.amadorcounty.gov/departments/building",
-              "https://wgainc.net/"]),
-    ("36", "203500"): dict(
-        place="Dresden village, NY", issuer="Town of Torrey code enforcement",
-        level="parent_town", basis="Village of Dresden sits in the Town of Torrey; "
+        "urls": ["https://www.amadorcounty.gov/departments/building",
+              "https://wgainc.net/"]},
+    ("36", "203500"): {
+        "place": "Dresden village, NY", "issuer": "Town of Torrey code enforcement",
+        "level": "parent_town", "basis": "Village of Dresden sits in the Town of Torrey; "
         "the Town Code Enforcement Officer issues building permits for it. This is "
         "a genuine level shift from the first pass.",
-        urls=["https://www.townoftorrey.org/building-planning-zoning.php",
-              "https://www.yatescountyny.gov/489/Towns-Villages-Resource-Directory"]),
+        "urls": ["https://www.townoftorrey.org/building-planning-zoning.php",
+              "https://www.yatescountyny.gov/489/Towns-Villages-Resource-Directory"]},
 }
 
 
@@ -129,22 +129,22 @@ def main():
         os.makedirs(HTML)
     results = []
     for (st, bid), spec in sorted(ISSUER.items()):
-        rec = dict(state=st, bps_id=bid, place=spec["place"], issuer=spec["issuer"],
-                   level=spec["level"], basis=spec["basis"], probes=[])
+        rec = {"state": st, "bps_id": bid, "place": spec["place"], "issuer": spec["issuer"],
+                   "level": spec["level"], "basis": spec["basis"], "probes": []}
         print("\n=== %s  ->  %s [%s]" % (spec["place"], spec["issuer"], spec["level"]))
         for u in spec["urls"]:
             code, final, body = fetch(u)
             low = body.lower()
-            vend = sorted(set(v for k, v in VENDOR.items() if k.encode() in low))
-            hints = sorted(set(h for h in PORTAL_HINT if h.encode() in low))
+            vend = sorted({v for k, v in VENDOR.items() if k.encode() in low})
+            hints = sorted({h for h in PORTAL_HINT if h.encode() in low})
             npdf = low.count(b".pdf")
             err = body[:4] == b"ERR:"
             name = "%s_%s_%d.html" % (st, bid, abs(hash(u)) % 10 ** 8)
             if not err:
                 io.open(os.path.join(HTML, name), "wb").write(body)
-            rec["probes"].append(dict(
-                url=u, code=code, final=final, bytes=len(body), vendors=vend,
-                portal_hints=hints, pdf_links=npdf, saved=None if err else name))
+            rec["probes"].append({
+                "url": u, "code": code, "final": final, "bytes": len(body), "vendors": vend,
+                "portal_hints": hints, "pdf_links": npdf, "saved": None if err else name})
             print("  %-4s %7d b  vend=%-26s hints=%-2d pdf=%-3d  %s"
                   % (code, len(body), ",".join(vend) or "-", len(hints), npdf, u[:58]))
             if err:

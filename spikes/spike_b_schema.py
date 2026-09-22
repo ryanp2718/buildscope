@@ -123,10 +123,10 @@ def main():
         print("  fields: %d" % len(fields))
         for k in ("unit", "worktype", "date"):
             print("    %-9s %s" % (k, ", ".join(hits[k][:9]) or "NONE FOUND"))
-        schema[key] = dict(label=label, platform=plat, url=url,
-                           fields=fields, hints=hits,
-                           sample={k: str(v)[:60] for k, v in
-                                   list(sample.items())[:40]})
+        schema[key] = {"label": label, "platform": plat, "url": url,
+                           "fields": fields, "hints": hits,
+                           "sample": {k: str(v)[:60] for k, v in
+                                   list(sample.items())[:40]}}
 
     p = os.path.join(mf.OUT, "schema.json")
     with open(p, "w", encoding="utf-8") as f:

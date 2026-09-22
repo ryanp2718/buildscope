@@ -137,12 +137,12 @@ def main():
                                              x["key_as_recorded"])):
             w.writerow(c)
 
-    n_col = len(set(c["key_as_recorded"] for c in live if c["collides_with"]))
+    n_col = len({c["key_as_recorded"] for c in live if c["collides_with"]})
     print("portals.csv: %d rows, %d ids corrected"
           % (len(fixed), sum(1 for r in fixed if r["bps_id_as_recorded"])))
     print("corrections.csv: %d registered instances across %d artifacts, "
           "%d of which silently named a different real office"
-          % (len(live), len(set(c["artifact"] for c in live)), n_col))
+          % (len(live), len({c["artifact"] for c in live}), n_col))
     return 0
 
 

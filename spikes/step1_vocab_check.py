@@ -31,17 +31,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # carries BP/EP/MP/PP together, which is what produced the 4x overcount, and it
 # must classify per record.
 FIELDS = {
-    "austin": dict(structure=("permit_class",), work=("work_class",),
-                   kind=("permittype",), default_kind=None),
-    "charlotte": dict(structure=("permittype",), work=("worktype",),
-                      kind=("permittype",), default_kind="BUILDING"),
-    "columbus": dict(structure=("GENERAL_TYPE", "B1_PER_TYPE"),
-                     work=("GENERAL_TYPE",), kind=("B1_PER_TYPE",),
-                     default_kind="BUILDING"),
-    "nashville": dict(structure=("Permit_Type_Description",),
-                      work=("Permit_Type_Description",),
-                      kind=("Permit_Type_Description",),
-                      default_kind="BUILDING"),
+    "austin": {"structure": ("permit_class",), "work": ("work_class",),
+                   "kind": ("permittype",), "default_kind": None},
+    "charlotte": {"structure": ("permittype",), "work": ("worktype",),
+                      "kind": ("permittype",), "default_kind": "BUILDING"},
+    "columbus": {"structure": ("GENERAL_TYPE", "B1_PER_TYPE"),
+                     "work": ("GENERAL_TYPE",), "kind": ("B1_PER_TYPE",),
+                     "default_kind": "BUILDING"},
+    "nashville": {"structure": ("Permit_Type_Description",),
+                      "work": ("Permit_Type_Description",),
+                      "kind": ("Permit_Type_Description",),
+                      "default_kind": "BUILDING"},
 }
 
 # Spike B's hand-enumerated Austin prefixes, kept only so the omission can be

@@ -44,7 +44,7 @@ NUM_TOK = {"permitno", "permitnum", "permitnumber", "caseno", "casenumber",
 
 
 def tokens(name):
-    return set(t.lower() for t in SPLIT.split(name) if t)
+    return {t.lower() for t in SPLIT.split(name) if t}
 
 
 def classify(names):

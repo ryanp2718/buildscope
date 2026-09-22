@@ -234,7 +234,7 @@ def parse_index(html):
     """
     hs = headers(html)
     if hs and len(hs) >= len(EXPECT_HEADERS):
-        for want, got in zip(EXPECT_HEADERS, hs):
+        for want, got in zip(EXPECT_HEADERS, hs, strict=False):
             if want not in got:
                 raise ValueError(
                     "St. Johns grid column order changed: expected %r, got %r"
@@ -244,7 +244,7 @@ def parse_index(html):
         cells = [_text(c) for c in CELL.findall(frag)]
         if len(cells) < len(COLUMNS):
             continue
-        d = dict(zip(COLUMNS, cells))
+        d = dict(zip(COLUMNS, cells, strict=False))
         m = PERMIT.search(frag)
         if m:
             d["number"] = _text(m.group(1))

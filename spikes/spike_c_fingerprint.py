@@ -25,14 +25,12 @@ point:
 Offline. No fetching. Stdlib only.
 """
 import csv
-import hashlib
 import io
 import json
 import os
 import re
 import sys
 from collections import Counter, defaultdict
-from html.parser import HTMLParser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -53,7 +51,7 @@ OUT = os.path.join(SPIKE, "spike_c_fingerprints.json")
 # unpack positionally.
 # ---------------------------------------------------------------------------
 from permits.fingerprint import (                       # noqa: E402
-    Skeleton, cluster, jaccard, raw as fingerprint, OPAQUE, THRESHOLDS, VOID)
+    cluster, raw as fingerprint, THRESHOLDS)
 
 # Page-type classification stays here. It is a Spike C question about what a
 # saved page *is*, not a property of the fingerprint, and lifting it alongside
@@ -130,7 +128,7 @@ def report(title, items, fps, sets, note=""):
     if note:
         print(note)
     print("=" * 78)
-    jur = sorted(set(i["juris"] for i in items))
+    jur = sorted({i["juris"] for i in items})
     if not jur:
         print("  (empty corpus)")
         return {}
@@ -142,7 +140,7 @@ def report(title, items, fps, sets, note=""):
         if j not in pick or i["paths"] > pick[j]["paths"]:
             pick[j] = i
     keys = sorted(pick)
-    exact = set(pick[k]["fp"] for k in keys)
+    exact = {pick[k]["fp"] for k in keys}
     print("  jurisdictions=%d  pages=%d  distinct EXACT fingerprints=%d"
           % (len(keys), len(items), len(exact)))
     print("  EXACT fingerprints / jurisdictions = %.2f" % (len(exact) / float(len(keys))))
@@ -184,7 +182,7 @@ def vendor_crosstab(items):
     for v, rows in sorted(by_v.items(), key=lambda kv: -len(kv[1])):
         if len(rows) < 2:
             continue
-        fps = set(r["fp"] for r in rows)
+        fps = {r["fp"] for r in rows}
         keys = [r["juris"] for r in rows]
         sm = {r["juris"]: r["set"] for r in rows}
         cl80 = len(cluster(keys, sm, 0.80))
@@ -229,9 +227,9 @@ def main():
                            errors="replace").read()
             fp, s, npaths, nodes = fingerprint(html)
             juris, cls, vendor, stratum = classify(name, html, labels)
-            items.append(dict(file=name, dir=os.path.basename(d), juris=juris,
-                              cls=cls, vendor=vendor, stratum=stratum, fp=fp,
-                              set=s, paths=npaths, nodes=nodes, bytes=len(html)))
+            items.append({"file": name, "dir": os.path.basename(d), "juris": juris,
+                              "cls": cls, "vendor": vendor, "stratum": stratum, "fp": fp,
+                              "set": s, "paths": npaths, "nodes": nodes, "bytes": len(html)})
 
     unmapped = [i["file"] for i in items if i["stratum"] == "unknown"]
     print("SPIKE C - TEMPLATE COLLISION   TRUSTED corpus: %d pages, %.1f MB"

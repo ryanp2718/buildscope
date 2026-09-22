@@ -146,7 +146,7 @@ def run(key):
         if h is None:
             continue
         rs, stated = report(tag, h)
-        ds = set(d for _, d, _ in rs if d)
+        ds = {d for _, d, _ in rs if d}
         inside = {d for d in ds if d == lo}
         print("        -> %d/%d rows carry the requested date  %s"
               % (len(inside), len(ds),
@@ -169,7 +169,7 @@ def run(key):
             break
         m = SHOWING.search(h)
         rs = rows(h)
-        nums = set(n for n, _, _ in rs if n)
+        nums = {n for n, _, _ in rs if n}
         new = nums - seen
         seen |= nums
         print("        page %-3d showing=%-15s rows=%-3d new=%-3d"

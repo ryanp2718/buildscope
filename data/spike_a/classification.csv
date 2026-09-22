@@ -1,0 +1,29 @@
+state,bps_id,county,state_abbr,place_name,stratum,units_12mo,bucket,status,vendor,confidence,basis,note
+32,021000,003,NV,Clark County Unincorporated Area,tier1_top_decile,3653,3,confirmed,Accela ACA,high,demonstrated,"empty-criteria POST returns a result set; 531 records pulled across 57 index pages. Cap indicator '100+' means date partitioning is required, not that enumeration fails."
+41,323000,071,OR,McMinnville,tier1_mid,36,3,confirmed,Accela ACA (statewide tenancy),medium,mechanically confirmed,"served by aca-oregon.accela.com, a statewide Accela instance; empty criteria returned a result set. Query demonstrated, records never pulled - confirmed as enumerable, unconfirmed as extractable."
+12,803000,109,FL,St. Johns County Unincorporated Area,tier1_top_decile,3637,3,confirmed,custom (WATS .NET),high,demonstrated,"date-range POST returns a full result set; 3,872 records pulled and reconciled against BPS. Was provisional bucket 4 on a form read."
+29,607000,510,MO,St. Louis,tier1_top_decile,291,4,confirmed,custom (ColdFusion),high,demonstrated,"parcel-keyed two-step: empty and wildcard streetAddress both refused, a known address returns a parcel-disambiguation table, not permits. The 2026 portal stlcitypermits.com is apply-and-pay only, no record search. Note that the old form posts to itself, not searchresults.cfm."
+21,045000,227,KY,Bowling Green,tier1_top_decile,458,7,confirmed,Tyler eSuite,high,demonstrated,"portal is esuites.bgky.org (Tyler eSuite), not the unreachable www2.bgky.org recorded earlier - the real host was in Spike A's own saved bytes. Contractor login, electrical permits only, apply and pay; no permit record search exists for any visitor. Registration is not expected to yield records, which bucket 7 does not distinguish."
+01,313000,089,AL,Madison County Unincorporated Area,tier1_top_decile,1375,5,provisional,CityView,medium,probed,"Portal returns a 118KB SPA shell, text ratio 0.023. All seven guessed server-side search paths 404. Needs a browser or the underlying REST API."
+05,282000,031,AR,Jonesboro,tier1_top_decile,796,7,provisional,Avolve ProjectDox,high,probed,"Permit link goes to jonesboro-ar-us.avolvecloud.com, a plan-review system behind login."
+13,617800,121,GA,South Fulton,tier1_top_decile,588,7,provisional,SagesGov,high,probed,SagesGov portal; registration required before any access. Contractors must register a company account.
+08,251000,123,CO,Garden City town,tier2_imputed,0,7,provisional,CommunityCore,high,probed,Permit links redirect to app.communitycore.com/app/account/login.
+50,459000,011,VT,St. Albans town,tier1_mid,24,7,provisional,iWorQ,medium,probed,Portal at stalbans_permit.portal.iworq.net returned 403 to our identified client. Portal exists; access gated.
+22,373000,055,LA,Lafayette Parish Unincorporated Area,tier1_top_decile,722,unresolved,provisional,eTRAKiT,low,unreachable,etrakit.lafayettela.gov did not respond over http or https from our network across three attempts. Known to be eTRAKiT from search. Not classified rather than guessed.
+34,175000,001,NJ,Galloway township,tier1_mid,35,unresolved,provisional,unknown,low,not located,galloway.com is an unrelated business; gallowaytwp-nj.gov does not resolve. Official site not located within the time budget.
+49,265000,049,UT,Mapleton,tier1_top_decile,457,6,provisional,none,medium,probed,'Online Permits & Inspections' link resolves to a static forms page. No searchable index found.
+48,468000,215,TX,Mission,tier1_top_decile,663,6,provisional,CivicPlus,medium,probed,Inspections Division page offers residential and commercial application PDFs only.
+19,686200,169,IA,Story County Unincorporated Area,tier1_mid,32,6,provisional,CivicPlus,medium,probed,"Applications and Permits page; forms only, no search."
+18,060000,021,IN,Brazil,tier1_mid,20,6,provisional,none,medium,probed,brazil.in.gov serves a permit application PDF. Permits issued at City Hall.
+45,087000,063,SC,Cayce,tier1_mid,23,6,provisional,none,medium,probed,building-services.php has no portal link and no application PDFs; process is in person.
+26,179000,021,MI,Chikaming township,tier1_mid,23,6,provisional,none,low,probed,"chikaming.com verified as the township by state and name, but carries no permit links at all."
+27,322000,027,MN,Hawley,tier1_mid,33,6,provisional,GovOffice,medium,probed,hawley.govoffice.com. Permits handled at City Hall; code in Title 9. No portal.
+42,504100,011,PA,Ontelaunee township,tier1_mid,29,6,provisional,none (contracted),medium,probed,"Permits available at the township building or via kraftcodeservices.com, a PRIVATE code-enforcement contractor. Six application PDFs."
+51,649000,101,VA,West Point town,tier1_mid,31,6,provisional,Revize,medium,probed,Building permits page 404s; department page offers permit PDFs. Pick up and drop off at Town Hall.
+53,573000,077,WA,Wapato,tier2_imputed,0,6,provisional,Revize,medium,probed,"Licenses and permits page carries 11 PDFs, no search."
+55,007500,061,WI,Ahnapee town,tier2_imputed,4,6,provisional,none,medium,probed,"Licenses and Permits page, no portal, no forms."
+31,064000,127,NE,Brownville village,tier2_imputed,0,6,provisional,none,medium,probed,Resident resources page with 4 PDFs. Permits via the village clerk.
+02,329000,188,AK,Kotzebue,tier2_imputed,1,6,provisional,none,medium,probed,cityofkotzebue.gov serves permit application and checklist PDFs; forms page 403s to our client.
+23,139000,009,ME,Eastbrook town,tier2_imputed,1,6,provisional,none,medium,probed,"No town website located beyond the Maine.gov municipal directory entry, which 403s."
+06,009000,005,CA,Amador City,tier2_imputed,0,6,provisional,none,high,probed,amador-city.com serves a building permit application PDF and a written process document. Office open 9 hours a week.
+36,203500,123,NY,Dresden village,tier2_imputed,0,6,provisional,none,medium,not located,No village website found; only a 211 directory listing for the Village Code Enforcement Office.

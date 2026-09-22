@@ -450,8 +450,8 @@ class Emitter(object):
         """Per-field null rates, and whether any of them should stop the run."""
         if not self.n:
             return {"n": 0, "rates": {}, "tripped": []}
-        rates = dict((f, round(self.null[f] / float(self.n), 4))
-                     for f in self.ALARM_FIELDS)
+        rates = {f: round(self.null[f] / float(self.n), 4)
+                     for f in self.ALARM_FIELDS}
         tripped = []
         # A classification field that is null for most records means the
         # jurisdiction cannot be classified at all, which is Mecklenburg.

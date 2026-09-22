@@ -79,7 +79,7 @@ class Skeleton(HTMLParser):
         if self.had_child:
             self.had_child[-1] = True
         if tag in VOID:
-            self.paths.append(">".join(self.stack + [tag]))
+            self.paths.append(">".join([*self.stack, tag]))
             return
         self.stack.append(tag)
         self.had_child.append(False)
@@ -92,7 +92,7 @@ class Skeleton(HTMLParser):
         self.nodes += 1
         if self.had_child:
             self.had_child[-1] = True
-        self.paths.append(">".join(self.stack + [tag]))
+        self.paths.append(">".join([*self.stack, tag]))
 
     def close_one(self, tag):
         leaf = not self.had_child[-1] if self.had_child else True
@@ -228,7 +228,7 @@ def cluster(keys, sets, t):
     one that finds none.
     """
     keys = list(keys)
-    parent = dict((k, k) for k in keys)
+    parent = {k: k for k in keys}
 
     def find(x):
         while parent[x] != x:

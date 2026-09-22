@@ -29,7 +29,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from permits import emit, sources                 # noqa: E402
+from permits import sources                 # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "data", "step1")
@@ -115,7 +115,7 @@ def main():
     # what may be quoted - a blocked source that nothing prints is a blocked
     # source nobody knows about. The summary is the record of what actually
     # ran, so the summary is what gets enumerated.
-    keyed = dict((s.key, s) for s in sources.SOURCES)
+    keyed = {s.key: s for s in sources.SOURCES}
     for key in sorted(summary):
         s = summary.get(key, {})
         alarm = s.get("alarm", {})
@@ -163,15 +163,15 @@ def main():
                   % (src.label[:22], yymm, b["source"], ours, ref, fmt(e),
                      fmt(pct(lo_ours, lo_ref)), fmt(pct(hi_ours, hi_ref)),
                      "  *" if q else ""))
-            rows.append(dict(qualified="Y" if q else "", jurisdiction=src.label, state=src.state_fips,
-                             bps_id=src.bps_id, yymm=yymm, source=b["source"],
-                             ours=ours, bps=ref, abs_pct_err=e,
-                             low_ours=lo_ours, low_bps=lo_ref,
-                             low_err=pct(lo_ours, lo_ref),
-                             high_ours=hi_ours, high_bps=hi_ref,
-                             high_err=pct(hi_ours, hi_ref),
-                             records=m["n"],
-                             new_building_unclassified=m["unclassified"]))
+            rows.append({"qualified": "Y" if q else "", "jurisdiction": src.label, "state": src.state_fips,
+                             "bps_id": src.bps_id, "yymm": yymm, "source": b["source"],
+                             "ours": ours, "bps": ref, "abs_pct_err": e,
+                             "low_ours": lo_ours, "low_bps": lo_ref,
+                             "low_err": pct(lo_ours, lo_ref),
+                             "high_ours": hi_ours, "high_bps": hi_ref,
+                             "high_err": pct(hi_ours, hi_ref),
+                             "records": m["n"],
+                             "new_building_unclassified": m["unclassified"]})
 
     # ---- the Seattle unit-field experiment ------------------------------
     got = fold("seattle")
@@ -219,7 +219,7 @@ def main():
     print("\n" + "=" * 94)
     print("MEASURED sources only")
     print("n = %d jurisdiction-months over %d jurisdictions"
-          % (len(meas), len(set(r["jurisdiction"] for r in meas))))
+          % (len(meas), len({r["jurisdiction"] for r in meas})))
     print("   median |err| blended     : %s   <- do not quote alone" % fmt(med(tot)))
     print("   median |err| low-density : %s   (n=%d)"
           % (fmt(med(lo)), len([x for x in lo if x is not None])))

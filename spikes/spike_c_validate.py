@@ -22,7 +22,6 @@ THAT is the finding.
 import io
 import os
 import sys
-from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spike_c_fingerprint import (fingerprint, jaccard, CORPORA,  # noqa: E402
@@ -61,7 +60,7 @@ def load_all():
     for n, p in idx.items():
         html = io.open(p, encoding="utf-8", errors="replace").read()
         fp, s, npaths, nodes = fingerprint(html)
-        fps[n] = dict(fp=fp, set=s, paths=npaths, nodes=nodes, bytes=len(html))
+        fps[n] = {"fp": fp, "set": s, "paths": npaths, "nodes": nodes, "bytes": len(html)}
     return fps
 
 

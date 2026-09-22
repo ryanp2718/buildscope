@@ -68,12 +68,12 @@ def main():
             print("%-22s %-6s %-7s %-8d %-8d %-9s %s"
                   % (j["label"][:22], m, b["source"], ours, ref,
                      "%.1f%%" % (100 * err) if ref else "n/a", split))
-            rows.append(dict(jurisdiction=j["label"], state=j["state"],
-                             bps_id=j["bps_id"], yymm=m, source=b["source"],
-                             ours=ours, bps=int(ref),
-                             abs_pct_err=round(100 * err, 1) if ref else "",
-                             bps_u1=b["u1"], bps_u2=b["u2"], bps_u34=b["u34"],
-                             bps_u5p=b["u5p"], rule=j["rule"]))
+            rows.append({"jurisdiction": j["label"], "state": j["state"],
+                             "bps_id": j["bps_id"], "yymm": m, "source": b["source"],
+                             "ours": ours, "bps": int(ref),
+                             "abs_pct_err": round(100 * err, 1) if ref else "",
+                             "bps_u1": b["u1"], "bps_u2": b["u2"], "bps_u34": b["u34"],
+                             "bps_u5p": b["u5p"], "rule": j["rule"]})
 
     if rows:
         p = os.path.join(OUT, "reconciliation.csv")

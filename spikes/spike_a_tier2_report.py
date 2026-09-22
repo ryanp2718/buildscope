@@ -52,7 +52,7 @@ def main():
             if before != after:
                 changed.append((new[k]["place_name"], before, after))
 
-    missing = set(new) - set((r["state"], r["bps_id"]) for r in rows)
+    missing = set(new) - {(r["state"], r["bps_id"]) for r in rows}
     assert not missing, "reclassified rows not present in classification: %s" % missing
     t2 = [r for r in rows if r["stratum"] == "tier2_imputed"]
     assert len(t2) == len(new), "expected %d tier-2 rows, matched %d" % (len(new), len(t2))

@@ -87,7 +87,7 @@ def build(rows):
         else:
             r.setdefault("status", "provisional")
             r["status"] = "provisional"
-        out.append(dict((f, r.get(f, "")) for f in FIELDS))
+        out.append({f: r.get(f, "") for f in FIELDS})
     return out
 
 

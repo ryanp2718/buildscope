@@ -150,7 +150,7 @@ def parse_index(html):
     this adapter does not yet understand is still visible in the raw record
     instead of silently disappearing.
     """
-    roles, raw_headers = headers(html)
+    roles, _raw_headers = headers(html)
     rows = []
     for frag in ROWPAT.findall(html):
         cells = CELL.findall(frag)
@@ -278,7 +278,7 @@ def units_from_detail(fields):
         return None, "refused:proposed-without-existing (%s)" % proposed[0][0]
     if len(plain) == 1 and not existing and not proposed:
         return plain[0][1], plain[0][0]
-    if plain and len(set(n for _, n in plain)) == 1:
+    if plain and len({n for _, n in plain}) == 1:
         return plain[0][1], plain[0][0]
     return None, "refused:ambiguous (%s)" % ", ".join(k for k, _ in found)
 

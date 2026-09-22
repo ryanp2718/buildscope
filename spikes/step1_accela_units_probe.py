@@ -176,10 +176,10 @@ def main():
     prev = []
     if os.path.exists(p):
         prev = json.load(io.open(p, encoding="utf-8")).get("records", [])
-    done = set(r["tenancy"] for r in out)
+    done = {r["tenancy"] for r in out}
     out = [r for r in prev if r["tenancy"] not in done] + out
-    json.dump({"window": WINDOW, "targets": sorted(set(r["tenancy"]
-                                                       for r in out)),
+    json.dump({"window": WINDOW, "targets": sorted({r["tenancy"]
+                                                       for r in out}),
                "verdicts": dict(verdicts), "records": out},
               io.open(p, "w", encoding="utf-8"), indent=1, default=str)
     print("wrote %s   |   requests spent: %d"

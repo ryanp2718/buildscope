@@ -50,10 +50,10 @@ def main():
             continue
         txt = strip_tags(io.open(os.path.join(HTMLDIR, name),
                                  encoding="utf-8", errors="replace").read())
-        hits[name] = dict(
-            wapato=len(re.findall(r"(?i)\bwapato\b", txt)),
-            yakima=len(re.findall(r"(?i)\byakima\b", txt)),
-            sample=sorted(set(re.findall(r"(?i)[A-Z0-9 ]{4,30}\bWAPATO\b", txt)))[:5])
+        hits[name] = {
+            "wapato": len(re.findall(r"(?i)\bwapato\b", txt)),
+            "yakima": len(re.findall(r"(?i)\byakima\b", txt)),
+            "sample": sorted(set(re.findall(r"(?i)[A-Z0-9 ]{4,30}\bWAPATO\b", txt)))[:5]}
         print("  %-44s wapato=%-3d yakima=%-3d" % (name[:44], hits[name]["wapato"],
                                                    hits[name]["yakima"]))
     res["wapato_in_results"] = hits
@@ -68,7 +68,7 @@ def main():
             res.setdefault("scope", {})[url] = {"status": st}
             continue
         txt = strip_tags(html)
-        found = sorted(set(" ".join(m.split()) for m in SCOPE.findall(txt)))
+        found = sorted({" ".join(m.split()) for m in SCOPE.findall(txt)})
         found = [f for f in found if len(f) > 40][:6]
         res.setdefault("scope", {})[url] = {"status": st, "statements": found}
         print("  %s" % url)

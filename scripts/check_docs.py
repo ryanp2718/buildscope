@@ -79,7 +79,7 @@ for f in sorted(indexed):
 
 # ---------------------------------------------------------------- 4
 LINK = re.compile(r"\[[^\]]*\]\(([^)#]+)(?:#[^)]*)?\)")
-for dirpath, dirnames, filenames in os.walk(DOCS):
+for dirpath, _dirnames, filenames in os.walk(DOCS):
     for name in filenames:
         if not name.endswith(".md"):
             continue

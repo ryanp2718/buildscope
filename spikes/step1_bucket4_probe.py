@@ -22,9 +22,7 @@ sizes to test a date filter. This script reads the rows.
 One tenancy per run, a handful of requests, no classification decided here.
 """
 import os
-import re
 import sys
-import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from permits import capture as mf  # noqa: E402
@@ -53,7 +51,7 @@ def describe(tag, html):
         print("     %-16s no result grid found  (%d bytes)" % (tag, len(html)))
         return None
     for tid, wide, dated in gs:
-        ds = sorted(set(d for r in dated for d in DATE.findall(" ".join(r))))
+        ds = sorted({d for r in dated for d in DATE.findall(" ".join(r))})
         print("     %-16s grid=%-28s rows=%-4d dated=%-4d cols=%d"
               % (tag, tid[:28], len(wide), len(dated), max(len(r) for r in wide)))
         print("        dates %s .. %s" % (ds[0] if ds else "-", ds[-1] if ds else "-"))

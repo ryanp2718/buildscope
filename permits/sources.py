@@ -104,4 +104,4 @@ SOURCES = [
         note="no unit field; units only in free text, ranges are refused"),
 ]
 
-BY_KEY = dict((s.key, s) for s in SOURCES)
+BY_KEY = {s.key: s for s in SOURCES}

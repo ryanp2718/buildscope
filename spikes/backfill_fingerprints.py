@@ -65,7 +65,7 @@ def run(tree):
         w = csv.DictWriter(f, fieldnames=mf.FIELDS)
         w.writeheader()
         for r in rows:
-            w.writerow(dict((k, r.get(k, "")) for k in mf.FIELDS))
+            w.writerow({k: r.get(k, "") for k in mf.FIELDS})
 
     print("  %-9s %4d rows  %4d fingerprinted  %3d already  %3d no saved file"
           "  %3d no DOM  -> %d distinct templates"
