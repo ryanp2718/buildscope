@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# Never commit
+# ---------------------------------------------------------------------------
+
+# Captured pages, raw extracts, inference cache and ledgers. ~260 MB, and the
+# raw store is deliberately private: prompts and cached responses carry page
+# content fetched from municipal portals, and ADR-0015 keeps that on the
+# machine that fetched it. `docs/evidence/` publishes the derived numbers;
+# `tests/fixtures/` carries the small redistributable slice the suite needs.
+data/
+
+# Interview prep, resume bullets, self-red-team, pitch. Working notes about
+# the author, not about the project.
+INTERNAL/
+
+# ---------------------------------------------------------------------------
+# Environment and caches
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# ---------------------------------------------------------------------------
+# Run artifacts
+# ---------------------------------------------------------------------------
+.drift_pool.log
+*.log
+
+# ---------------------------------------------------------------------------
+# Editor and OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Secrets. The API key lives at ~/.anthropic_key, outside the tree, on
+# purpose. These patterns are belt and braces.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+*.key
+.anthropic_key
+.permits-contact
+
+# Local agent settings (per-machine permissions, not project config).
+.claude/settings.local.json
