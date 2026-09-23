@@ -3,7 +3,7 @@
 [![CI](https://github.com/ryanp2718/buildscope/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanp2718/buildscope/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Municipal building-permit data, and a measurement of whether a language model can write the
+**Municipal building-permit data, and a pass@1 measurement of whether a language model can write the
 extractors.**
 
 Every city and county in the United States publishes building permits, and almost none of them publish
@@ -12,28 +12,35 @@ ASP.NET results grid that only yields records to a correctly-formed postback. Co
 jurisdictions the ordinary way costs a hundred hand-written extractors, and then costs them again every
 time a vendor ships a restyle.
 
-The obvious idea is to have a model write each extractor. The question nobody answers with a number is
-whether the result can be trusted — and "trusted" is not one question. Does the generated code agree with
-a hand-written parser? Does it still work when the page changes? How often does the same prompt produce
-working code twice? When it fails, does it fail loudly, or does it return zero rows and let a pipeline
-record a quiet month in a city that issued four hundred permits?
+The obvious idea is to have a model write each extractor. Code generation has a metric family for this:
+pass@k (Chen et al., 2021) — draw k completions, ask whether at least one passes. This project reports the
+quantity underneath it, pass@1: one completion per draw, scored against a reference, the draw repeated
+independently to measure a rate instead of a single outcome. A scraper fails in ways that rate doesn't cover
+on its own. Does the generated code agree with a hand-written parser? Does it still work when the page
+changes? Does it fail loudly, or does it return zero rows and let a pipeline record a quiet month in a city
+that issued four hundred permits?
 
-This repository is that measurement, with the pipeline built underneath it so the measurement has
-something real to run against.
+This repository runs pass@1 against real municipal permit pages: draws per prompt, each scored against a
+hand-written extractor, re-run under deliberate page mutation, cost-ledgered per call. The pipeline
+underneath it is what the measurement runs against.
+
+The pre-LLM literature on this problem called an extractor a wrapper and studied exactly the drift question
+above as wrapper maintenance (Kushmerick, 1997; Lerman, Minton & Knoblock, 2003). This project keeps
+"extractor" as the code-level name and treats wrapper induction as the closest prior art.
 
 ## What has been measured
 
 | | | where |
 |---|---|---|
 | **29,668 records** across **7 jurisdictions**, three source families | reconciled against the Census Building Permits Survey to within **3.0–4.1%** over 12 jurisdiction-months | [report](docs/evidence/2026-09-20-step1-stjohns-reconciliation.md) |
-| **26 LLM-written extractors** scored against hand-written ones | **agreement 1.0000** on 4,188 records over 71 pages — and that benchmark turned out to be saturated | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
+| **26 model-generated extractors**, pass@1, never hand-edited | **agreement 1.0000** on 4,188 records over 71 pages — and that benchmark turned out to be saturated | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
 | **8 record-preserving page mutations**, no labels required | 20 extractors that scored *identically perfect* split under drift; **5 of 20** survived a CSS class rename | [report](docs/evidence/2026-09-21-drift-robustness.md) |
-| **55 draws** of one prompt across 3 models × 2 layouts | success rates from 5% to 100%; **86% of failures were silent** — zero rows, no exception | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
+| **55 draws, pass@1**, across 3 models × 2 layouts | success rates from 5% to 100%; **86% of failures were silent** — zero rows, no exception | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
 | **67 priced calls, $4.3411**, every one ledgered before it billed | **cost per working extractor inverts the per-token price list**: $0.286/success on the frontier model against $0.686 on the cheapest | [report](docs/evidence/2026-09-22-cost-per-success.md) |
 
-The last one is the finding that generalises furthest. A cheap model that succeeds once in twenty attempts
-bills for all twenty, so the per-token price ranks models correctly only when they all succeed. Which
-regime you are in is decided by page difficulty, and the price list cannot tell you which one that is.
+The last row generalises furthest. A cheap model that succeeds once in twenty attempts bills for all twenty,
+so per-token price ranks models correctly only when they all succeed. Page difficulty decides which regime
+you're in, and the price list can't tell you which one that is.
 
 ## What this does not claim
 
