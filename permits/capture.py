@@ -279,7 +279,6 @@ def fetch(op, url, name, jurisdiction, vendor, page_type, data=None,
     html = raw.decode("utf-8", "replace")
     verdict, reason = verify(page_type, html, status)
     fn = "%s.html" % name
-    io.open(os.path.join(PAGES, fn), "w", encoding="utf-8", newline="").write(html)
     # Fingerprint every page we keep, including rejected ones: a rejection is
     # a verdict about content, and "what did the blocking page look like"
     # is answerable only if the bytes were fingerprinted when they arrived.
@@ -290,7 +289,21 @@ def fetch(op, url, name, jurisdiction, vendor, page_type, data=None,
     row = _row(url, final, status, ctype, len(raw),
                hashlib.sha256(raw).hexdigest(), jurisdiction, vendor, page_type,
                verdict, reason, method, True, fn, mark)
-    _write(row)
+    # The page lands under a temporary name and is promoted only once its row
+    # is on disk. Written the other way round - which is how this stood until
+    # 2026-09-22 - a refused schema migration raises out of `_write` between
+    # the two steps and leaves an unrecorded page behind: the exact Spike C
+    # failure this module exists to prevent, reintroduced by the module
+    # itself. `tests/test_capture.py` holds the case that found it.
+    part = os.path.join(PAGES, fn + ".part")
+    with io.open(part, "w", encoding="utf-8", newline="") as f:
+        f.write(html)
+    try:
+        _write(row)
+    except BaseException:
+        os.remove(part)
+        raise
+    os.replace(part, os.path.join(PAGES, fn))
     print("  %-7s %-34s %s  %6dB  %s"
           % (verdict.upper(), name, page_type, len(raw), reason))
     return html, row

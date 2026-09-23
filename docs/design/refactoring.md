@@ -50,13 +50,35 @@ have no `sys.path` bootstrap of their own and were reaching `permits/` *transiti
 they were importing*, which is a fair illustration of what the old arrangement cost in ways nobody had
 counted.
 
-**The honest caveat: this moved the code, not the risk.** The tests this document named as a precondition
-— robots disallow produces a `rejected` row and no file; a transport error produces a row and no file; the
-budget ceiling raises rather than continuing; the per-host pause is honoured; a page is never written
-without its row; the header migration is additive and refuses to drop a column — are still unwritten. The
-move was taken early because the `scripts/` ↔ `spikes/` split needed it, so the sequencing argument in
-[ADR-0016](../adr/0016-tests-are-replay-over-the-raw-store.md) has been paid off in the wrong order. That
-is now the top item under **Scheduled**.
+**The honest caveat, now paid off.** This document named the tests as a precondition and the move happened
+without them, because the `scripts/` ↔ `spikes/` split needed it first — so the sequencing argument in
+[ADR-0016](../adr/0016-tests-are-replay-over-the-raw-store.md) was settled in the wrong order. The tests
+landed the same day; the entry below says what they found, which is the argument for the sequencing that
+was not followed.
+
+### ~~The capture layer gets its tests~~ — **done 2026-09-22**
+
+All six properties this document named, in `tests/test_capture.py`: robots disallow produces a `rejected`
+row and no file; a transport error produces a row and no file; the budget ceiling raises rather than
+continuing; the per-host pause is honoured and is per-host; a page is never written without its row; the
+header migration is additive and refuses to drop a column. Plus the verdict rules, each of which is a
+discriminator that once fired on something every page has.
+
+Written against a **loopback `ThreadingHTTPServer`, not a fake opener** — which is a change from what this
+document scheduled. A fake opener would have been faster to write and would have tested the fake: the
+whole risk in this module is what real `urllib` does on a real error path. The server costs a millisecond,
+makes no network call, and exercises the real opener, the real `HTTPError` branch and a real `robots.txt`
+round trip.
+
+**It found a live defect on the first run.** `fetch()` wrote the page and *then* the row, and `_migrate()`
+raises between the two, so a manifest carrying an unknown column left an unrecorded page on disk — the
+Spike C failure, reintroduced inside the module written to prevent it, live for as long as the migration
+path had existed. The page is now staged under a temporary name and promoted only after its row is
+committed.
+
+**Residual:** the ASP.NET postback path — viewstate round-tripping, the `Referer`/`Origin` headers Accela
+demands, the session cookie across a paged grid — is still exercised only by replay. Noted in
+[`testing.md`](testing.md), not scheduled.
 
 ### ~~`scripts/` splits into tools and notebook~~ — **done 2026-09-22**
 
@@ -74,15 +96,7 @@ import in `permits/` is stdlib or declared, so `uv sync` is sufficient to run th
 
 ## Scheduled
 
-### 1. The capture layer gets its tests — **first, and now overdue**
-
-*Trigger: immediately. The move happened without them.*
-
-The six properties listed above, in `tests/test_capture.py`, against a fake opener rather than a live
-portal. This is the largest untested surface in the project and it is the code that writes the provenance
-log everything downstream trusts.
-
-### 2. `permits/bps.py` — the frame loader
+### 1. `permits/bps.py` — the frame loader
 
 *Trigger: the third script that needs to read `bps_frame.csv`.*
 
@@ -92,7 +106,7 @@ by `(state_fips, bps_id)`, index by name-within-state, and the tier/unit accesso
 [ADR-0007](../adr/0007-office-identity-is-the-bps-office-id.md) makes the only legitimate way to assign an
 office identity.
 
-### 3. `norm_date` gets a rewrite, not another format
+### 2. `norm_date` gets a rewrite, not another format
 
 *Trigger: the next date format that does not parse.*
 
@@ -102,7 +116,7 @@ each layer was added because the previous one failed on a real source. It works,
 be: try each format against the date-part token, in order, with no width slicing at all. The width slice
 is the part that caused the 100%-null bug and it no longer earns its place.
 
-### 4. The Spike A probes get deleted
+### 3. The Spike A probes get deleted
 
 *Trigger: when the Spike A corpus is no longer re-runnable, or the offices are re-probed properly.*
 
@@ -112,7 +126,7 @@ demonstrated verdicts. Moving them to `spikes/` in the reviewer-ready pass was a
 item: it stopped them being mistaken for maintained code, and it did not delete them. **Not** a rewrite —
 they produced dated evidence reports and their value is historical.
 
-### 5. Adapter protocol becomes explicit
+### 4. Adapter protocol becomes explicit
 
 *Trigger: the fourth adapter — which [ADR-0009](../adr/0009-adapters-first-generic-extraction-second.md)
 makes the last one before the bake-off, so this is the last chance to do it cheaply.*
@@ -126,7 +140,7 @@ Deliberately **not** an abstract base class. The three adapters differ in pagina
 (offset/limit vs. postback vs. recursive date bisection) and forcing a common `pull` would push the
 difference into configuration. A documented protocol plus the conformance tests is the right weight.
 
-### 6. Data-artifact hygiene
+### 5. Data-artifact hygiene
 
 *Trigger: opportunistic.*
 

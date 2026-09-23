@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 195 tests, ~2s, no network
+python scripts/run_tests.py           # everything: 222 tests, ~16s, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -41,8 +41,9 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_adapters.py` | replay over stored pages; column-order assertions; truncation detection | the Clark vocabulary bug, the truncated page |
 | `test_artifacts.py` | published figures, classification shape, D1's capture invariant, record store | the 112 → 180 re-quote |
 | `test_structure.py` | the `permits/`/`scripts/` boundary ratchet, declared-dependency rule, adapters stay thin | 23 scripts importing the capture layer |
+| `test_capture.py` | robots, politeness, the budget ceiling, schema migration, the verdict rules, and D1's page-and-row invariant | the unrecorded page it found on its first run |
 
-## Three ideas worth knowing before editing these
+## Four ideas worth knowing before editing these
 
 **Replay, not fixtures.** [ADR-0006](../adr/0006-the-observation-log-is-the-source-of-truth.md) makes
 every downstream stage a pure function of immutable bytes, so `data/step1/pages/` is a free regression
@@ -61,6 +62,19 @@ files named `sj_stjohns_01012026_*.html`. It matched nothing and reported `OK (s
 `TestGoldenCorpus` now asserts the expected page families exist with minimum counts, and the runner prints
 every skip with its reason. If a capture is renamed, update `GOLDEN` — do not let the suite go quiet.
 
+**A fake is not the only alternative to a mock.** Until 2026-09-22 this document said the capture layer
+could not be tested without either making requests or mocking `urllib`, "and a mock of `urllib` tests the
+mock". The objection was right and the conclusion was wrong. `tests/test_capture.py` starts a
+`ThreadingHTTPServer` on 127.0.0.1: it costs a millisecond, makes no network call, and exercises the real
+opener, the real cookie jar, the real `HTTPError` branch and a real `robots.txt` round trip. Nothing in it
+is stubbed, so nothing in it can pass because the stub agreed with the code.
+
+That distinction was not academic. The first run failed on the one property the module's own docstring
+claims — that a page may not exist on disk without a manifest row — because `fetch()` wrote the page and
+*then* the row, and `_migrate()` raises between the two. A refused schema migration left an unrecorded
+page behind: the Spike C failure this module was written to prevent, reintroduced inside it. It had been
+live for as long as the migration path had existed, and no amount of reading the file had caught it.
+
 ## What this suite is not
 
 **It is not a golden set.** It asserts that behaviour has not *changed*. It says nothing about whether the
@@ -69,14 +83,14 @@ behaviour is *correct*. [ADR-0014](../adr/0014-the-golden-set-precedes-the-pipel
 is free and the golden set is expensive, and letting the cheap one stand in for the expensive one is
 exactly how a project stops measuring accuracy.
 
-**It does not test the network path.** Nothing here exercises `fetch`, robots handling, politeness or the
-retry behaviour, because doing so means either making requests or mocking `urllib` — and a mock of
-`urllib` tests the mock. This is the largest untested surface in the project and it is the one that writes
-the manifest. Closing it is the first item in
-[`refactoring.md`](refactoring.md): the capture layer gets tests as part of moving into `permits/`.
-
 **It does not test the reconciliation arithmetic end to end.** `test_artifacts.py` checks the properties
 of emitted records and the gate metric, not the BPS fold that produces the 1.0% / 4.4% / 4.1% figures.
+
+**It does not test the postback path.** `test_capture.py` covers `fetch` over GET. The ASP.NET POST
+sequence — `__VIEWSTATE` round-tripping, the `Referer`/`Origin` headers Accela demands, the cookie that
+carries a session across a paged result grid — is exercised only by `test_adapters.py` replaying pages
+that path already produced, which is not the same as exercising the path. A loopback server that answers
+a postback the way Accela does is the obvious next step and has not been written.
 
 ## Adding a test
 
