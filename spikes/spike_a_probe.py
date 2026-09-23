@@ -27,7 +27,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from permits.identity import user_agent   # noqa: E402
+from permits.crawler_identity import user_agent   # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SAMPLE = os.path.join(ROOT, "data", "spike_a", "sample.csv")

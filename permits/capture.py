@@ -39,7 +39,7 @@ from http.cookiejar import CookieJar
 
 from permits import aspnet
 from permits import fingerprint as fp
-from permits.identity import user_agent
+from permits.crawler_identity import user_agent
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "data", "measure")

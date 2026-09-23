@@ -40,7 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from permits import capture                              # noqa: E402
-from permits import identity                             # noqa: E402
+from permits import crawler_identity                      # noqa: E402
 
 # --------------------------------------------------------------------------
 # A page long enough to clear the 2,000-byte floor, carrying none of the
@@ -160,15 +160,15 @@ class CaptureCase(unittest.TestCase):
         capture._last.clear()
         capture._migrated.clear()
 
-        prev = os.environ.get(identity.CONTACT_ENV)
+        prev = os.environ.get(crawler_identity.CONTACT_ENV)
 
         def unset():
             if prev is None:
-                os.environ.pop(identity.CONTACT_ENV, None)
+                os.environ.pop(crawler_identity.CONTACT_ENV, None)
             else:
-                os.environ[identity.CONTACT_ENV] = prev
+                os.environ[crawler_identity.CONTACT_ENV] = prev
         self.addCleanup(unset)
-        os.environ[identity.CONTACT_ENV] = "https://example.invalid/tests"
+        os.environ[crawler_identity.CONTACT_ENV] = "https://example.invalid/tests"
 
         ROUTES.clear()
         ROUTES.update(BASE_ROUTES)
