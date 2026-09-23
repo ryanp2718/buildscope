@@ -129,7 +129,7 @@ they produced dated evidence reports and their value is historical.
 ### 4. Adapter protocol becomes explicit
 
 *Trigger: the fourth adapter — which [ADR-0009](../adr/0009-adapters-first-generic-extraction-second.md)
-makes the last one before the bake-off, so this is the last chance to do it cheaply.*
+makes the last one before the conformance test, so this is the last chance to do it cheaply.*
 
 The three adapters already implement the same informal protocol — `build`, `parse_index`, `pull_window`,
 `vocabulary_for`, `page_is_complete`, `headers`, `ADAPTER_VERSION` — discovered by reading them rather
@@ -160,8 +160,8 @@ difference into configuration. A documented protocol plus the conformance tests 
 - **Splitting `permits/emit.py` (529 lines).** It is long because the comments carry the reasoning for
   every rule, and the rules are the product. Splitting it would scatter that.
 - **Splitting `scripts/conformance.py` (1,494 lines).** The largest single file in the repo, and the one a
-  reviewer is most likely to flag. It is an experiment harness: schema, prompt construction, the sandbox,
-  scoring, and five CLI modes over one shared notion of a draw. The pieces that were genuinely reusable —
+  reviewer is most likely to flag. It runs schema validation, prompt construction, the sandbox, scoring, and
+  five CLI modes over one shared notion of a draw. The pieces that were genuinely reusable —
   the Wilson interval, the failure taxonomy, the percentile — already left for `permits/stats.py` when a
   second consumer appeared, which is the trigger this document trusts. Splitting the rest today would
   produce four files that are only ever used together.

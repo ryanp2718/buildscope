@@ -781,7 +781,9 @@ def main():
 
 # ----------------------------------------------------- variance over draws
 def run_variance(client, target, pages, refs, args):
-    """k independent draws of one identical synthesis request.
+    """k independent draws of one identical synthesis request: a pass@1 rate,
+    in the pass@k family (Chen et al., 2021) of repeated-sampling code-gen
+    evaluation.
 
     Every figure in the published conformance run is a single draw from a
     stochastic process, so none of them carries a variance and "Haiku fails

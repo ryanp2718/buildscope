@@ -26,9 +26,9 @@ and carries `call_class` on every row.
 
 **Every response is cached on disk by request hash.** The same argument as D1.
 A model call is not reproducible - the same prompt can return different bytes
-tomorrow - so the *response* has to be the artifact, or a bake-off number
-cannot be re-derived without paying for it again. Re-running the harness over
-a warm cache costs zero dollars, which is what makes the scoring code safe to
+tomorrow - so the *response* has to be the artifact, or a measurement cannot
+be re-derived without paying for it again. Re-running an experiment over a
+warm cache costs zero dollars, which is what makes the scoring code safe to
 iterate on after the money is spent.
 
 A fourth property that is not a design principle, just prudence: `Budget`

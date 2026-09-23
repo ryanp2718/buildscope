@@ -13,7 +13,7 @@ Status:    Current. Pinned by `tests/test_model_stats.py`.
 
 Nothing was measured again. The 55 draws and the drift matrix are the 2026-09-21 run, unaltered. What
 changed is that the per-model figures are now derived by one script from one long-format table instead
-of being computed inside the experiment harness, printed once, and pasted into prose by hand.
+of being computed inside `scripts/conformance.py`, printed once, and pasted into prose by hand.
 
 Doing that made one quantity computable that had never been computed: **dollars per extractor that
 actually works**, rather than dollars per call. Everything below falls out of that one division.

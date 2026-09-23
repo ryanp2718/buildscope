@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Estimators shared by the experiment harness and the statistics roll-up.
+"""Estimators shared by the pass@1 scoring code and the statistics roll-up.
 
 These lived in `scripts/conformance.py` until 2026-09-22 and moved here when a
 second consumer appeared. `scripts/` is spikes and runners

@@ -61,11 +61,11 @@ numbers.
 - **The self-agreement check is the cheapest and most skippable rule, and skipping it invalidates the
   rest.** If `work_class` cannot be labelled consistently by one person two weeks apart, every accuracy
   figure computed against it is noise with a decimal point.
-- **This gates the D8 bake-off.** [ADR-0009](0009-adapters-first-generic-extraction-second.md) sets the
-  fourth adapter as the last one before a measured generic-versus-adapter comparison exists, and a
+- **This gates the D8 conformance test.** [ADR-0009](0009-adapters-first-generic-extraction-second.md) sets
+  the fourth adapter as the last one before a measured generic-versus-adapter comparison exists, and a
   comparison needs something to compare against. The adapters are the oracle for *agreement*; the golden
-  set is the oracle for *correctness*. A bake-off scored only on adapter agreement measures whether the
-  synthesized extractor imitates the adapter, including its bugs.
+  set is the oracle for *correctness*. A conformance test scored only on adapter agreement measures whether
+  the synthesized extractor imitates the adapter, including its bugs.
 - **Nothing is labelled.** Zero records. This is the largest unspent cost in the project and the one most
   likely to be deferred indefinitely, because it is the only task here that is neither automatable nor
   interesting.
@@ -85,7 +85,7 @@ numbers.
   nothing to compare it against.
 - **Defer the golden set until after the generic extractor exists.** Tempting, since the extractor would
   make labelling faster. Rejected as the same anchoring problem wearing a schedule, and because it makes
-  the bake-off unscoreable at the exact moment it is needed.
+  the conformance test unscoreable at the exact moment it is needed.
 - **Buy labels.** Not seriously costed. Worth revisiting for the bulk of the set once the labelling
   guidelines are written, since the self-agreement check is precisely the artifact that would make
   outsourcing safe.
@@ -100,7 +100,7 @@ the size target once per-record labelling time is measured rather than estimated
 ## References
 
 - `DESIGN.md` §D9, §5 (metrics), §9 (sequencing)
-- [ADR-0009](0009-adapters-first-generic-extraction-second.md) — the bake-off this gates
+- [ADR-0009](0009-adapters-first-generic-extraction-second.md) — the conformance test this gates
 - [ADR-0006](0006-the-observation-log-is-the-source-of-truth.md) — why the set is drawn from the raw store
 - [ADR-0016](0016-tests-are-replay-over-the-raw-store.md) — the regression set, and why it is not this
 - `tests/test_adapters.py`

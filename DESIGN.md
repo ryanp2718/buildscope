@@ -576,7 +576,7 @@ kept. It is what killed the claim above.
 which records the decision that survived, the premise that did not, and **sets the written trigger D8
 required and never got** — the silent slippage D8 itself predicted. The trigger is an artifact, not a
 date: **the fourth adapter is the last one built before a measured generic-versus-adapter comparison
-exists.** No fifth adapter until the bake-off produces a number. Three adapters of the cap of five are
+exists.** No fifth adapter until the conformance test produces a number. Three adapters of the cap of five are
 now spent (open-data, Accela, WATS). Two further consequences from step 1 that belong here:
 
 - **The emit interface survived a third platform** — one new `UNIT_SOURCES` value, no schema change. §9

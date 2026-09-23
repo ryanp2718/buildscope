@@ -138,7 +138,7 @@ contains no hard-coded permit number, date, address or row count.
 ## Findings about the instrument, not the model
 
 Every one of these would have produced a number that looked like a fact about
-the model and was a fact about the harness. Four were caught before any call
+the model and was a fact about the instrument. Four were caught before any call
 was made; four cost money or a failed run.
 
 **Caught before spending (free):**
