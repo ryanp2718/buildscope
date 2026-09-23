@@ -526,7 +526,8 @@ month-boundary lag sits *inside* the St. Johns 4.1% and is not separable from ex
 
 ### D8 — Adapters first, generic extraction second
 
-Hand-written adapters for the top 4–5 platforms by universe share, then LLM extractor synthesis.
+Hand-written adapters — this project's term for a human-written extractor — for the top 4–5 platforms by
+universe share, then LLM extractor synthesis for the rest.
 
 The better argument than velocity: **adapters are the eval oracle for the generic path.** A known-good
 Accela adapter lets synthesized extractors be scored on thousands of pages without hand-labeling, which
