@@ -34,6 +34,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from permits import infer                                   # noqa: E402
 from permits.stats import failure_mode, pctile, wilson      # noqa: E402
 
 OUT = os.path.join(ROOT, "data", "infer")
@@ -42,9 +43,11 @@ FIELDS = ["experiment", "target", "model", "unit", "unit_id", "metric",
 
 
 def short(model):
-    """`claude-haiku-4-5-20251001` -> `haiku-4-5`. The date is noise in a
-    comparison table and the prefix is constant."""
-    return model.replace("claude-", "").split("-20")[0]
+    """`claude-haiku-4-5-20251001` -> `haiku-4-5`, `qwen/qwen3-coder` ->
+    `qwen3-coder`. Delegated so the two tables that name models agree; this
+    file had its own copy, which predated the second provider and rendered a
+    vendor-prefixed id at full width straight through the column."""
+    return infer.short_model(model)
 
 
 def load(name):
@@ -175,7 +178,16 @@ def aggregate(rows):
             # Cost per extractor that actually worked. The headline cost of a
             # cheap model is per call; the cost that matters is per success,
             # and on a 5% cell those differ by twentyfold.
-            "usd_per_success": round(usd / k, 6) if k else None,
+            # None means "cannot be stated", and there are two ways to get
+            # there. No successes is one: dividing a bill by zero is how a
+            # broken cell gets quoted as free. Zero recorded spend is the
+            # other, and it is an artifact of replay - a cell re-scored
+            # against the response cache bills nothing in that run, so its
+            # spend lives in earlier ledger rows rather than in this record.
+            # Reporting 0.0 there would read as "this cell was free", which
+            # is the same lie in the other direction.
+            "usd_per_success": (round(usd / k, 6) if k and usd else None),
+            "usd_is_replayed": bool(k and not usd),
             "latency_p50_s": pctile(lat, 0.50),
             "latency_p95_s": pctile(lat, 0.95),
             "api_calls": len(errs),
@@ -198,7 +210,7 @@ def aggregate(rows):
 def report(agg):
     print("\nper-cell model statistics   (success = perfect agreement on "
           "every page)")
-    print("%-9s %-12s %5s %8s %-16s %8s %9s %9s %7s"
+    print("%-9s %-20s %5s %8s %-16s %8s %9s %9s %7s"
           % ("target", "model", "n", "success", "95% CI", "silent",
              "$/success", "drift", "p95 s"))
     for _, e in sorted(agg.items()):
@@ -206,12 +218,13 @@ def report(agg):
                if e["failures"] else "-")
         dr = ("%.2f (n=%d)" % (e["drift_survival"], e["drift_n"])
               if "drift_survival" in e else "-")
-        print("%-9s %-12s %5d %7.0f%% [%.2f, %.2f]      %8s %9s %9s %7s"
+        print("%-9s %-20s %5d %7.0f%% [%.2f, %.2f]      %8s %9s %9s %7s"
               % (e["target"], short(e["model"]), e["draws_scored"],
                  100 * (e["success_rate"] or 0),
                  e["success_ci95"][0], e["success_ci95"][1], sil,
                  ("$%.4f" % e["usd_per_success"]
-                  if e["usd_per_success"] else "never"),
+                  if e["usd_per_success"]
+                  else ("replayed" if e.get("usd_is_replayed") else "never")),
                  dr,
                  ("%.0f" % e["latency_p95_s"]
                   if e["latency_p95_s"] is not None else "-")))

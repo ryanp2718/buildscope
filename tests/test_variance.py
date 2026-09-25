@@ -200,3 +200,90 @@ class TestDriftHarnessIsolation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheHarnessDoesNotDecideTheAnswer(unittest.TestCase):
+    """Three harness assumptions that held only because Claude was the sole
+    caller, each found on 2026-09-24 by the first open-weight draws.
+
+    All three point the same way - they turn a working extractor into a
+    recorded failure - and all three would have landed hardest on the tier
+    this experiment was widened to measure. A harness artifact that biases
+    every cell in one direction is indistinguishable, in the published table,
+    from a fact about the models.
+    """
+
+    def setUp(self):
+        import conformance
+        self.C = conformance
+
+    def test_the_last_block_wins_not_the_first(self):
+        """A model whose reasoning lands in `content` emits drafts first."""
+        text = ("thinking about it\n\n```python\ndef extract(html):\n"
+                "    pass  # first attempt\n```\n\n"
+                "wait, that misses the header row\n\n"
+                "```python\ndef extract(html):\n    return [1, 2, 3]\n```\n")
+        src = self.C.extract_block(text, self.C.CODEBLOCK, "def extract(")
+        self.assertIn("return [1, 2, 3]", src)
+        self.assertNotIn("first attempt", src)
+
+    def test_a_block_without_the_contract_does_not_win_on_position(self):
+        text = ("```python\ndef extract(html):\n    return []\n```\n"
+                "and to call it:\n\n```python\nrows = extract(page)\n```\n")
+        src = self.C.extract_block(text, self.C.CODEBLOCK, "def extract(")
+        self.assertIn("def extract", src)
+        self.assertNotIn("rows = extract(page)", src)
+
+    def test_unbalanced_fences_do_not_walk_out_of_phase(self):
+        """The real failure: nine fences, one of them opening where a close
+        was due, which reassigned the answer's closing fence to a sketch."""
+        text = ("```python\nsketch = 1\n"
+                "```python\ndef extract(html):\n    return ['real']\n```\n")
+        blocks = self.C.fenced_blocks(text)
+        self.assertGreaterEqual(len(blocks), 2)
+        src = self.C.extract_block(text, self.C.CODEBLOCK, "def extract(")
+        self.assertIn("'real'", src)
+
+    def test_a_module_that_prints_is_not_an_execution_failure(self):
+        """The runner reports by writing JSON to stdout, so a stray print in
+        generated code corrupted the channel and the draw was recorded as
+        "runner produced no JSON" - a formatting habit scored as an
+        extraction error."""
+        import io
+        import tempfile
+        d = tempfile.mkdtemp()
+        src = os.path.join(d, "noisy.py")
+        page = os.path.join(d, "p.html")
+        with io.open(page, "w", encoding="utf-8") as fh:
+            fh.write("<html></html>")
+        with io.open(src, "w", encoding="utf-8") as fh:
+            fh.write("print('loading')\n"
+                     "def extract(html):\n"
+                     "    print('parsing')\n"
+                     "    return [{'native_id': 'A1'}]\n"
+                     "print('demo:', extract(''))\n")
+        res, err = self.C.run_synth(src, [page],
+                                    runner_name="_test_runner.py")
+        self.assertIsNone(err)
+        self.assertTrue(res[0]["ok"])
+        self.assertEqual(res[0]["rows"], [{"native_id": "A1"}])
+
+    def test_a_non_list_return_is_a_failure_not_a_clean_zero(self):
+        """`None` would crash the scorer and a dict would iterate its keys,
+        match nothing and report a confident zero."""
+        import io
+        import tempfile
+        for body, name in (("    return None\n", "NoneType"),
+                           ("    return {'a': 1}\n", "dict")):
+            d = tempfile.mkdtemp()
+            src = os.path.join(d, "bad.py")
+            page = os.path.join(d, "p.html")
+            with io.open(page, "w", encoding="utf-8") as fh:
+                fh.write("<html></html>")
+            with io.open(src, "w", encoding="utf-8") as fh:
+                fh.write("def extract(html):\n" + body)
+            res, err = self.C.run_synth(src, [page],
+                                        runner_name="_test_runner.py")
+            self.assertIsNone(err)
+            self.assertFalse(res[0]["ok"])
+            self.assertIn(name, res[0]["error"])

@@ -77,6 +77,18 @@ class TestPublishedCellStatistics(unittest.TestCase):
     def cell(self, target, model):
         return self.cells["%s|%s" % (target, model)]
 
+    def published(self):
+        """The cells the 2026-09-21 report describes: the Anthropic ones.
+
+        The aggregates below pin that report's totals, and a second provider
+        adds cells to the same store, so summing everything would make each
+        new open-weight draw fail a test about a finished experiment. Scoping
+        by provider keeps the guardrail pointed at what it was written to
+        guard - a change in the Claude numbers still fails here - and the
+        open-weight run gets its own pinned figures when it is published.
+        """
+        return {k: e for k, e in self.cells.items() if "/" not in e["model"]}
+
     def test_success_rates_match_the_variance_experiment(self):
         expected = {
             ("stjohns", "claude-haiku-4-5-20251001"): (15, 15),
@@ -93,7 +105,7 @@ class TestPublishedCellStatistics(unittest.TestCase):
 
     def test_fifty_five_draws_in_total(self):
         self.assertEqual(
-            sum(e["draws_scored"] for e in self.cells.values()), 55)
+            sum(e["draws_scored"] for e in self.published().values()), 55)
 
     def test_cost_per_success_inverts_the_price_list_on_the_hard_page(self):
         """The finding this module was written to expose.
@@ -132,14 +144,19 @@ class TestPublishedCellStatistics(unittest.TestCase):
             with self.subTest(cell=name):
                 if e["perfect"] == 0:
                     self.assertIsNone(e["usd_per_success"])
+                elif e.get("usd_is_replayed"):
+                    # Scored entirely from the response cache, so this run
+                    # billed nothing and the cell's real spend is in earlier
+                    # ledger rows. Stated as unknown rather than as zero.
+                    self.assertIsNone(e["usd_per_success"])
                 else:
                     self.assertGreater(e["usd_per_success"], 0)
 
     def test_silent_failures_dominate_where_there_are_failures(self):
         """55 draws, 29 failures, 25 silent. Asserted per-cell so a change in
         one model's failure character is visible rather than averaged away."""
-        total_f = sum(e["failures"] for e in self.cells.values())
-        total_s = sum(e["silent_failures"] for e in self.cells.values())
+        total_f = sum(e["failures"] for e in self.published().values())
+        total_s = sum(e["silent_failures"] for e in self.published().values())
         self.assertEqual(total_f, 29)
         self.assertEqual(total_s, 25)
 

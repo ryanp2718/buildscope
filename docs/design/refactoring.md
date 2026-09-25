@@ -17,7 +17,7 @@ Measured 2026-09-22, not estimated:
 | Spikes carrying a `sys.path.insert` hack | 39 |
 | Spikes importing a **sibling spike** as a library | 3 modules, 6 import sites |
 | Tools importing anything but `permits/` | **0**, enforced |
-| Third-party dependencies | 3 runtime, 2 dev, locked |
+| Third-party dependencies | 4 runtime, 2 dev, locked |
 
 Two structural problems dominated this document until 2026-09-22 and both are now closed, so what follows
 is shorter than it used to be.

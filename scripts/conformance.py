@@ -399,9 +399,69 @@ CODEBLOCK = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.S)
 JSONBLOCK = re.compile(r"```(?:json)?\s*\n(.*?)```", re.S)
 
 
-def extract_block(text, pat):
-    m = pat.search(text)
-    return m.group(1) if m else text
+FENCE_OPEN = re.compile(r"```[ \t]*(?:python|py|json)?[ \t]*\r?\n", re.I)
+# An opening fence is one that names a language. A bare ``` is read as a
+# close, which is the convention and the only way to tell the two apart.
+FENCE_LANG = re.compile(r"```[ \t]*(?:python|py|json)[ \t]*\r?\n", re.I)
+
+
+def fenced_blocks(text):
+    """Every fenced region, tolerant of fences that do not pair.
+
+    A regex pair like ```(.*?)``` assumes the fences alternate. Replies from
+    models that deliberate in prose do not: a draft is abandoned mid-block, so
+    the next thing seen is another *opening* fence where a close was due. The
+    pair regex takes it as the close, and from there every fence is off by
+    one - which is how the closing fence of the real answer gets assigned to
+    an earlier sketch and the answer disappears entirely.
+
+    So a fence that names a language is treated as an opening even when a
+    close was expected: the unclosed block ends there and scanning resumes at
+    it rather than past it. An unterminated final block runs to end of text,
+    which degrades to a truncated block rather than the wrong one.
+    """
+    out, pos = [], 0
+    while True:
+        m = FENCE_OPEN.search(text, pos)
+        if not m:
+            return out
+        start = m.end()
+        close = text.find("```", start)
+        if close == -1:
+            out.append(text[start:])
+            return out
+        out.append(text[start:close])
+        pos = close if FENCE_LANG.match(text, close) else close + 3
+
+
+def extract_block(text, pat, must_contain=None):
+    """The model's answer, from a reply that may hold several blocks.
+
+    Prefers the LAST block that satisfies the contract rather than the first
+    that matches a fence. A model whose chain of thought lands in `content`
+    emits drafts - a sketch, a correction, then the finished module - and the
+    first fenced block is an abandoned attempt. Claude puts that deliberation
+    in a separate thinking channel and emits one block, so `search` was
+    sufficient until 2026-09-24, when an open-weight reasoning model returned
+    nine fences and was scored on a 154-character fragment of its first
+    draft: 10,236 output tokens of a working extractor, recorded as a refusal.
+
+    That is a harness artifact that would have been read as a fact about the
+    model, and it points the same direction on every model in the open-weight
+    tier - which is exactly the comparison this experiment exists to make.
+
+    `must_contain` selects on the contract the prompt asked for instead of on
+    position, so a trailing usage example does not win for being last.
+    """
+    blocks = fenced_blocks(text)
+    if not blocks:
+        m = pat.search(text)
+        return m.group(1) if m else text
+    if must_contain:
+        named = [b for b in blocks if must_contain in b]
+        if named:
+            return named[-1]
+    return max(blocks, key=len)
 
 
 def audit(src):
@@ -437,20 +497,43 @@ def audit(src):
 
 
 RUNNER = r'''# -*- coding: utf-8 -*-
-import io, json, sys, importlib.util
+# The generated module's own stdout is captured and discarded. Importing it
+# executes its top level, and `extract` may print too; this runner reports by
+# writing JSON to stdout, so one stray print in generated code would corrupt
+# that channel and the whole draw would be recorded as "runner produced no
+# JSON". Claude was told not to print and did not, which is why this went
+# unnoticed - a model that ends its module with a demo call is making a
+# formatting choice, not an extraction error, and the measurement should not
+# confuse the two. The real stdout is held aside and used only for the report.
+import io, json, sys, importlib.util, contextlib
+_real_stdout = sys.stdout
+_sink = io.StringIO()
 spec = importlib.util.spec_from_file_location("synth", sys.argv[1])
 mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+with contextlib.redirect_stdout(_sink):
+    spec.loader.exec_module(mod)
 out = []
 for p in sys.argv[2:]:
     html = io.open(p, encoding="utf-8", errors="replace").read()
     try:
-        rows = mod.extract(html)
-        out.append({"page": p, "ok": True, "rows": rows})
+        with contextlib.redirect_stdout(_sink):
+            rows = mod.extract(html)
+        # A non-list return is a contract violation, not a parse of zero
+        # records, and it is recorded as a failure for the same reason an
+        # exception is: the scorer would otherwise either crash on None or
+        # quietly iterate a dict's keys and report a clean zero. The error
+        # text names the type so this stays distinguishable from a genuine
+        # empty parse in the stored records.
+        if not isinstance(rows, list):
+            out.append({"page": p, "ok": False,
+                        "error": "ContractError: extract() returned %s, "
+                                 "not a list" % type(rows).__name__})
+        else:
+            out.append({"page": p, "ok": True, "rows": rows})
     except Exception as e:
         out.append({"page": p, "ok": False,
                     "error": "%s: %s" % (e.__class__.__name__, e)})
-sys.stdout.write(json.dumps(out))
+_real_stdout.write(json.dumps(out))
 '''
 
 
@@ -586,11 +669,26 @@ def matrix(targets, args):
 
     Printed rather than argued, because the interesting fact about the second
     axis is how cheap it is: the arms differ in cost by the ratio of one page
-    to one corpus, and the models differ by a flat 5x. Those are very
-    different levers and only one of them is a tradeoff.
+    to one corpus, while the models now differ by more than two orders of
+    magnitude. Those are very different levers and only one of them is a
+    tradeoff.
+
+    **[2026-09-23] The model axis used to stop at 5x**, which is the spread
+    across the three Claude tiers. A claim about cost per success measured
+    only inside a 5x band cannot say whether it survives a wider one, and the
+    open-weight rows reach roughly 90x below Opus 5. That is the whole reason
+    they are here; see the `permits/infer.py` docstring.
     """
+    priced = dict(infer.PRICES)
+    priced.update(infer.OPENROUTER_PRICES)
+    # Free endpoints are excluded: this table plans measurements, and a free
+    # route does not promise a fixed upstream or quantization, so a cell drawn
+    # from one is not a sample of a single condition. It would also sort to
+    # the top and make the cheapest-tier line below quote a zero.
+    for m in infer.OPENROUTER_FREE:
+        priced.pop(m, None)
     rows = []
-    for model in sorted(infer.PRICES, key=lambda m: infer.PRICES[m][0]):
+    for model in sorted(priced, key=lambda m: priced[m][0]):
         s_usd = d_usd = 0.0
         for key in targets:
             t = TARGETS[key]
@@ -608,15 +706,20 @@ def matrix(targets, args):
                     infer.tokens(DIRECT_SYSTEM) + infer.tokens(strip(read(p))),
                     direct_budget(len(refs[fn])))
         rows.append((model, s_usd, d_usd))
-    print("\nprojected worst case, %s\n" % infer.PRICES_AS_OF)
-    print("  %-28s %9s %9s %9s" % ("model", "arm S", "arm D", "both"))
+    print("\nprojected worst case")
+    print("  Anthropic  %s" % infer.PRICES_AS_OF)
+    print("  OpenRouter %s\n" % infer.OPENROUTER_PRICES_AS_OF)
+    print("  %-30s %9s %9s %9s %8s"
+          % ("model", "arm S", "arm D", "both", "vs dearest"))
+    dearest = max(r[1] + r[2] for r in rows) or 1.0
     for model, s, d in rows:
-        print("  %-28s %9s %9s %9s"
-              % (model, "$%.3f" % s, "$%.3f" % d, "$%.3f" % (s + d)))
+        print("  %-30s %9s %9s %9s %7.1fx"
+              % (model, "$%.3f" % s, "$%.3f" % d, "$%.3f" % (s + d),
+                 dearest / (s + d) if (s + d) else 0.0))
     cheap = rows[0]
     dear = rows[-1]
     print("\n  full 2x2 (%s and %s, both arms): $%.3f"
-          % (cheap[0].split("-")[1], dear[0].split("-")[1],
+          % (infer.short_model(cheap[0]), infer.short_model(dear[0]),
              sum(cheap[1:]) + sum(dear[1:])))
     print("  cheap tier first, then decide:         $%.3f now, $%.3f held back"
           % (sum(cheap[1:]), sum(dear[1:])))
@@ -635,8 +738,12 @@ def main():
     ap.add_argument("--direct-pages", type=int, default=2,
                     help="whole pages per target sent to the model for arm D")
     ap.add_argument("--key-file", default=None,
-                    help="file holding the API key (default %s)"
+                    help="file holding the Anthropic API key (default %s)"
                          % infer.KEY_FILE)
+    ap.add_argument("--openrouter-key-file", default=None,
+                    help="file holding the OpenRouter API key (default %s). "
+                         "Any model id containing a slash is routed there."
+                         % infer.OPENROUTER_KEY_FILE)
     ap.add_argument("--synth-model", default=MODEL)
     ap.add_argument("--direct-model", default=MODEL)
     ap.add_argument("--variance-report", action="store_true",
@@ -679,11 +786,30 @@ def main():
     if not os.path.isdir(SYNTH):
         os.makedirs(SYNTH)
     client = infer.Client(ROOT, args.max_spend, dry_run=not args.run,
-                          key_file=args.key_file)
-    if args.run and not client.key:
-        raise SystemExit(
-            "no API key. Set ANTHROPIC_API_KEY or write it to %s, then "
-            "re-run. Nothing has been sent." % infer.KEY_FILE)
+                          key_file=args.key_file,
+                          openrouter_key_file=args.openrouter_key_file)
+    if args.run:
+        # Check the credential for every provider this run will actually use,
+        # not just Anthropic's. Having one of the two configured must not read
+        # as having the other, or the run dies partway through an allocation
+        # with some cells paid for and some not.
+        need = {args.synth_model, args.direct_model}
+        if args.cells:
+            for cell in args.cells.split(","):
+                bits = cell.strip().split(":", 1)
+                if len(bits) == 2 and bits[1].count(":"):
+                    need.add(bits[1].rsplit(":", 1)[0])
+        for m in sorted(need):
+            if not client.key_for(m):
+                prov = infer.provider_for(m)
+                raise SystemExit(
+                    "no API key for %s, needed by %s. Set %s or write it to "
+                    "%s, then re-run. Nothing has been sent."
+                    % (prov, m,
+                       "OPENROUTER_API_KEY" if prov == infer.OPENROUTER
+                       else "ANTHROPIC_API_KEY",
+                       infer.OPENROUTER_KEY_FILE
+                       if prov == infer.OPENROUTER else infer.KEY_FILE))
     report = {"targets": {}, "prices_as_of": infer.PRICES_AS_OF,
               "synth_model": args.synth_model,
               "direct_model": args.direct_model,
@@ -802,7 +928,7 @@ def run_variance(client, target, pages, refs, args):
     one when the alternative is partial credit nobody can act on.
     """
     win, _frac, _at = window(read(pages[0][1]), args.synth_window)
-    tier = args.synth_model.replace("claude-", "").split("-2")[0]
+    tier = infer.short_model(args.synth_model)
     prompt = ("Portal page excerpt (one page of the result grid, stripped of "
               "scripts, styles and non-structural attributes):\n\n" + win)
     vdir = os.path.join(SYNTH, "variance")
@@ -830,7 +956,7 @@ def run_variance(client, target, pages, refs, args):
         rec.update({"usd": meta["usd"], "cached": meta["cached"],
                     "truncated": meta.get("truncated"),
                     "output_tokens": usage.get("output_tokens", 0)})
-        src = extract_block(text, CODEBLOCK)
+        src = extract_block(text, CODEBLOCK, "def extract(")
         rec["bytes"] = len(src)
         if not src:
             rec["outcome"] = "no_code"
@@ -938,11 +1064,22 @@ def run_cells(client, args):
     """
     spec = []
     for cell in args.cells.split(","):
-        bits = cell.strip().split(":")
-        if len(bits) != 3:
+        # Split off the target at the first colon and the draw count at the
+        # last, rather than splitting on every colon: an OpenRouter model id
+        # may contain one itself, as in `openai/gpt-oss-120b:batch`, and a
+        # three-way split would reject the cheapest models on the menu.
+        cell = cell.strip()
+        if cell.count(":") < 2:
             raise SystemExit("bad --cells entry %r, want target:model:draws"
                              % cell)
-        spec.append((bits[0], bits[1], int(bits[2])))
+        tkey, rest = cell.split(":", 1)
+        model, draws = rest.rsplit(":", 1)
+        try:
+            n = int(draws)
+        except ValueError:
+            raise SystemExit("bad draw count %r in --cells entry %r"
+                             % (draws, cell)) from None
+        spec.append((tkey, model, n))
 
     loaded = {}
     total_worst = 0.0
@@ -966,8 +1103,15 @@ def run_cells(client, args):
         target, pages, refs = loaded[tkey]
         saved = args.synth_model
         args.synth_model = model
-        worst = plan(target, pages, refs, args)["synth_usd"] * n
-        args.synth_model = saved
+        try:
+            worst = plan(target, pages, refs, args)["synth_usd"] * n
+        except infer.Refused as e:
+            # An unpriced model is a refusal, not a crash. It is the most
+            # likely thing to be wrong about a hand-typed --cells line, and a
+            # traceback buries the one sentence that says how to fix it.
+            raise SystemExit("%s Nothing has been sent." % e) from None
+        finally:
+            args.synth_model = saved
         total_worst += worst
         print("  %-9s %-26s %2d draws   <= $%.2f worst case"
               % (tkey, model, n, worst))
@@ -1180,7 +1324,7 @@ def variance_pool(target_key, model=None):
             continue
         if model and cell.get("model") != model:
             continue
-        tier = cell["model"].replace("claude-", "").split("-2")[0]
+        tier = infer.short_model(cell["model"])
         for d in cell.get("detail", []):
             if d.get("outcome") == "perfect" and d.get("source"):
                 if os.path.exists(d["source"]):
@@ -1389,13 +1533,13 @@ def summarize_drift(report):
 def run_target(client, target, pages, refs, args, rep):
     # ---- arm S ---------------------------------------------------------
     win, frac, _at = window(read(pages[0][1]), args.synth_window)
-    tier = args.synth_model.replace("claude-", "").split("-2")[0]
+    tier = infer.short_model(args.synth_model)
     text, usage, meta = client.message(
         args.synth_model, SYNTH_SYSTEM,
         "Portal page excerpt (one page of the result grid, stripped of "
         "scripts, styles and non-structural attributes):\n\n" + win,
         args.synth_tokens, "synthesis", thinking=True, tag=target.key)
-    src = extract_block(text, CODEBLOCK)
+    src = extract_block(text, CODEBLOCK, "def extract(")
     # Keyed by model: a second tier's extractor must not overwrite the first's,
     # or the two are not comparable afterwards and the cheap run has destroyed
     # the artifact the expensive one produced.
@@ -1454,6 +1598,19 @@ def run_target(client, target, pages, refs, args, rep):
                              "usd": meta["usd"]})
             print("    arm D: %s -> unparseable output (truncated=%s)"
                   % (fn, meta.get("truncated")))
+            continue
+        if not isinstance(rows, list):
+            # Valid JSON that is not an array. `null` would crash the scorer
+            # and an object would iterate its keys, match nothing, and report
+            # a clean zero - the silent-failure mode this project exists to
+            # measure, arriving through the harness instead of the model.
+            d_scores.append({"page": fn,
+                             "error": "not a JSON array: %s"
+                                      % type(rows).__name__,
+                             "truncated": meta.get("truncated"),
+                             "usd": meta["usd"]})
+            print("    arm D: %s -> output was %s, not an array"
+                  % (fn, type(rows).__name__))
             continue
         sc = score(target, refs[fn], rows)
         sc.update({"page": fn, "usd": meta["usd"],

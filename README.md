@@ -76,7 +76,7 @@ scripts/      six maintained tools.  conformance.py is the experiment harness;
               three check_*.py validate the docs, the identities and the notes.
 spikes/       the lab notebook.  47 scripts, unmaintained, kept because the
               published numbers came out of them.  See spikes/README.md.
-tests/        222 tests, replay over stored pages.  No network, no spend.
+tests/        271 tests, replay over stored pages.  No network, no spend.
 docs/         adr/ why a rule exists · design/ how it works · evidence/ what
               was measured, dated and reproducible.
 DESIGN.md     the narrative: thesis, open questions, sequencing, risk register.
@@ -102,10 +102,21 @@ To re-derive the published model statistics from the stored artifacts:
 uv run python scripts/model_stats.py
 ```
 
-Running the inference experiments for real needs an Anthropic API key in `~/.anthropic_key`. Every call is
-ledgered before it bills and any call whose worst-case cost would break the configured ceiling is refused
-rather than attempted. Responses are cached under a hash of the request, so a 55-call experiment replays
-end to end for $0.00.
+Running the inference experiments for real needs an Anthropic API key in `~/.anthropic_key`, and — for the
+open-weight models — an OpenRouter key in `~/.openrouter_key`. Any model id containing a slash is routed to
+OpenRouter through the OpenAI-compatible endpoint; everything else goes to Anthropic. `uv run python
+scripts/conformance.py --matrix` prints the current price ladder, which spans about 90× from the cheapest
+open-weight model to Opus 5.
+
+That spread is the point rather than a saving. The project's central claim is that **cost per success, not
+cost per token, is what ranks models**, and until 2026-09-23 it was measured only across three Claude tiers
+— a 5× band, inside which the claim holds: Haiku needs a 20% success rate to beat Opus on cost per success
+and measures 5%. Whether it survives an 88× band, where a model needs roughly one success in eighty-eight,
+is a different question and an open one.
+
+Every call is ledgered before it bills and any call whose worst-case cost would break the configured ceiling
+is refused rather than attempted. Responses are cached under a hash of the request, so a 55-call experiment
+replays end to end for $0.00.
 
 ## The captured pages are not in this repository
 

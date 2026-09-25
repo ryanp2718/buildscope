@@ -70,7 +70,7 @@ step 1 is underway with three adapters. Two changes to how this document should 
   because Bowling Green KY turned out to publish no permit records at all. Bucket 4 - the cell section 8
   said the whole figure rested on - is now **2.3% of units**, down from 33.9% two days ago. See
   [the bucket-4 report](docs/evidence/2026-09-21-bucket4-resolution.md).
-- **There is a test suite**, 222 tests, offline and free, run with `python scripts/run_tests.py`. The part
+- **There is a test suite**, 271 tests, offline and free, run with `python scripts/run_tests.py`. The part
   that matters for this document: **every headline figure quoted below is recomputed from its source
   artifact by `tests/test_artifacts.py`.** Editing a number here without the artifact, or the artifact
   without the number, now fails. [ADR-0016](docs/adr/0016-tests-are-replay-over-the-raw-store.md),
@@ -834,6 +834,25 @@ in/out; Sonnet 5 $2/$10; Haiku 4.5 $1/$5. Prompt-cache reads bill at 0.1x input;
    published agent-loop measurements put caching at a 2.5-3.7x cost reduction at 81-90% hit rates; this
    workload's prefix/suffix ratio is unusually favorable. **Verify with `cache_read_input_tokens`, not
    by reading the code** - if it is zero across repeated calls, something in the prefix is varying.
+
+   **[2026-09-23] VERIFIED, as instructed, and this lever is worth about 2% of spend - not 2.5-3.7x.**
+   Across all 67 calls in `data/infer/ledger.jsonl`, **5 had any cache activity at all**, every one of
+   them Opus 5 on `clarkco`. Haiku and Sonnet show zero cache *writes*, not merely zero reads, so the
+   breakpoint never engaged on them.
+
+   Nothing in the prefix is varying. **The prefix/suffix claim is inverted.** The stable part is
+   `SYNTH_SYSTEM` - schema, ontology, few-shots - and it measures **889 tokens against a 13,535-token
+   request, 6.6%**. The variable part is the page, and it is the other 93%. Anthropic's agent-loop
+   figures describe a long stable conversation history against short turns; this is one shot over a
+   large document, which is the same ratio the other way up. Even at a 100% hit rate on every call the
+   ceiling is 0.9 x 6.6% of input spend, and input is 35% of the bill: **~2% of total.**
+
+   Where the money actually is, measured over the same 67 calls: **output tokens are 51-75% of spend
+   in every call class.** A lever that only touches input cannot be the top of this list. Lever 2 is,
+   and it is worth restating that **lever 2 has never been implemented** - there is no Batch code path
+   in `permits/` or `scripts/`, so all 67 calls were billed at full rate, while `cost_model.py` prices
+   the entire project with `batch=True` as its default argument. Every planned figure in this section
+   is a batched number and every measured figure is not.
 4. **Do not send raw HTML to the model.** Strip scripts, styles, comments, and attribute noise before
    the page enters a prompt. On municipal portal HTML this is routinely an order-of-magnitude token
    reduction against identical extraction quality, and it compounds with everything above.
@@ -1974,7 +1993,7 @@ October misses that cycle. Verify actual dates for target companies rather than 
 | **A reconciliation figure built on implied units gets quoted bare** `[2026-09-20]` | **High** | St. Johns states no unit count; its 4.1% is derived from the BPS taxonomy and tests the implication rule rather than measuring extraction. The alarm marks it `qualified` (distinct from `tripped`), the reconciler keeps it out of the headline median and prints it separately. The residual risk is a human quoting it from the table. |
 | **Apply-and-pay portals read as permit portals** `[2026-09-21]` | **High** | Both bucket-4 offices probed run modern transactional portals - Tyler eSuite, a custom ASP.NET app - that publish **no permit records at all**. Vendor detection, form detection and every automated signal Spike A used score them as healthy portals. Any coverage figure built from portal *detection* rather than a demonstrated record query is inflated by an unknown amount. ADR-0004's bucket 7 does not distinguish this case and needs revising. |
 | **An office identity is silently substituted** `[2026-09-21]` | **High** | All 28 office ids in `portals.csv` were wrong and **7 resolved to a real, different office** - `12|633000` is Okeechobee County, not St. Johns. An existence check passes on every one. Mitigation is `scripts/check_identity.py`, which checks the key *against the name recorded beside it* and runs in the test suite; known-wrong keys in dated captures are registered in `data/corrections.csv` rather than rewritten. |
-| **The regression suite is mistaken for a golden set** `[2026-09-21]` | Medium | 222 tests assert that behaviour has not *changed*; none asserts it is *correct*. D9's 500-1,000 blind-labelled records remain unstarted and unmeasured, and the cheap suite makes deferring the expensive one feel safer than it is. See [ADR-0014](docs/adr/0014-the-golden-set-precedes-the-pipeline.md). |
+| **The regression suite is mistaken for a golden set** `[2026-09-21]` | Medium | 271 tests assert that behaviour has not *changed*; none asserts it is *correct*. D9's 500-1,000 blind-labelled records remain unstarted and unmeasured, and the cheap suite makes deferring the expensive one feel safer than it is. See [ADR-0014](docs/adr/0014-the-golden-set-precedes-the-pipeline.md). |
 | **The capture layer is untested** `[2026-09-21, closed 2026-09-22]` | Closed | `permits/capture.py` writes the provenance log everything downstream trusts and had **no tests**. `tests/test_capture.py` now covers robots handling, the per-host pause, the budget ceiling, schema migration and the verdict rules against a loopback HTTP server - no mock, real `urllib`. It failed on its first run against the one invariant the module exists to enforce: `fetch()` wrote the page and then the row, so a refused schema migration left an unrecorded page on disk, which is the Spike C failure reintroduced inside the code written to prevent it. Fixed by writing the row first and promoting the page only afterwards. **Residual:** the ASP.NET postback path - viewstate, the CSRF headers, the session cookie across a paged grid - is still only exercised by replay. |
 | BPS reconciliation infeasible | **Critical** | Spike B. **[2026-09-19]** Fall back to D7 reporting lag as the validation spine; do not re-plan from scratch. |
 | **Templates do not collapse across jurisdictions** `[2026-09-19]` | **Critical** | **Spike C**, run before step 4 is built. Untested until now. Kills the amortization claim, i.e. the stated reason the architecture exists. |
