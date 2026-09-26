@@ -62,6 +62,82 @@ class TestEstimators(unittest.TestCase):
         self.assertEqual(failure_mode({"outcome": "raised"}), "loud")
 
 
+def _draw(i, out, perfect, cached=False, usd=0.01):
+    return {"draw": i, "output_tokens": out, "cached": cached,
+            "usd": 0.0 if cached else usd,
+            "outcome": "perfect" if perfect else "imperfect",
+            "recall_min": 1.0 if perfect else 0.0}
+
+
+def _buy(i, out, usd=0.01, model="m/x"):
+    return {"call_class": "synthesis", "tag": "clarkco/var", "model": model,
+            "draw": i, "output_tokens": out, "usd": usd, "ok": True,
+            "seconds": 1.0}
+
+
+class TestCellsAreConditions(unittest.TestCase):
+    """Synthetic store, so these hold whatever the live data says.
+
+    Written after the roll-up grouped on (target, model): the hinted glm-5.2
+    draws landed in the baseline cell and turned 0/10 into 1/15, and the
+    cell's cost summed every variance call the model had ever made."""
+
+    def run_stats(self, cells, ledger):
+        import model_stats
+        v = {"cells": cells}
+        rows = (model_stats.rows_from_variance(v, ledger)
+                + model_stats.rows_from_ledger(ledger))
+        return model_stats, model_stats.aggregate(rows)
+
+    def cell(self, draws, hint=False):
+        return {"target": "clarkco", "model": "m/x", "synth_hint": hint,
+                "detail": draws}
+
+    def test_a_hinted_cell_does_not_pool_into_its_baseline(self):
+        _, agg = self.run_stats(
+            {"clarkco|m/x": self.cell([_draw(0, 100, False),
+                                       _draw(1, 200, False)]),
+             "clarkco|m/x|hint": self.cell([_draw(0, 300, True)], hint=True)},
+            [_buy(0, 100), _buy(1, 200), _buy(0, 300)])
+        self.assertEqual(sorted(agg), ["clarkco|m/x", "clarkco|m/x|hint"])
+        self.assertEqual(agg["clarkco|m/x"]["perfect"], 0)
+        self.assertEqual(agg["clarkco|m/x"]["draws_scored"], 2)
+        self.assertIsNone(agg["clarkco|m/x"]["usd_per_success"])
+        self.assertEqual(agg["clarkco|m/x|hint"]["usd_total"], 0.01)
+
+    def test_a_replayed_draw_is_priced_at_what_it_cost_to_buy(self):
+        _, agg = self.run_stats(
+            {"clarkco|m/x": self.cell([_draw(0, 100, True, cached=True)])},
+            [_buy(0, 100, usd=0.05)])
+        e = agg["clarkco|m/x"]
+        self.assertEqual(e["usd_this_run"], 0.0)
+        self.assertEqual(e["usd_per_success"], 0.05)
+        self.assertTrue(e["usd_is_replayed"])
+
+    def test_superseded_and_duplicate_purchases_are_not_a_cells_cost(self):
+        """An earlier ceiling's draw 0 and a second purchase of draw 1 were
+        both paid for; neither produced a response this cell was scored on."""
+        ledger = [_buy(0, 16000, usd=0.08),     # older, lower ceiling
+                  _buy(1, 7563, usd=0.015),     # bought twice concurrently
+                  _buy(0, 4415, usd=0.01),
+                  _buy(1, 7831, usd=0.015)]     # the one the cache kept
+        cells = {"clarkco|m/x": self.cell([_draw(0, 4415, True, cached=True),
+                                           _draw(1, 7831, False,
+                                                 cached=True)])}
+        ms, agg = self.run_stats(cells, ledger)
+        self.assertAlmostEqual(agg["clarkco|m/x"]["usd_total"], 0.025)
+        self.assertEqual(ms.unclaimed({"cells": cells}, ledger), [0, 1])
+
+    def test_a_draw_with_no_purchase_row_makes_the_cost_unstated(self):
+        """Half a bill over the full success count would understate it."""
+        _, agg = self.run_stats(
+            {"clarkco|m/x": self.cell([_draw(0, 100, True, cached=True),
+                                       _draw(1, 200, True, cached=True)])},
+            [_buy(0, 100)])
+        self.assertEqual(agg["clarkco|m/x"]["draws_unpriced"], 1)
+        self.assertIsNone(agg["clarkco|m/x"]["usd_per_success"])
+
+
 class TestPublishedCellStatistics(unittest.TestCase):
     """Pinned figures. These fail when a measurement changes, which is the
     point - the failure is the reminder to write a new evidence report."""
@@ -144,13 +220,16 @@ class TestPublishedCellStatistics(unittest.TestCase):
             with self.subTest(cell=name):
                 if e["perfect"] == 0:
                     self.assertIsNone(e["usd_per_success"])
-                elif e.get("usd_is_replayed"):
-                    # Scored entirely from the response cache, so this run
-                    # billed nothing and the cell's real spend is in earlier
-                    # ledger rows. Stated as unknown rather than as zero.
-                    self.assertIsNone(e["usd_per_success"])
                 else:
+                    # Positive even when this run billed nothing. A cell
+                    # re-scored against the response cache is free to repeat
+                    # and was not free to buy, so the denominator is what the
+                    # cell's draws cost, joined from the ledger rows that
+                    # bought them.
                     self.assertGreater(e["usd_per_success"], 0)
+                    self.assertEqual(e["draws_unpriced"], 0)
+                    self.assertGreaterEqual(e["usd_total"],
+                                            e["usd_this_run"])
 
     def test_silent_failures_dominate_where_there_are_failures(self):
         """55 draws, 29 failures, 25 silent. Asserted per-cell so a change in
@@ -159,6 +238,64 @@ class TestPublishedCellStatistics(unittest.TestCase):
         total_s = sum(e["silent_failures"] for e in self.published().values())
         self.assertEqual(total_f, 29)
         self.assertEqual(total_s, 25)
+
+
+class TestOpenWeightAxisFigures(unittest.TestCase):
+    """Pinned figures for docs/evidence/2026-09-25-open-weight-model-axis.md.
+
+    That report's front matter said it was pinned before anything pinned it,
+    and its tables went stale in exactly the way that allows: kimi-k2-thinking
+    stayed at 0/2 in two sections after the cell had reached 2/10. If one of
+    these moves, the report is out of date."""
+
+    # (target, model, condition): (perfect, scored, $/success or None)
+    CELLS = {
+        ("stjohns", "openai/gpt-oss-120b", "baseline"): (18, 20, 0.001016),
+        ("stjohns", "qwen/qwen3.5-flash-02-23", "baseline"): (10, 20,
+                                                              0.006789),
+        ("stjohns", "qwen/qwen3-coder", "baseline"): (7, 20, 0.007514),
+        ("clarkco", "moonshotai/kimi-k2-thinking", "baseline"): (2, 10,
+                                                                 0.173813),
+        ("clarkco", "deepseek/deepseek-v4-flash", "baseline"): (1, 10,
+                                                                0.05662),
+        ("clarkco", "z-ai/glm-5.3-flash", "baseline"): (2, 10, 0.014129),
+        ("clarkco", "deepseek/deepseek-v4-pro", "baseline"): (0, 10, None),
+        ("clarkco", "z-ai/glm-5.2", "baseline"): (0, 10, None),
+        ("clarkco", "openai/gpt-oss-120b", "baseline"): (0, 20, None),
+        ("clarkco", "qwen/qwen3-coder", "baseline"): (0, 20, None),
+        ("clarkco", "qwen/qwen3.5-flash-02-23", "baseline"): (0, 20, None),
+        ("clarkco", "z-ai/glm-5.2", "hint"): (1, 5, 0.136135),
+        ("clarkco", "z-ai/glm-5.3-flash", "hint"): (2, 5, 0.006224),
+        ("clarkco", "deepseek/deepseek-v4-flash", "hint"): (0, 5, None),
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        if not os.path.exists(STATS):
+            raise unittest.SkipTest(
+                "no model_stats.json; run scripts/model_stats.py")
+        with io.open(STATS, encoding="utf-8") as fh:
+            cls.cells = json.load(fh)["cells"]
+
+    def test_cells_match_the_report(self):
+        for (target, model, cond), (k, n, per) in self.CELLS.items():
+            name = "%s|%s" % (target, model) + (
+                "" if cond == "baseline" else "|" + cond)
+            with self.subTest(cell=name):
+                e = self.cells[name]
+                self.assertEqual((e["perfect"], e["draws_scored"]), (k, n))
+                if per is None:
+                    self.assertIsNone(e["usd_per_success"])
+                else:
+                    self.assertAlmostEqual(e["usd_per_success"], per,
+                                           places=6)
+
+    def test_opus_is_not_the_only_model_to_solve_clark(self):
+        """The claim the report carried, and R1 in the 2026-09-26 audit."""
+        solved = sorted(e["model"] for e in self.cells.values()
+                        if e["target"] == "clarkco"
+                        and e["condition"] == "baseline" and e["perfect"])
+        self.assertEqual(len(solved), 6, solved)
 
 
 if __name__ == "__main__":

@@ -126,18 +126,56 @@ def short_model(model):
 # The ladder spans 88x to 8x cheaper per synthesis draw than Opus 5, which is
 # the point: the existing model axis is a 5x band and cannot answer whether
 # the cost-per-success inversion survives a wider one.
+# Rates in USD per million tokens, input then output. Read this as a CEILING
+# TABLE, not a price list: several entries sit deliberately above the quoted
+# rate, and the quoted rate is in the comment beside them.
+#
+# Reconciled 2026-09-25 against all 132 paid OpenRouter calls on disk, pricing
+# the full prompt (`input_tokens + cache_read_input_tokens`, since a cached
+# read is discounted but still billed). Two separate reasons to diverge:
+#
+#   Under-reported reasoning. glm-5.2 billed 2.09x its list projection on 4 of
+#   4 calls and deepseek-v4-pro 1.26x on 3 of 3, because `completion_tokens`
+#   does not include every reasoning token those two are charged for.
+#   kimi-k2-thinking reconciles at exactly 1.00, which is how we know this is
+#   a per-model reporting difference and not a rule about reasoning models.
+#
+#   Routing variance. One OpenRouter model id is not one upstream, and the
+#   upstreams do not agree on price. gpt-oss-120b reconciles at a mean of 0.51
+#   but a max of 1.88, qwen3-coder at 0.57 mean and 1.33 max - the mean says
+#   the list rate is right and the tail says it is not a bound.
+#
+# The table has exactly one job, the pre-call worst case in `Budget.check`,
+# where stale-high is safe and stale-low is not a ceiling at all. The entries
+# therefore carry margin over the worst ratio observed rather than tracking
+# it: routing variance means the next call can be served by an upstream none
+# of these calls used, so a rate fitted to the observed maximum is a rate that
+# is already wrong. None of this touches the accounting - the ledger records
+# OpenRouter's reported `usage.cost` and flags it `usd_reported`, so what is
+# billed comes from the invoice and only what is *authorized* comes from
+# here.
 OPENROUTER_PRICES = {
-    "qwen/qwen3.5-flash-02-23": (0.065, 0.260),
-    "openai/gpt-oss-120b": (0.150, 0.600),
+    "qwen/qwen3.5-flash-02-23": (0.065, 0.260),        # list; reconciles 1.00
+    "openai/gpt-oss-120b": (0.300, 1.200),             # 2x list 0.150/0.600
     # OpenRouter exposes asynchronous variants under a `:batch` suffix at a
     # steep discount - 80% here, not the 50% Anthropic's Batch API gives. The
     # suffix is part of the model id, which is why `--cells` splits on the
     # first and last colon rather than on every one.
     "openai/gpt-oss-120b:batch": (0.0296, 0.136),
-    "qwen/qwen3-coder": (0.300, 1.000),
-    "moonshotai/kimi-k2-thinking": (0.600, 2.500),
-    "z-ai/glm-5.2": (0.650, 2.042),
-    "deepseek/deepseek-v4-pro": (0.940, 1.879),
+    "qwen/qwen3-coder": (0.450, 1.500),                # 1.5x list 0.300/1.000
+    "moonshotai/kimi-k2-thinking": (0.600, 2.500),     # list; reconciles 1.00
+    "z-ai/glm-5.2": (0.650, 7.500),                    # list out 2.042
+    "deepseek/deepseek-v4-pro": (0.940, 5.000),        # list out 1.879
+    # Current-generation cheap tier, added 2026-09-25 and reconciled
+    # 2026-09-26 against their first paid calls. The two diverge from list
+    # for the two different reasons above. glm-5.3-flash under-reports
+    # reasoning like its larger sibling: 9 of 9 calls billed above list, mean
+    # 2.40x, max 3.38x. deepseek-v4-flash is routing: 12 of 15 calls
+    # reconcile at 1.00 and the other 3 - the slow ones, 15-24 tokens/s -
+    # billed 4.7-4.8x, which is a different upstream at a different price.
+    # Output rates are about 1.5x the rate that bounds the worst call.
+    "z-ai/glm-5.3-flash": (0.070, 2.300),              # list 0.045/0.140
+    "deepseek/deepseek-v4-flash": (0.075, 0.750),      # list 0.047/0.095
     # Free tier, for verifying the path end to end before any money is added
     # to the account. Deliberately NOT a measurement cell: a free endpoint
     # does not promise which upstream, which quantization or which context
@@ -146,7 +184,8 @@ OPENROUTER_PRICES = {
     # routing rather than the model. Use it to prove the wire works.
     "nvidia/nemotron-3-ultra-550b-a55b:free": (0.0, 0.0),
 }
-OPENROUTER_PRICES_AS_OF = "2026-09-23 (openrouter.ai/api/v1/models)"
+OPENROUTER_PRICES_AS_OF = ("2026-09-23 (openrouter.ai/api/v1/models); reasoning output "
+                           "rates reconciled to invoice 2026-09-25")
 
 # Priced at zero on purpose, as opposed to zero because someone dropped a
 # digit. Anything here is excluded from the "every rate is positive" check and
@@ -161,7 +200,44 @@ OPENROUTER_REASONING = frozenset([
     "moonshotai/kimi-k2-thinking",
     "deepseek/deepseek-v4-pro",
     "z-ai/glm-5.2",
+    # Membership was probed, not assumed from the name. Both return a
+    # populated `reasoning` field and a non-zero `reasoning_tokens` count
+    # when sent no reasoning parameter, so both are billed for thinking out
+    # of the same allowance and both need the headroom.
+    "z-ai/glm-5.3-flash",
+    "deepseek/deepseek-v4-flash",
 ])
+
+# Room to think, added on top of the answer budget rather than taken out of
+# it. OpenRouter counts reasoning tokens and output tokens against the same
+# `max_tokens`, so passing one ceiling to every model does not give every
+# model the same experiment: a model that thinks gets whatever is left after
+# thinking, and a model that does not gets all of it. Measured 2026-09-24 at a
+# 16,000 ceiling, that difference is the whole result - glm-5.2 spent 16,000
+# tokens reasoning on both clarkco draws and emitted no extractor either time,
+# kimi-k2-thinking and deepseek-v4-pro truncated once each. Scored as written,
+# that reads as "reasoning models cannot do this page". It is a fact about the
+# ceiling.
+#
+# 32,000 is twice the level observed to bind, chosen so it does not bind
+# again; it is a cap and bills only what is drawn against it. The answer
+# budget is then whatever the caller asked for, identical across the axis,
+# which is the property the comparison needs.
+REASONING_HEADROOM = 32000
+
+
+def ceiling_for(model, max_tokens):
+    """The `max_tokens` to put on the wire so `max_tokens` is the answer.
+
+    Equal ceilings are not equal treatment when reasoning is billed from the
+    same allowance, so the ceiling is a function of the model and the answer
+    budget is the thing held constant. Non-reasoning models are returned
+    unchanged, which keeps every Anthropic request byte-identical to the ones
+    already bought and cached.
+    """
+    if model in OPENROUTER_REASONING:
+        return max_tokens + REASONING_HEADROOM
+    return max_tokens
 
 # Cache reads bill at 0.1x input; 5-minute writes at 1.25x. Section 6 lever 3.
 CACHE_READ = 0.1
@@ -666,6 +742,12 @@ class Client(object):
         it caches is 6.6% of the request.
         """
         prov = provider_for(model)
+        # Resolved once, here, so the ceiling that goes on the wire is the
+        # same one the budget is checked against, the span records, and
+        # `truncated` compares output against. Computing it at any one of
+        # those sites and not the others is how a run gets pre-authorized for
+        # a third of what it can actually spend.
+        max_tokens = ceiling_for(model, max_tokens)
         body = (self.build_chat(model, system, user, max_tokens, thinking,
                                 temperature)
                 if prov == OPENROUTER

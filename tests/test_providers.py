@@ -35,6 +35,7 @@ here.
 
 Nothing here needs the raw store or a credential, and nothing here sends.
 """
+import json
 import io
 import os
 import sys
@@ -501,10 +502,6 @@ class TestThePriceTableIsUsable(unittest.TestCase):
                            "the model axis is no wider than it was")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestTruncationIsDecidedOnFacts(unittest.TestCase):
     """A cut-off answer that reads as complete is the failure this project
     exists to measure, so the flag does not rest on the provider's label
@@ -530,3 +527,149 @@ class TestTruncationIsDecidedOnFacts(unittest.TestCase):
     def test_missing_usage_does_not_raise(self):
         self.assertFalse(infer.truncated("end_turn", None, 16000))
         self.assertFalse(infer.truncated("end_turn", {}, 0))
+
+
+# --------------------------------------------- the ceiling is not the answer
+class TestReasoningGetsRoomToThink(ClientCase):
+    """OpenRouter bills reasoning and output from one allowance, so an equal
+    `max_tokens` is an unequal experiment: the thinking model answers from
+    what is left, the other answers from all of it.
+
+    Measured 2026-09-24 at a flat 16,000, glm-5.2 spent the entire budget
+    reasoning on both clarkco draws and emitted no extractor either time. The
+    scored result was 0/2. That is not a capability measurement, it is the
+    ceiling showing up in the table under a model's name, and it is the exact
+    shape of harness artifact this suite exists to catch.
+    """
+
+    def test_a_reasoning_model_gets_headroom_on_top(self):
+        self.assertEqual(infer.ceiling_for("z-ai/glm-5.2", 16000),
+                         16000 + infer.REASONING_HEADROOM)
+
+    def test_every_reasoning_model_gets_it(self):
+        for m in infer.OPENROUTER_REASONING:
+            self.assertGreater(infer.ceiling_for(m, 8000), 8000, m)
+
+    def test_a_non_reasoning_model_is_untouched(self):
+        """Including the ones that merely happen to be verbose. qwen3.5-flash
+        averaged 9,817 output tokens on stjohns without a reasoning
+        parameter, which is a property of the model and not a request for
+        headroom; granting it here would hand one cheap model a larger budget
+        than the others it is being compared against."""
+        for m in ("qwen/qwen3.5-flash-02-23", "openai/gpt-oss-120b",
+                  "qwen/qwen3-coder"):
+            self.assertEqual(infer.ceiling_for(m, 16000), 16000, m)
+
+    def test_the_anthropic_path_cannot_move(self):
+        """The property the response cache is worth $4.34 of."""
+        for m in ("claude-opus-5", "claude-sonnet-5",
+                  "claude-haiku-4-5-20251001"):
+            self.assertEqual(infer.ceiling_for(m, 16000), 16000, m)
+
+    def test_the_budget_is_checked_against_what_can_actually_be_spent(self):
+        """Raise the ceiling in the request body alone and the guard
+        authorizes a third of what the call may draw. The ceiling is resolved
+        once, before anything reads it."""
+        seen = []
+        self.client.budget.check = lambda m, i, o: seen.append((m, i, o))
+        self.install(_FakeResponse(usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=10, cost=0.01)))
+        self.client.message("z-ai/glm-5.2", "S", "U", 16000, "synthesis")
+        self.assertEqual(seen[-1][2], 16000 + infer.REASONING_HEADROOM)
+
+    def test_the_wire_carries_the_raised_ceiling(self):
+        comps = self.install(_FakeResponse(usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=10, cost=0.01)))
+        self.client.message("z-ai/glm-5.2", "S", "U", 16000, "synthesis")
+        self.assertEqual(comps.bodies[-1]["max_tokens"],
+                         16000 + infer.REASONING_HEADROOM)
+
+    def test_the_projection_and_the_guard_quote_the_same_number(self):
+        """`plan` prints a worst case, `Budget.check` enforces one, and they
+        are computed at different sites from the same arguments. Raise the
+        ceiling at one and not the other and the run is pre-authorized for a
+        third of what it can spend - the printed figure is what a person reads
+        before typing --run, so the two have to agree by construction."""
+        projected = infer.estimate(
+            "z-ai/glm-5.2", 9000,
+            infer.ceiling_for("z-ai/glm-5.2", 16000))
+        b = infer.Budget(projected + 1e-9)
+        b.check("z-ai/glm-5.2", 9000,
+                infer.ceiling_for("z-ai/glm-5.2", 16000))
+        b.ceiling = projected - 1e-4
+        with self.assertRaises(infer.Refused):
+            b.check("z-ai/glm-5.2", 9000,
+                    infer.ceiling_for("z-ai/glm-5.2", 16000))
+
+    def test_thinking_to_the_old_ceiling_is_no_longer_truncation(self):
+        """The 16,000-token reasoning burn that voided the first run reads as
+        a complete answer once the answer budget is actually 16,000."""
+        ceiling = infer.ceiling_for("z-ai/glm-5.2", 16000)
+        self.assertFalse(infer.truncated(
+            "stop", {"output_tokens": 16000}, ceiling))
+        self.assertTrue(infer.truncated(
+            "stop", {"output_tokens": ceiling}, ceiling))
+
+
+# ------------------------------------------ the table is a ceiling, not a bill
+class TestTheEstimatorStaysAboveTheInvoice(unittest.TestCase):
+    """`OPENROUTER_PRICES` exists for one thing: the pre-call worst case. A
+    rate below what the provider actually charges is not a ceiling.
+
+    The quantity to reconcile against is the FULL prompt. `input_tokens`
+    excludes the cached portion - `_usage_from_chat` subtracts it so the two
+    providers' ledger rows mean the same thing - but a cached read is
+    discounted, not free, so pricing a row off `input_tokens` alone
+    understates it. Measured here that artifact was worth 4.5x on a single
+    qwen3-coder row and looked exactly like a stale price, which is the whole
+    reason this test names the quantity instead of assuming it.
+    """
+
+    def rows(self):
+        path = os.path.join(ROOT, "data", "infer", "ledger.jsonl")
+        if not os.path.exists(path):
+            self.skipTest("no ledger on this checkout")
+        out = []
+        with io.open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                if (r.get("provider") == infer.OPENROUTER
+                        and r.get("usd_reported") and r.get("usd", 0) > 0
+                        and r.get("model") in infer.OPENROUTER_PRICES):
+                    out.append(r)
+        return out
+
+    def test_no_paid_call_billed_more_than_the_table_projected(self):
+        rows = self.rows()
+        self.assertGreater(len(rows), 50, "too few paid rows to reconcile")
+        for r in rows:
+            with self.subTest(model=r["model"], at=r.get("at")):
+                full_in = (r.get("input_tokens", 0)
+                           + r.get("cache_read_input_tokens", 0))
+                projected = infer.estimate(r["model"], full_in,
+                                           r.get("output_tokens", 0))
+                self.assertGreaterEqual(
+                    round(projected, 6), round(r["usd"], 6),
+                    "%s billed $%.5f against a projection of $%.5f; the "
+                    "table is stale-low and no longer bounds the call"
+                    % (r["model"], r["usd"], projected))
+
+    def test_the_reconciled_entries_are_not_silently_list_price(self):
+        """Refresh this table from the model list and every reconciled entry
+        drops back to list, the ceiling quietly stops being one, and nothing
+        fails. This is the tripwire for that."""
+        above_list = {"z-ai/glm-5.2": 2.042,
+                      "deepseek/deepseek-v4-pro": 1.879,
+                      "openai/gpt-oss-120b": 0.600,
+                      "qwen/qwen3-coder": 1.000}
+        for model, listed in above_list.items():
+            with self.subTest(model=model):
+                self.assertGreater(infer.OPENROUTER_PRICES[model][1], listed)
+        self.assertIn("reconciled", infer.OPENROUTER_PRICES_AS_OF)
+
+
+if __name__ == "__main__":
+    unittest.main()

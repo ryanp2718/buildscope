@@ -56,6 +56,10 @@ the distinction is exactly what a reader needs.
 | [2026-09-20 Spike B](2026-09-20-spike-b-bps-reconciliation.md) | Can portal permit data be aggregated into something comparable to Census unit counts? | Current |
 | [2026-09-20 Step 1 / St. Johns](2026-09-20-step1-stjohns-reconciliation.md) | Can an HTML adapter produce a reconciliation figure, and what does it cost per record? | Current |
 | [2026-09-21 Bucket 4 resolved](2026-09-21-bucket4-resolution.md) | Do the last two bucket-4 offices enumerate, and what does that do to the gate? | Current |
+| [2026-09-21 Extractor conformance](2026-09-21-extractor-conformance.md) | Can a model write an extractor that agrees with a hand-written adapter, and which arm is cheaper? | Current |
+| [2026-09-21 Drift robustness](2026-09-21-drift-robustness.md) | Do synthesised extractors survive realistic template drift? | Current |
+| [2026-09-22 Cost per success](2026-09-22-cost-per-success.md) | Does cost per token or cost per working extractor rank models correctly? | Superseded in scope by 2026-09-25 |
+| [2026-09-25 Open-weight model axis](2026-09-25-open-weight-model-axis.md) | Does the cost-per-success rule survive a 90x price band and a second provider? | Current |
 
 ## Naming
 

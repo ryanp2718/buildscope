@@ -1,6 +1,6 @@
 # spikes/ — the lab notebook
 
-Forty-seven scripts. None of them are maintained, none of them are imported by
+Forty-eight scripts. None of them are maintained, none of them are imported by
 `permits/`, and nothing in `scripts/` depends on them — `tests/test_structure.py`
 enforces both of those. They are here for one reason: **every number published
 in [`docs/evidence/`](../docs/evidence/) came out of this directory**, and a
@@ -35,6 +35,7 @@ a notebook and would not be acceptable anywhere else in this repo.
 | `spike_c_*` | 3 | Do pages from different jurisdictions collide under a structural fingerprint? | [spike-c-template-collision](../docs/evidence/2026-09-20-spike-c-template-collision.md) |
 | `measure_*` | 6 | How expensive is capture, in requests, bytes and tokens? | [measurement-ab-preregistration](../docs/evidence/2026-09-20-measurement-ab-preregistration.md), [measurement-ab-results](../docs/evidence/2026-09-20-measurement-ab-results.md) |
 | `step1_*` | 15 | Can two real jurisdictions be pulled end to end and reconciled against an oracle? | [step1-stjohns-reconciliation](../docs/evidence/2026-09-20-step1-stjohns-reconciliation.md), [bucket4-resolution](../docs/evidence/2026-09-21-bucket4-resolution.md) |
+| `open_weight_axis_tables` | 1 | Which records does each failing Clark extractor miss, and how do the cells compare? | [open-weight-model-axis](../docs/evidence/2026-09-25-open-weight-model-axis.md) |
 | `backfill_fingerprints`, `fix_portal_identity` | 2 | — | One-shot data migrations, run once against the private store. |
 
 The inference experiments — variance, drift, conformance — are **not** here.

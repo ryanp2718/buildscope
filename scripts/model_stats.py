@@ -10,10 +10,10 @@ per-model comparison - the thing anyone actually wants - exists only as prose.
 This script reads the three artifacts that already exist and emits:
 
   data/infer/model_stats.csv    one row per observation, long format
-  data/infer/model_stats.json   aggregates per (target, model) with intervals
+  data/infer/model_stats.json   aggregates per cell with intervals
 
-Long format on purpose: one row is `experiment, target, model, unit, unit_id,
-metric, value`, so a new metric is a new row rather than a new column, and
+Long format on purpose: one row is `experiment, target, model, condition,
+unit, unit_id, metric, value`, so a new metric is a new row rather than a new column, and
 anything that reads CSV can group it without knowing what the experiment was.
 The aggregate file is derived from the long table, never computed separately,
 so the two cannot disagree.
@@ -38,8 +38,8 @@ from permits import infer                                   # noqa: E402
 from permits.stats import failure_mode, pctile, wilson      # noqa: E402
 
 OUT = os.path.join(ROOT, "data", "infer")
-FIELDS = ["experiment", "target", "model", "unit", "unit_id", "metric",
-          "value"]
+FIELDS = ["experiment", "target", "model", "condition", "unit", "unit_id",
+          "metric", "value"]
 
 
 def short(model):
@@ -58,14 +58,91 @@ def load(name):
         return json.load(fh)
 
 
-def rows_from_variance(v):
+def read_ledger(path):
+    """Ledger rows as dicts, in file order. Line position is the row id."""
+    if not os.path.exists(path):
+        return []
+    with io.open(path, encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+def condition(cell):
+    """The experimental condition a variance cell was run under.
+
+    Cells written before `--synth-hint` existed carry no flag and were all
+    run on the baseline prompt."""
+    return "hint" if cell.get("synth_hint") else "baseline"
+
+
+def purchases(v, ledger):
+    """The ledger row that bought each scored draw, keyed (cell key, draw).
+
+    A draw record says what this run paid, which is zero for a draw replayed
+    from the response cache. The cost of a cell is what its draws cost to
+    buy, whenever that was, so each draw is joined to the ledger row that
+    produced the response it was scored on.
+
+    The join is on (model, target, draw index, output tokens) over successful
+    variance synthesis calls. The ledger does not record which prompt a call
+    used, so the output token count is what separates a hinted draw from the
+    baseline draw with the same index, and a draw bought under an earlier
+    output ceiling from the one scored now. Each ledger row is claimed at
+    most once. When two rows match - the same draw bought twice by two
+    concurrent runs, with identical token counts - the later one is taken,
+    because the cache keeps the last response written.
+
+    Ledger rows no draw claims are not a cell's cost: they are superseded or
+    duplicate purchases, reported separately by `unclaimed`. A draw with no
+    matching row maps to None and the cell's spend is then unknown rather
+    than understated.
+    """
+    index = collections.defaultdict(list)
+    for i, r in enumerate(ledger):
+        tag = r.get("tag") or ""
+        if (r.get("call_class") == "synthesis" and tag.endswith("/var")
+                and r.get("ok", True)):
+            index[(r.get("model"), tag.split("/")[0], r.get("draw"),
+                   r.get("output_tokens"))].append(i)
+    claimed, out = set(), {}
+    for key, cell in sorted(v["cells"].items()):
+        for d in cell["detail"]:
+            if failure_mode(d) == "not_attempted":
+                continue
+            hits = [i for i in index.get((cell["model"], cell["target"],
+                                          d["draw"], d.get("output_tokens")),
+                                         [])
+                    if i not in claimed]
+            if hits:
+                claimed.add(hits[-1])
+                out[(key, d["draw"])] = hits[-1]
+            else:
+                out[(key, d["draw"])] = None
+    return out
+
+
+def unclaimed(v, ledger):
+    """Variance synthesis rows that no scored draw was bought by."""
+    used = {i for i in purchases(v, ledger).values() if i is not None}
+    return [i for i, r in enumerate(ledger)
+            if r.get("call_class") == "synthesis"
+            and (r.get("tag") or "").endswith("/var")
+            and r.get("ok", True) and i not in used]
+
+
+def rows_from_variance(v, ledger=()):
     """One row per draw per metric. Draws that were never attempted are
     emitted as `attempted=0` rather than dropped: a cell that stopped on
     budget has a different denominator from one that ran out of successes,
-    and dropping the row loses that distinction."""
+    and dropping the row loses that distinction.
+
+    `usd` is what the run that wrote the record paid; `usd_purchase` and
+    `seconds` come from the ledger row that bought the response (see
+    `purchases`). A draw with no such row gets `purchase_unknown=1` instead.
+    """
+    bought = purchases(v, ledger)
     out = []
-    for cell in v["cells"].values():
-        target, model = cell["target"], cell["model"]
+    for key, cell in v["cells"].items():
+        target, model, cond = cell["target"], cell["model"], condition(cell)
         for d in cell["detail"]:
             mode = failure_mode(d)
             uid = "d%02d" % d["draw"]
@@ -82,9 +159,16 @@ def rows_from_variance(v):
                     ("source_bytes", d.get("bytes", 0)),
                     ("truncated", 1 if d.get("truncated") else 0),
                 ]
+                i = bought.get((key, d["draw"]))
+                if i is None:
+                    metrics.append(("purchase_unknown", 1))
+                else:
+                    metrics.append(("usd_purchase", ledger[i].get("usd", 0.0)))
+                    metrics.append(("seconds", ledger[i].get("seconds")))
             for metric, value in metrics:
                 out.append({"experiment": "variance", "target": target,
-                            "model": model, "unit": "draw", "unit_id": uid,
+                            "model": model, "condition": cond,
+                            "unit": "draw", "unit_id": uid,
                             "metric": metric, "value": value})
     return out
 
@@ -103,63 +187,78 @@ def rows_from_drift(dr):
             for candidate, r in results.items():
                 out.append(
                     {"experiment": "drift", "target": target,
-                     "model": candidate, "unit": "extractor_mutation",
+                     "model": candidate, "condition": "",
+                     "unit": "extractor_mutation",
                      "unit_id": "%s|%s" % (candidate, mutation),
                      "metric": "survived",
                      "value": 1 if r.get("survived") else 0})
     return out
 
 
-def rows_from_ledger(path):
+def rows_from_ledger(ledger):
     """One row per API call. `ok` is absent on rows written before
     2026-09-22 and reads as a success, which is what it was - the client of
     the day could not record anything else."""
     out = []
-    if not os.path.exists(path):
-        return out
-    with io.open(path, encoding="utf-8") as fh:
-        lines = fh.readlines()
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if not line:
-            continue
-        r = json.loads(line)
+    for i, r in enumerate(ledger):
         target = (r.get("tag") or "").split("/")[0]
         for metric in ("usd", "seconds", "input_tokens", "output_tokens",
                        "cache_read_input_tokens"):
             out.append({"experiment": "ledger", "target": target,
-                        "model": r.get("model", "?"), "unit": "call",
-                        "unit_id": "c%04d" % i, "metric": metric,
-                        "value": r.get(metric, 0)})
+                        "model": r.get("model", "?"), "condition": "",
+                        "unit": "call", "unit_id": "c%04d" % i,
+                        "metric": metric, "value": r.get(metric, 0)})
         out.append({"experiment": "ledger", "target": target,
-                    "model": r.get("model", "?"), "unit": "call",
-                    "unit_id": "c%04d" % i, "metric": "ok",
+                    "model": r.get("model", "?"), "condition": "",
+                    "unit": "call", "unit_id": "c%04d" % i, "metric": "ok",
                     "value": 1 if r.get("ok", True) else 0})
     return out
 
 
-def pick(rows, experiment, metric, target=None, model=None):
+def pick(rows, experiment, metric, target=None, model=None, cond=None):
     return [r["value"] for r in rows
             if r["experiment"] == experiment and r["metric"] == metric
             and (target is None or r["target"] == target)
-            and (model is None or r["model"] == model)]
+            and (model is None or r["model"] == model)
+            and (cond is None or r["condition"] == cond)]
+
+
+def cell_name(target, model, cond):
+    """The key `scripts/conformance.py` files the cell under in
+    variance.json, so a figure here can be traced to its draws."""
+    base = "%s|%s" % (target, model)
+    return base if cond == "baseline" else "%s|%s" % (base, cond)
 
 
 def aggregate(rows):
-    """Per (target, model) summary, derived from the long table only."""
-    cells = sorted({(r["target"], r["model"]) for r in rows
+    """Per-cell summary, derived from the long table only.
+
+    A cell is (target, model, condition). Grouping on (target, model) alone
+    pooled hinted draws into the baseline rate, so the key carries the
+    condition and matches the variance.json key it came from."""
+    cells = sorted({(r["target"], r["model"], r["condition"]) for r in rows
                     if r["experiment"] == "variance"})
     out = {}
-    for target, model in cells:
-        att = pick(rows, "variance", "attempted", target, model)
-        perf = pick(rows, "variance", "perfect", target, model)
-        silent = pick(rows, "variance", "silent_failure", target, model)
+    for target, model, cond in cells:
+        def var(metric):
+            return pick(rows, "variance", metric, target, model, cond)
+        att = var("attempted")
+        perf = var("perfect")
+        silent = var("silent_failure")
         n, k = len(perf), sum(perf)
         fails = n - k
         n_silent = sum(silent)
-        lat = pick(rows, "ledger", "seconds", target, model)
+        lat = var("seconds")
+        # Call errors are a property of the provider, not the prompt, and a
+        # failed call has no draw to join to, so this one figure is pooled
+        # over every call for the model on the target.
         errs = pick(rows, "ledger", "ok", target, model)
-        usd = sum(pick(rows, "variance", "usd", target, model))
+        # What the run that wrote the record paid, and what the cell's draws
+        # cost to buy. The second is the denominator: a draw replayed from
+        # the cache is free to repeat but was not free to buy.
+        usd_run = sum(var("usd"))
+        usd = sum(var("usd_purchase"))
+        unknown = sum(var("purchase_unknown"))
         # Survival is pooled over the draws of this model on this target.
         # Candidate names in drift.json carry the tier, not the model id.
         tag = short(model)
@@ -168,26 +267,27 @@ def aggregate(rows):
                 and r["model"].startswith("draw %s " % tag)]
         lo, hi = wilson(k, n)
         e = {
-            "target": target, "model": model,
+            "target": target, "model": model, "condition": cond,
             "draws_attempted": sum(att), "draws_scored": n,
             "perfect": k,
             "success_rate": (float(k) / n) if n else None,
             "success_ci95": [round(lo, 4), round(hi, 4)],
             "failures": fails, "silent_failures": n_silent,
             "usd_total": round(usd, 6),
+            "usd_this_run": round(usd_run, 6),
+            "draws_unpriced": unknown,
             # Cost per extractor that actually worked. The headline cost of a
             # cheap model is per call; the cost that matters is per success,
             # and on a 5% cell those differ by twentyfold.
-            # None means "cannot be stated", and there are two ways to get
-            # there. No successes is one: dividing a bill by zero is how a
-            # broken cell gets quoted as free. Zero recorded spend is the
-            # other, and it is an artifact of replay - a cell re-scored
-            # against the response cache bills nothing in that run, so its
-            # spend lives in earlier ledger rows rather than in this record.
-            # Reporting 0.0 there would read as "this cell was free", which
-            # is the same lie in the other direction.
-            "usd_per_success": (round(usd / k, 6) if k and usd else None),
-            "usd_is_replayed": bool(k and not usd),
+            # None means "cannot be stated": either no successes, since
+            # dividing a bill by zero is how a broken cell gets quoted as
+            # free, or a draw whose purchase is missing from the ledger, since
+            # a partial bill understates the cost.
+            "usd_per_success": (round(usd / k, 6)
+                                if k and usd and not unknown else None),
+            # True when some of the draws were scored from the cache, so the
+            # spend above was paid by earlier runs rather than this one.
+            "usd_is_replayed": bool(usd and usd_run < usd),
             "latency_p50_s": pctile(lat, 0.50),
             "latency_p95_s": pctile(lat, 0.95),
             "api_calls": len(errs),
@@ -198,39 +298,42 @@ def aggregate(rows):
             slo, shi = wilson(n_silent, fails)
             e["silent_share_of_failures"] = round(float(n_silent) / fails, 4)
             e["silent_ci95"] = [round(slo, 4), round(shi, 4)]
-        if surv:
+        # Drift candidates are baseline extractors; drift.json does not
+        # record a condition, so survival is attached to the baseline only.
+        if surv and cond == "baseline":
             dlo, dhi = wilson(sum(surv), len(surv))
             e["drift_survival"] = round(float(sum(surv)) / len(surv), 4)
             e["drift_n"] = len(surv)
             e["drift_ci95"] = [round(dlo, 4), round(dhi, 4)]
-        out["%s|%s" % (target, model)] = e
+        out[cell_name(target, model, cond)] = e
     return out
 
 
 def report(agg):
     print("\nper-cell model statistics   (success = perfect agreement on "
           "every page)")
-    print("%-9s %-20s %5s %8s %-16s %8s %9s %9s %7s"
-          % ("target", "model", "n", "success", "95% CI", "silent",
+    print("%-9s %-20s %-8s %5s %8s %-16s %8s %9s %9s %7s"
+          % ("target", "model", "cond", "n", "success", "95% CI", "silent",
              "$/success", "drift", "p95 s"))
     for _, e in sorted(agg.items()):
         sil = ("%d/%d" % (e["silent_failures"], e["failures"])
                if e["failures"] else "-")
         dr = ("%.2f (n=%d)" % (e["drift_survival"], e["drift_n"])
               if "drift_survival" in e else "-")
-        print("%-9s %-20s %5d %7.0f%% [%.2f, %.2f]      %8s %9s %9s %7s"
-              % (e["target"], short(e["model"]), e["draws_scored"],
+        print("%-9s %-20s %-8s %5d %7.0f%% [%.2f, %.2f]      %8s %9s %9s %7s"
+              % (e["target"], short(e["model"]), e["condition"],
+                 e["draws_scored"],
                  100 * (e["success_rate"] or 0),
                  e["success_ci95"][0], e["success_ci95"][1], sil,
                  ("$%.4f" % e["usd_per_success"]
                   if e["usd_per_success"]
-                  else ("replayed" if e.get("usd_is_replayed") else "never")),
+                  else ("unpriced" if e["draws_unpriced"] else "never")),
                  dr,
                  ("%.0f" % e["latency_p95_s"]
                   if e["latency_p95_s"] is not None else "-")))
-    print("\n  $/success is total cell spend over extractors that passed "
-          "conformance.\n  A cell that never succeeded has no cost per "
-          "success, only a bill.")
+    print("\n  $/success is what the cell's draws cost to buy, over "
+          "extractors that passed\n  conformance. A cell that never "
+          "succeeded has no cost per success, only a bill.")
 
 
 def main():
@@ -239,13 +342,14 @@ def main():
     args = ap.parse_args()
 
     rows = []
+    ledger = read_ledger(os.path.join(OUT, "ledger.jsonl"))
     v = load("variance.json")
     if v:
-        rows += rows_from_variance(v)
+        rows += rows_from_variance(v, ledger)
     dr = load("drift.json")
     if dr:
         rows += rows_from_drift(dr)
-    rows += rows_from_ledger(os.path.join(OUT, "ledger.jsonl"))
+    rows += rows_from_ledger(ledger)
     if not rows:
         raise SystemExit("no artifacts in %s; run the experiments first" % OUT)
 
@@ -272,6 +376,13 @@ def main():
     print("wrote %s  (%d cells)" % (os.path.relpath(jpath, ROOT), len(agg)))
     if not args.csv_only:
         report(agg)
+        spare = unclaimed(v, ledger) if v else []
+        if spare:
+            print("\n  %d variance calls ($%.4f) bought a response no scored "
+                  "draw uses:\n  superseded by a later ceiling, or bought "
+                  "twice. Not counted in any cell."
+                  % (len(spare), sum(ledger[i].get("usd", 0.0)
+                                     for i in spare)))
 
 
 if __name__ == "__main__":

@@ -184,6 +184,50 @@ this is being measured against.
 Write the block and nothing else after it.
 """
 
+# Appended to SYNTH_SYSTEM only under --synth-hint, so the default prompt is
+# byte-identical to the one every cached response was bought against and no
+# prior measurement is invalidated by this constant existing.
+#
+# Deliberately general. Every clarkco near miss, in each of the six models
+# that produces one, is the same one - it keys row selection on the detail
+# anchor and drops the rows that have no detail page - but a hint naming that permit prefix, that column or that
+# jurisdiction measures whether the answer can be handed over, which is not a
+# question anyone needs answered. This states the structural fact only: grid
+# rows differ in state and markup follows state. A model that cannot get from
+# there to its own selector has not been helped by the hint, which is the
+# distinction the experiment is for.
+SYNTH_HINT = """
+ROW STATE: a grid does not render every row identically. The same column can
+be a hyperlink on one row and plain text on the next, because rows differ in
+state - issued versus pending, closed versus active - and only some states
+have a detail page to link to. Select rows by the row container, and read each
+field as optionally wrapped in a tag. A selector keyed on an anchor silently
+drops whichever state lacks one.
+"""
+
+
+def synth_system(args):
+    """The synthesis system prompt for this run.
+
+    One accessor rather than four call sites, because the prompt is also what
+    the token projection and the budget pre-check are computed from. A run
+    that priced the short prompt and sent the long one would under-authorize
+    itself in exactly the way `ceiling_for` was added to stop.
+    """
+    return SYNTH_SYSTEM + SYNTH_HINT if args.synth_hint else SYNTH_SYSTEM
+
+
+def cell_key(target_key, model, args):
+    """`target|model`, or `target|model|hint` when the hint is on.
+
+    A hinted draw is a different condition, so it gets its own cell. Merging
+    the two under one key would pool draws from two prompts into one rate and
+    report it as one experiment.
+    """
+    base = "%s|%s" % (target_key, model)
+    return base + "|hint" if args.synth_hint else base
+
+
 DIRECT_SYSTEM = CONTRACT + """
 YOUR TASK: return the records from the page below.
 
@@ -650,15 +694,23 @@ def direct_budget(n_records):
 def plan(target, pages, refs, args):
     """What the run would cost, from the real bytes, before any call."""
     win, frac, at = window(read(pages[0][1]), args.synth_window)
-    syn_in = infer.tokens(SYNTH_SYSTEM) + infer.tokens(win)
-    syn = infer.estimate(args.synth_model, syn_in, args.synth_tokens)
+    syn_in = infer.tokens(synth_system(args)) + infer.tokens(win)
+    # The ceiling, not the answer budget: a reasoning model is authorized
+    # for its thinking too, and a projection that quotes the answer budget
+    # understates such a cell threefold. `Budget.check` sees the raised
+    # number at call time either way, so the two would silently disagree.
+    syn = infer.estimate(args.synth_model, syn_in,
+                         infer.ceiling_for(args.synth_model,
+                                           args.synth_tokens))
 
     direct = []
     for fn, p in pages[:args.direct_pages]:
         n_in = infer.tokens(DIRECT_SYSTEM) + infer.tokens(strip(read(p)))
         cap = direct_budget(len(refs[fn]))
         direct.append((fn, n_in, cap,
-                       infer.estimate(args.direct_model, n_in, cap)))
+                       infer.estimate(
+                           args.direct_model, n_in,
+                           infer.ceiling_for(args.direct_model, cap))))
     return {"synth_in": syn_in, "synth_window_frac": frac,
             "synth_window_at": at, "synth_usd": syn, "direct": direct,
             "direct_usd": sum(d[3] for d in direct)}
@@ -698,13 +750,13 @@ def matrix(targets, args):
             refs = {fn: t.reference(read(p)) for fn, p in pages}
             win, _, _ = window(read(pages[0][1]), args.synth_window)
             s_usd += infer.estimate(
-                model, infer.tokens(SYNTH_SYSTEM) + infer.tokens(win),
-                args.synth_tokens)
+                model, infer.tokens(synth_system(args)) + infer.tokens(win),
+                infer.ceiling_for(model, args.synth_tokens))
             for fn, p in pages[:args.direct_pages]:
                 d_usd += infer.estimate(
                     model,
                     infer.tokens(DIRECT_SYSTEM) + infer.tokens(strip(read(p))),
-                    direct_budget(len(refs[fn])))
+                    infer.ceiling_for(model, direct_budget(len(refs[fn]))))
         rows.append((model, s_usd, d_usd))
     print("\nprojected worst case")
     print("  Anthropic  %s" % infer.PRICES_AS_OF)
@@ -735,6 +787,10 @@ def main():
     ap.add_argument("--synth-window", type=int, default=24000,
                     help="chars of stripped page shown to synthesis")
     ap.add_argument("--synth-tokens", type=int, default=8000)
+    ap.add_argument("--synth-hint", action="store_true",
+                    help="append the row-state paragraph to the synthesis "
+                         "prompt and score the draws into a separate "
+                         "target|model|hint cell")
     ap.add_argument("--direct-pages", type=int, default=2,
                     help="whole pages per target sent to the model for arm D")
     ap.add_argument("--key-file", default=None,
@@ -941,7 +997,7 @@ def run_variance(client, target, pages, refs, args):
         rec = {"draw": d, "model": args.synth_model, "target": target.key}
         try:
             text, usage, meta = client.message(
-                args.synth_model, SYNTH_SYSTEM, prompt, args.synth_tokens,
+                args.synth_model, synth_system(args), prompt, args.synth_tokens,
                 "synthesis", thinking=True,
                 tag="%s/var" % target.key, draw=d)
         except (infer.Refused, infer.ApiError) as e:
@@ -967,8 +1023,14 @@ def run_variance(client, target, pages, refs, args):
             if problems:
                 rec["outcome"] = "refused"
             else:
-                sp = os.path.join(vdir, "%s_%s_d%02d.py"
-                                  % (target.key, tier, d))
+                # The hint suffix is part of the filename, not just the cell
+                # key. Without it a hinted run overwrites the baseline
+                # extractors in place, and those sources are the evidence -
+                # re-scoring them per record is what identified the row
+                # class every model drops.
+                sp = os.path.join(vdir, "%s_%s%s_d%02d.py"
+                                  % (target.key, tier,
+                                     "_hint" if args.synth_hint else "", d))
                 with io.open(sp, "w", encoding="utf-8") as fh:
                     fh.write(src)
                 rec["source"] = sp
@@ -1014,7 +1076,7 @@ def run_variance(client, target, pages, refs, args):
 
 
 def save_variance(target, args, draws, usd):
-    """Merge this cell into data/infer/variance.json, keyed target|model."""
+    """Merge this cell into data/infer/variance.json, keyed by `cell_key`."""
     path = os.path.join(OUT, "variance.json")
     prior = {}
     if os.path.exists(path):
@@ -1029,8 +1091,9 @@ def save_variance(target, args, draws, usd):
     counts = {}
     for r in draws:
         counts[r.get("outcome")] = counts.get(r.get("outcome"), 0) + 1
-    cells["%s|%s" % (target.key, args.synth_model)] = {
+    cells[cell_key(target.key, args.synth_model, args)] = {
         "target": target.key, "model": args.synth_model,
+        "synth_hint": bool(args.synth_hint),
         "draws_attempted": n, "perfect": ok,
         "rate": (float(ok) / n) if n else None,
         "ci95": [round(lo, 4), round(hi, 4)],
@@ -1535,7 +1598,7 @@ def run_target(client, target, pages, refs, args, rep):
     win, frac, _at = window(read(pages[0][1]), args.synth_window)
     tier = infer.short_model(args.synth_model)
     text, usage, meta = client.message(
-        args.synth_model, SYNTH_SYSTEM,
+        args.synth_model, synth_system(args),
         "Portal page excerpt (one page of the result grid, stripped of "
         "scripts, styles and non-structural attributes):\n\n" + win,
         args.synth_tokens, "synthesis", thinking=True, tag=target.key)
