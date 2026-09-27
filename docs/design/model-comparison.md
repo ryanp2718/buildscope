@@ -91,6 +91,13 @@ each cell is a mixture in unknown proportion.
   the settings every draw was sent with.
 - **Cache** (`data/infer/cache/`): the response text, usage, stop reason, host and response id.
 
+## File guarantees
+
+`permits/fileio.py`: cache entries and roll-ups are written atomically; `variance.json` and
+`conformance.json` are merged under a lock into the file as it is at that moment; a cell runs in one
+process at a time, and a second run of it is refused before it sends anything; ledger appends are
+locked. An unreadable `variance.json` raises instead of being treated as empty.
+
 ## Checking a change
 
 - **Nothing already bought is invalidated.** Every v1 draw must still hash to its cached response
@@ -130,3 +137,4 @@ each cell is a mixture in unknown proportion.
   OpenRouter's effort names are not the labs', its catalogue default for glm-5.2 is not Z.ai's, and
   some DeepSeek endpoints ignore the effort sent. Protocol v2 now sends each lab's default level,
   excludes those endpoints, and records the lab level and the provider's response id on every row.
+  Step 4 done: atomic writes, locked merges, one run per cell.

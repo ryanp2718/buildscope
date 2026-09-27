@@ -5,6 +5,7 @@ description = "Municipal building-permit data pipeline with measured LLM extract
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.40",
+    "filelock>=3.12",
     "httpx2>=2.0",
     "openai>=1.40",
     "opentelemetry-api>=1.27",
@@ -80,6 +81,7 @@ python_version = "3.11"
 strict = true
 files = [
     "permits/cells.py",
+    "permits/fileio.py",
     "permits/infer.py",
     "permits/models.py",
     "permits/stats.py",

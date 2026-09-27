@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 380 tests, ~18s, no network
+python scripts/run_tests.py           # everything: 386 tests, ~18s, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -49,6 +49,7 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_providers.py` | provider routing, the OpenAI/Anthropic usage translation, which figure gets billed, the golden cache keys, protocol v1 frozen and protocol v2's request and ledger fields | the `stream` cache-key bug, and four ways a second wire format can produce a wrong number |
 | `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, every model that reasons is asked to at its lab's default level, and the protocol v2 efforts, caps, sampling, host filters and excluded endpoints against the catalogue and endpoint snapshots | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
 | `test_transport.py` | streaming on both providers, the read timeout and wall-clock limit, the fatal/transient error split with one retry per draw, time to first token, and infra errors reported beside the pass rate | a 900 s per-read timeout that let one call run 65,161 s, and a timeout, a revoked key and a budget refusal all stopping the cell as one outcome |
+| `test_fileio.py` | atomic writes of the cache and the roll-ups, `variance.json` merged under a lock, one run per cell, whole ledger lines under concurrent appends; the races are run between real processes | a truncated cache entry that failed on every later hit, a corrupt `variance.json` read as empty, and two processes that both bought draw 1 of one cell |
 | `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
 
 ## Four ideas worth knowing before editing these

@@ -360,7 +360,7 @@ Anthropic.
 | 1 | (Done 2026-09-26: `ModelSpec` registry in `permits/models.py` replacing the seven tables; frozen `Usage`, `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec`, `RunConfig`; `Outcome` as a `StrEnum`; mypy strict in CI on five `permits/` files. Every cached request hashes as before, and a replay of four cells re-scores every draw identically.) | no |
 | 2 | (Done 2026-09-26: every call streams on both providers; read timeout 120 s between chunks; wall-clock limit 300 s + ceiling at 10 tok/s; `FatalError` stops the run, `TransientError` is retried once under the same draw then recorded as `infra_error`, outside the pass rate; `ttft_s` in the ledger; infra-error rate, median TTFT and tokens per second in `model_stats.json`. See "Step 2 as built" below.) | no |
 | 3 | (Done 2026-09-26: protocol v2 in the registry and request builders; v1 frozen and still replaying; settings sent, serving host and reasoning tokens on every ledger row. Amended 2026-09-27: reasoning at the lab's default level, endpoints that ignore effort excluded, the provider's response id on every row. See "Step 3 as built" below.) | no, and $0.08 for the effort probe |
-| 4 | Atomic cache writes; a lock on `variance.json`; closed file handles. (`short_model` and the `cached()` / `Ledger.rows()` handles: done with step 1.) | no |
+| 4 | (Done 2026-09-27: atomic writes of the cache and the roll-ups; `variance.json` and `conformance.json` merged under a lock; one run per cell at a time; ledger appends under a lock; every JSON read closes its handle. See "Step 4 as built" below.) | no |
 | 5 | (Done 2026-09-26: R1 corrected in the report, the code comment and the test docstring; the report's cells pinned in `tests/test_model_stats.py`.) | no |
 | 6 | Pre-register roster, prompt hash, development/test split, n per cell and success criteria; dry-run the cost projection; then run | yes |
 | 7 | Run generated extractors in a container with no network | no, deferred |
@@ -511,6 +511,33 @@ Not verified, since this step spends nothing: that OpenRouter accepts every valu
 that it routes a 64,000-token request only to hosts whose own `max_completion_tokens` allows it
 (some list 16,384 or less), and that each chunk's `provider` field names the host. The step 6
 smoke draw per model checks all three before any cell is bought.
+
+### Step 4 as built
+
+`permits/fileio.py`, used by the cache, the ledger and every roll-up the harness writes:
+
+- **Atomic writes.** `atomic_write` writes a temporary file in the target's directory, flushes and
+  fsyncs it, and swaps it in with `os.replace`. A write cut off halfway now leaves the old file whole,
+  where it left truncated JSON that failed on every later hit. Used for cache entries,
+  `variance.json`, `conformance.json`, `drift.json` and `model_stats.csv`/`.json`.
+- **Merges under a lock.** `update_json` holds a `filelock` lock (`<file>.lock`) across the read, the
+  merge and the write, and merges into the file as it is at that moment, so another process's update
+  in between is kept. `save_variance` and the `conformance.json` writer use it. Run between two real
+  processes, 25 merges each: 50 of 50 cells kept with the lock, 25 to 29 without it.
+- **One run per cell.** `run_variance` takes a lock named by the cell's key for the whole run,
+  without waiting. A second process on the same cell stops with "cell ... is being run by another
+  process. Nothing was sent." That is the double purchase of 2026-09-25 made impossible rather than
+  detectable.
+- **An unreadable `variance.json` raises.** It was read as empty, and the save that followed would
+  have replaced every cell with one. The drift pool reader also raises now instead of returning no
+  candidates.
+- **Ledger appends under a lock**, so two processes cannot interleave a line.
+- **Closed handles.** The remaining `json.load(io.open(...))` reads in `scripts/` close their files.
+
+Checked with no spend: two v1 cells replayed at `--max-spend 0` re-score identically through the
+locked save, the other 20 cells are untouched, and no ledger row is written; a second run of a cell
+whose lock another process holds is refused; `model_stats.csv` and `.json` regenerate byte for byte.
+`tests/test_fileio.py` covers each guarantee between real processes.
 
 ## What this does not establish
 

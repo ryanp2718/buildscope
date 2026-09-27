@@ -158,7 +158,7 @@ class TestTheArmsAreScoredApart(unittest.TestCase):
         # reused the filenames would overwrite them in place.
         import inspect
         self.assertIn("condition_suffix(cfg)",
-                      inspect.getsource(self.C.run_variance))
+                      inspect.getsource(self.C._run_variance))
         self.assertEqual(self.C.condition_suffix(args()), "")
         self.assertEqual(self.C.condition_suffix(args(synth_hint=True)),
                          "_hint")

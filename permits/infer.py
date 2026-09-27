@@ -68,7 +68,7 @@ import httpx2
 import openai
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from permits import models, telemetry
+from permits import fileio, models, telemetry
 from permits.models import ModelSpec, Protocol, Provider, ReasoningControl
 
 # A request body as it goes on the wire and into the cache key. Left as a
@@ -525,8 +525,12 @@ class Ledger:
             os.makedirs(d)
 
     def write(self, row: LedgerRow) -> None:
-        with io.open(self.path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row.to_dict(), sort_keys=True) + "\n")
+        # Under a lock: two processes appending at once can interleave
+        # their bytes on Windows, which leaves one unreadable line that
+        # `rows()` then fails on for good.
+        with fileio.lock_for(self.path):
+            with io.open(self.path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row.to_dict(), sort_keys=True) + "\n")
 
     def rows(self) -> list[LedgerRow]:
         if not os.path.exists(self.path):
@@ -826,10 +830,13 @@ class Client:
 
         A transport detail must not be part of the identity of a request
         anyway: the same prompt streamed and unstreamed is the same question.
+
+        Written atomically: a write cut off halfway used to leave truncated
+        JSON that failed to load every time the key was hit afterwards, for
+        a response already paid for.
         """
         p = os.path.join(self.cache_dir, key + ".json")
-        with io.open(p, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(resp, sort_keys=True, indent=1))
+        fileio.atomic_write(p, json.dumps(resp, sort_keys=True, indent=1))
 
     def build(self, model: str, system: str, user: str, max_tokens: int,
               thinking: bool = False, temperature: float | None = None,

@@ -109,7 +109,8 @@ def scan_csv(path, frame):
 def scan_json(path, frame):
     out = []
     try:
-        d = json.load(io.open(path, encoding="utf-8"))
+        with io.open(path, encoding="utf-8") as fh:
+            d = json.load(fh)
     except (IOError, ValueError, UnicodeDecodeError):
         return out
     if not isinstance(d, dict):

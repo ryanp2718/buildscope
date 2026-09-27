@@ -90,6 +90,7 @@ scoring the model on a task with the answer in the prompt.
 import argparse
 import ast
 import csv
+import hashlib
 import io
 import json
 import os
@@ -100,7 +101,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from permits import infer, models
+from permits import fileio, infer, models
 from permits.cells import CellSpec, DrawRecord, Outcome, RunConfig, draws_of
 from permits.models import Protocol
 from permits.stats import ORDER, failure_mode, wilson
@@ -910,7 +911,7 @@ def main():
     if args.cells:
         try:
             run_cells(client, args, cfg)
-        except (infer.Refused, infer.ApiError) as e:
+        except (infer.Refused, infer.ApiError, fileio.Busy) as e:
             raise SystemExit("run stopped: %s\nDraws already bought are saved "
                              "in data/infer/variance.json." % e) from None
         return
@@ -975,33 +976,50 @@ def main():
     # writer that clobbers means the second run destroys the thing the first
     # was for. Learned by doing it.
     path = os.path.join(OUT, "conformance.json")
-    prior = {}
-    if os.path.exists(path):
-        try:
-            prior = json.load(io.open(path, encoding="utf-8"))
-        except ValueError:
-            prior = {}
-    runs = prior.get("runs", {})
-    for key, rep in report["targets"].items():
-        for arm in ("arm_s", "arm_d"):
-            if arm not in rep:
-                continue
-            model = rep[arm].get("model") or (
-                cfg.synth_model if arm == "arm_s" else cfg.direct_model)
-            runs["%s|%s|%s" % (key, arm, model)] = rep[arm]
-    out = {"runs": runs, "prices_as_of": infer.PRICES_AS_OF,
-           "note": report["note"],
-           "reference": {k: {"pages": v["pages"],
-                                  "records": v["reference_records"]}
+
+    def merge(prior):
+        runs = prior.get("runs", {})
+        for key, rep in report["targets"].items():
+            for arm in ("arm_s", "arm_d"):
+                if arm not in rep:
+                    continue
+                model = rep[arm].get("model") or (
+                    cfg.synth_model if arm == "arm_s" else cfg.direct_model)
+                runs["%s|%s|%s" % (key, arm, model)] = rep[arm]
+        out = {"runs": runs, "prices_as_of": infer.PRICES_AS_OF,
+               "note": report["note"],
+               "reference": {k: {"pages": v["pages"],
+                                 "records": v["reference_records"]}
                              for k, v in report["targets"].items()}}
-    out["reference"].update(prior.get("reference", {}))
-    with io.open(path, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(out, indent=1, sort_keys=True, default=str))
-    print("wrote data/infer/conformance.json (%d runs recorded)" % len(runs))
+        out["reference"].update(prior.get("reference", {}))
+        return out
+
+    out = fileio.update_json(path, merge)
+    print("wrote data/infer/conformance.json (%d runs recorded)"
+          % len(out["runs"]))
 
 
 # ----------------------------------------------------- variance over draws
+def cell_lock(cfg, target):
+    """The lock file for one cell, named by a hash of its key: keys carry
+    `|` and `/`, which are not filename characters."""
+    key = cell_key(target.key, cfg.synth_model, cfg)
+    name = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(OUT, "locks", name + ".lock"), key
+
+
 def run_variance(client, target, pages, refs, cfg):
+    """One variance cell, run under its lock (see `_run_variance`).
+
+    Two processes ran the same cell at once on 2026-09-25 and both bought
+    draw 1. The lock is taken without waiting, so the second is refused
+    before it sends anything."""
+    path, key = cell_lock(cfg, target)
+    with fileio.run_lock(path, "cell %s" % key):
+        return _run_variance(client, target, pages, refs, cfg)
+
+
+def _run_variance(client, target, pages, refs, cfg):
     """k independent draws of one identical synthesis request: a pass@1 rate,
     in the pass@k family (Chen et al., 2021) of repeated-sampling code-gen
     evaluation.
@@ -1146,22 +1164,20 @@ def save_variance(target, cfg, draws, usd, settings=None):
     """Merge this cell into data/infer/variance.json, keyed by `cell_key`.
 
     A v1 cell is written in the shape it always had. A v2 cell also records
-    its protocol, any effort, and the settings every draw was sent with."""
+    its protocol, any effort, and the settings every draw was sent with.
+
+    Merged under a lock into the file as it is at the moment of writing, so
+    a cell another process saved since this run started is kept. An
+    unreadable file raises: it used to be read as empty, and the save that
+    followed would have replaced every cell with this one."""
     path = os.path.join(OUT, "variance.json")
-    prior = {}
-    if os.path.exists(path):
-        try:
-            prior = json.load(io.open(path, encoding="utf-8"))
-        except ValueError:
-            prior = {}
-    cells = prior.get("cells", {})
     ok = sum(1 for r in draws if r.outcome is Outcome.PERFECT)
     n = sum(1 for r in draws if r.scored())
     lo, hi = wilson(ok, n)
     counts = {}
     for r in draws:
         counts[str(r.outcome)] = counts.get(str(r.outcome), 0) + 1
-    cells[cell_key(target.key, cfg.synth_model, cfg)] = {
+    cell = {
         "target": target.key, "model": cfg.synth_model,
         "synth_hint": bool(cfg.synth_hint),
         "draws_attempted": n, "perfect": ok,
@@ -1172,7 +1188,6 @@ def save_variance(target, cfg, draws, usd, settings=None):
         "synth_window": cfg.synth_window,
         "detail": [r.to_dict() for r in draws],
     }
-    cell = cells[cell_key(target.key, cfg.synth_model, cfg)]
     if cfg.protocol is Protocol.V1:
         cell["temperature"] = "1.0 (pinned by extended thinking)"
     else:
@@ -1180,13 +1195,15 @@ def save_variance(target, cfg, draws, usd, settings=None):
         cell["settings"] = settings
         if cfg.effort:
             cell["effort"] = cfg.effort
-    with io.open(path, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps({"cells": cells,
-                             "prices_as_of": infer.PRICES_AS_OF,
-                             "note": "agreement with the adapter, not "
-                                     "accuracy; success = perfect on "
-                                     "every page"},
-                            indent=1, sort_keys=True, default=str))
+
+    def merge(prior):
+        cells = prior.get("cells", {})
+        cells[cell_key(target.key, cfg.synth_model, cfg)] = cell
+        return {"cells": cells, "prices_as_of": infer.PRICES_AS_OF,
+                "note": "agreement with the adapter, not accuracy; "
+                        "success = perfect on every page"}
+
+    fileio.update_json(path, merge)
 
 
 def run_cells(client, args, cfg):
@@ -1372,7 +1389,7 @@ def variance_report():
     path = os.path.join(OUT, "variance.json")
     if not os.path.exists(path):
         raise SystemExit("no variance.json; run --cells first")
-    cells = json.load(io.open(path, encoding="utf-8"))["cells"]
+    cells = fileio.read_json(path)["cells"]
     print("\nfailure taxonomy by cell   (success = perfect on every page)")
     print("%-42s %5s %5s %8s %8s %8s %8s   %-18s %s"
           % ("cell", "n", "infra", "perfect", "s-part", "s-empty", "loud",
@@ -1440,10 +1457,7 @@ def variance_pool(target_key, model=None):
     path = os.path.join(OUT, "variance.json")
     if not os.path.exists(path):
         return []
-    try:
-        cells = json.load(io.open(path, encoding="utf-8")).get("cells", {})
-    except ValueError:
-        return []
+    cells = fileio.read_json(path).get("cells", {})
     out = []
     for key, cell in sorted(cells.items()):
         if cell.get("target") != target_key:
@@ -1590,12 +1604,11 @@ def run_drift(args):
                               "mutations": rows}
 
     path = os.path.join(OUT, "drift.json")
-    with io.open(path, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps({"targets": report,
-                             "note": "reference is the adapter's parse of "
-                                     "the CLEAN page; mutations preserve "
-                                     "records and are control-checked"},
-                            indent=1, sort_keys=True, default=str))
+    fileio.atomic_write(path, json.dumps(
+        {"targets": report,
+         "note": "reference is the adapter's parse of the CLEAN page; "
+                 "mutations preserve records and are control-checked"},
+        indent=1, sort_keys=True, default=str))
     print("\nwrote data/infer/drift.json")
     summarize_drift(report)
 

@@ -34,7 +34,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from permits import infer                                   # noqa: E402
+from permits import fileio, infer                           # noqa: E402
 from permits.cells import draws_of                           # noqa: E402
 from permits.stats import failure_mode, pctile, wilson      # noqa: E402
 
@@ -64,8 +64,7 @@ def load(name):
     p = os.path.join(OUT, name)
     if not os.path.exists(p):
         return None
-    with io.open(p, encoding="utf-8") as fh:
-        return json.load(fh)
+    return fileio.read_json(p)
 
 
 def read_ledger(path):
@@ -406,11 +405,12 @@ def main():
         raise SystemExit("no artifacts in %s; run the experiments first" % OUT)
 
     cpath = os.path.join(OUT, "model_stats.csv")
-    with io.open(cpath, "w", encoding="utf-8", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=FIELDS)
-        w.writeheader()
-        for r in rows:
-            w.writerow(r)
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=FIELDS, lineterminator="\r\n")
+    w.writeheader()
+    for r in rows:
+        w.writerow(r)
+    fileio.atomic_write(cpath, buf.getvalue(), newline="")
     counts = collections.Counter(r["experiment"] for r in rows)
     print("wrote %s  (%d rows: %s)"
           % (os.path.relpath(cpath, ROOT), len(rows),
