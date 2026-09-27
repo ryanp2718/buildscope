@@ -26,6 +26,7 @@
           background:color-mix(in srgb, var(--accent) 7%, transparent); border-radius:0 6px 6px 0; }
   footer { margin-top:3.5rem; padding-top:1.2rem; border-top:1px solid var(--line);
            color:var(--mut); font-size:.85rem; }
+  td code { overflow-wrap:anywhere; }
   a { color:inherit; text-decoration-color:var(--mut); text-underline-offset:2px; }
 </style>
 </head>
@@ -33,7 +34,8 @@
 <main>
 
 <h1>PermitsResearchBot</h1>
-<p class="sub">An automated collector for an academic study of municipal building-permit data coverage.</p>
+<p class="sub">An automated collector for an independent research project on residential
+building permits.</p>
 
 <p>If you found this page in your server logs, this explains what the traffic is and how to
 stop it. You do not need to contact anyone to make it stop &mdash; see the last section.</p>
@@ -46,48 +48,52 @@ an aggregate level, at finer resolution.</p>
 <p>It reads the same public search pages a member of the public would. It does not attempt to
 authenticate, does not submit forms other than public record searches, does not follow links
 behind a login, and does not access anything a visitor could not reach in a browser.</p>
+<p>The crawler's source is public at
+<a href="https://github.com/ryanp2718/buildscope">github.com/ryanp2718/buildscope</a>; the
+fetching code is <code>permits/capture.py</code>.</p>
 
 <h2>How it behaves</h2>
 <table>
-  <tr><td>User-Agent</td><td><code>PermitsResearchBot/0.1</code></td></tr>
+  <tr><td>User-Agent</td><td><code>PermitsResearchBot/0.1 (municipal open-data coverage study;
+      contact: https://ryanp2718.github.io/buildscope/)</code></td></tr>
   <tr><td>Request rate</td><td>One request at a time. Minimum 1.5&nbsp;seconds between requests
       to the same host; slower where <code>robots.txt</code> asks.</td></tr>
   <tr><td>Concurrency</td><td>None. Single-threaded, one connection.</td></tr>
   <tr><td>Retries</td><td>None. A failed request is recorded and abandoned.</td></tr>
-  <tr><td>Volume ceiling</td><td>A hard per-run request budget. The run aborts when it is
-      reached rather than continuing.</td></tr>
-  <tr><td>robots.txt</td><td>Fetched per host and honored, including <code>Crawl-delay</code>.
-      A disallowed path is not requested.</td></tr>
-  <tr><td>Challenges</td><td>A bot challenge or interstitial is treated as a decline. The host
-      is recorded as not participating and is not retried or worked around.</td></tr>
+  <tr><td>Volume ceiling</td><td>A hard per-run request budget, counting <code>robots.txt</code>
+      requests. The run aborts when it is reached rather than continuing.</td></tr>
+  <tr><td>robots.txt</td><td>Fetched once per host per run and honored. A group naming
+      <code>PermitsResearchBot</code> takes precedence over <code>*</code>. A disallowed path is
+      not requested.</td></tr>
+  <tr><td>Challenges</td><td>A bot challenge or interstitial is treated as a decline: recorded,
+      not retried, and not worked around.</td></tr>
 </table>
-<p>In practice this has meant well under one request per minute to any single host.</p>
 
 <h2>What it collects</h2>
 <p>Permit-level fields: record identifier, dates, permit type and work classification, dwelling
-unit counts, and jurisdiction. These are aggregated for statistical analysis.</p>
-<p><strong>Personal names are not retained.</strong> Owner-builder permits carry an individual's
-name attached to a home address. Applicant names are classified as individual or business at the
-point of extraction and the raw name string is never written into the analysis dataset. No
-published output contains an individual's name.</p>
+unit counts, valuation, address, and jurisdiction. These are aggregated for statistical
+analysis.</p>
+<p><strong>Fetched pages are never published.</strong> Some permit pages show an individual's
+name next to a home address, for example on an owner-builder permit. The pages as fetched stay
+on the machine that fetched them and are not released in any form. The extracted dataset has no
+owner or applicant name field.</p>
 
 <h2>How to make it stop</h2>
 <div class="stop">
-  <p style="margin:.2rem 0 .6rem"><strong>Option 1 &mdash; robots.txt.</strong> Add this to
-  your <code>robots.txt</code> and the crawler will stop on its next run, with no further action
-  needed:</p>
-  <pre>User-agent: PermitsResearchBot
+  <p style="margin:.2rem 0 .6rem">Add this to your <code>robots.txt</code> and the crawler will
+  stop on its next run, with no further action needed:</p>
+  <pre id="opt-out">User-agent: PermitsResearchBot
 Disallow: /</pre>
-  <p style="margin:.6rem 0 .2rem"><strong>Option 2 &mdash; ask.</strong> Write to
-  <a href="mailto:CONTACT@EXAMPLE">CONTACT@EXAMPLE</a> naming your domain and it will be added to
-  a permanent exclusion list. No explanation required, and no reply is needed from you beyond
-  the request itself.</p>
 </div>
-<p>A <code>Crawl-delay</code> directive is also honored if you would prefer slower access to no
-access. Either option is sufficient on its own.</p>
+<p>If you would prefer slower access to no access, a <code>Crawl-delay</code> in whole seconds
+is honored instead. It can only slow the crawler down; a value under 1.5&nbsp;seconds has no
+effect.</p>
+<pre>User-agent: PermitsResearchBot
+Crawl-delay: 10</pre>
 
 <footer>
-  Operated by PROJECT_OWNER &middot; Last updated 21 September 2026<br>
+  Operated by <a href="https://github.com/ryanp2718">ryanp2718</a> &middot; Last updated
+  27 September 2026<br>
   This page exists so that anyone reviewing server logs can identify this traffic and act on it
   without having to track down a person first.
 </footer>
