@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, fields, replace
 from enum import StrEnum
 from typing import Any
 
+from permits.models import Protocol
+
 
 class Outcome(StrEnum):
     """How one draw ended. Exactly one per draw, decided in this order: the
@@ -29,28 +31,43 @@ class Outcome(StrEnum):
 
 @dataclass(frozen=True)
 class CellSpec:
-    """One `--cells` entry: `target:model:draws`."""
+    """One `--cells` entry: `target:model[@effort]:draws`."""
     target: str
     model: str
     draws: int
     hint: bool = False
+    protocol: Protocol = Protocol.V2
+    effort: str | None = None
+
+    @property
+    def label(self) -> str:
+        """The model as the cell names it: `model`, or `model@effort`."""
+        return "%s@%s" % (self.model, self.effort) if self.effort else self.model
 
     @property
     def key(self) -> str:
-        """`target|model`, or `target|model|hint` when the hint is on.
+        """`target|label`, then `|hint` when the hint is on and `|v2` under
+        protocol v2.
 
-        A hinted draw is a different condition, so it gets its own cell.
-        Merging the two under one key would pool draws from two prompts into
-        one rate and report it as one experiment.
+        Each is a different condition, so each gets its own cell. Merging
+        them under one key would pool draws made under two prompts, or two
+        request policies, into one rate and report it as one experiment. v1
+        cells keep the keys they were written under.
         """
-        base = "%s|%s" % (self.target, self.model)
-        return base + "|hint" if self.hint else base
+        key = "%s|%s" % (self.target, self.label)
+        if self.hint:
+            key += "|hint"
+        if self.protocol is not Protocol.V1:
+            key += "|%s" % self.protocol
+        return key
 
     @classmethod
-    def parse(cls, entry: str, hint: bool = False) -> "CellSpec":
+    def parse(cls, entry: str, hint: bool = False,
+              protocol: Protocol = Protocol.V2) -> "CellSpec":
         """Split off the target at the first colon and the draw count at the
         last, rather than splitting on every colon: an OpenRouter model id may
-        contain one itself, as in `openai/gpt-oss-120b:batch`."""
+        contain one itself, as in `openai/gpt-oss-120b:batch`. An effort is
+        written after the model id with `@`, which no id contains."""
         entry = entry.strip()
         if entry.count(":") < 2:
             raise ValueError("bad --cells entry %r, want target:model:draws"
@@ -62,7 +79,13 @@ class CellSpec:
         except ValueError:
             raise ValueError("bad draw count %r in --cells entry %r"
                              % (draws, entry)) from None
-        return cls(target, model, n, hint)
+        effort = None
+        if "@" in model:
+            model, effort = model.split("@", 1)
+            if protocol is Protocol.V1:
+                raise ValueError("%r names an effort, which protocol v1 does "
+                                 "not have" % entry)
+        return cls(target, model, n, hint, protocol, effort)
 
 
 @dataclass(frozen=True)
@@ -76,14 +99,18 @@ class RunConfig:
     synth_hint: bool
     direct_pages: int
     draws: int
+    protocol: Protocol = Protocol.V2
+    effort: str | None = None
 
     @classmethod
     def from_args(cls, args: Any) -> "RunConfig":
-        return cls(**{f.name: getattr(args, f.name) for f in fields(cls)})
+        return cls(**{f.name: getattr(args, f.name) for f in fields(cls)
+                      if hasattr(args, f.name)})
 
     def for_cell(self, cell: CellSpec) -> "RunConfig":
         return replace(self, synth_model=cell.model, draws=cell.draws,
-                       synth_hint=cell.hint)
+                       synth_hint=cell.hint, protocol=cell.protocol,
+                       effort=cell.effort)
 
 
 @dataclass(frozen=True)
@@ -114,6 +141,10 @@ class DrawRecord:
     recall_mean: float | None = None
     precision_min: float | None = None
     pages_scored: int | None = None
+    # Who served the response and how much of `output_tokens` was reasoning,
+    # where known. Absent on draws recorded before 2026-09-26.
+    host: str | None = None
+    reasoning_tokens: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}

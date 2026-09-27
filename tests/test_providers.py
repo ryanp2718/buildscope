@@ -48,6 +48,7 @@ sys.path.insert(0, ROOT)
 import openai                                                # noqa: E402
 
 from permits import infer, models                                 # noqa: E402
+from permits.models import Protocol                                 # noqa: E402
 from tests import requires_raw_store                         # noqa: E402
 
 
@@ -71,10 +72,11 @@ class _FakeChoice(object):
 
 
 class _FakeChunk(object):
-    def __init__(self, model, choices, usage):
+    def __init__(self, model, choices, usage, provider=None):
         self.model = model
         self.choices = choices
         self.usage = usage
+        self.provider = provider
 
 
 class _FakeResponse(object):
@@ -84,8 +86,9 @@ class _FakeResponse(object):
     which reads as zeros, the same as a missing block did unstreamed."""
 
     def __init__(self, text="ok", finish_reason="stop", model="x/y",
-                 usage=None, choices=None):
+                 usage=None, choices=None, host=None):
         self.model = model
+        self.host = host
         self.usage = usage if usage is not None else _FakeUsage()
         self.choices = (choices if choices is not None
                         else [_FakeChoice(text, finish_reason)])
@@ -98,23 +101,29 @@ class _FakeResponse(object):
 
     def __iter__(self):
         for c in self.choices:
-            yield _FakeChunk(self.model, [c], None)
-        yield _FakeChunk(self.model, [], self.usage)
+            yield _FakeChunk(self.model, [c], None, self.host)
+        yield _FakeChunk(self.model, [], self.usage, self.host)
 
 
 class _FakeCompletions(object):
-    """`bodies` holds the request body; the streaming arguments, which the
-    client passes beside the body and never in it, go to `transport`."""
+    """`bodies` holds the request body as it goes on the wire, `extra_body`
+    merged back in; the streaming arguments, which the client passes beside
+    the body and never in it, go to `transport`, and the names that went
+    through `extra_body` to `extras`."""
 
     def __init__(self, result):
         self.result = result
         self.bodies = []
         self.transport = []
+        self.extras = []
 
     def create(self, **kw):
         self.transport.append({k: kw.pop(k) for k in ("stream",
                                                       "stream_options")
                                if k in kw})
+        extra = kw.pop("extra_body", None) or {}
+        self.extras.append(sorted(extra))
+        kw.update(extra)
         self.bodies.append(kw)
         if isinstance(self.result, Exception):
             raise self.result
@@ -288,8 +297,7 @@ class TestUsageTranslation(unittest.TestCase):
         c._oai = _FakeOAI(_FakeResponse(finish_reason="weird",
                                         usage=_FakeUsage(prompt_tokens=1,
                                                          completion_tokens=1)))
-        _t, _u, stop, _m, _b = c._send_chat({"model": "x/y"})
-        self.assertEqual(stop, "weird")
+        self.assertEqual(c._send_chat({"model": "x/y"}).stop_reason, "weird")
 
 
 # --------------------------------------------------------------- money
@@ -349,12 +357,62 @@ class TestOpenRouterRequestShape(unittest.TestCase):
     def test_reasoning_is_sent_only_where_it_exists(self):
         """OpenRouter ignores it silently elsewhere, and a run written up as
         controlled when it was not is worse than a rejected request."""
-        on = self.c.build_chat("deepseek/deepseek-v4-pro", "S", "U", 100,
-                               thinking=True)
-        self.assertEqual(on["reasoning_effort"], "medium")
         off = self.c.build_chat("qwen/qwen3-coder", "S", "U", 100,
                                 thinking=True)
+        self.assertNotIn("reasoning", off)
         self.assertNotIn("reasoning_effort", off)
+
+    def test_v1_sent_medium_to_its_five_and_nothing_else(self):
+        """The frozen shape the v1 cells were bought with."""
+        on = self.c.build_chat("deepseek/deepseek-v4-pro", "S", "U", 100,
+                               thinking=True, protocol=Protocol.V1)
+        self.assertEqual(on, {
+            "model": "deepseek/deepseek-v4-pro", "max_tokens": 100,
+            "messages": [{"role": "system", "content": "S"},
+                         {"role": "user", "content": "U"}],
+            "reasoning_effort": "medium"})
+        for m in ("openai/gpt-oss-120b", "qwen/qwen3.5-flash-02-23"):
+            self.assertEqual(
+                set(self.c.build_chat(m, "S", "U", 100, thinking=True,
+                                      protocol=Protocol.V1)),
+                {"model", "max_tokens", "messages"}, m)
+
+    def test_v2_asks_for_the_catalogue_default_effort(self):
+        """Four of v1's five were sent "medium", which their catalogue
+        entries do not list."""
+        want = {"deepseek/deepseek-v4-pro": {"effort": "high"},
+                "z-ai/glm-5.3-flash": {"effort": "max"},
+                "openai/gpt-oss-120b": {"effort": "medium"},
+                "moonshotai/kimi-k2-thinking": {"enabled": True},
+                "qwen/qwen3.5-flash-02-23": {"enabled": True}}
+        for m, r in want.items():
+            with self.subTest(model=m):
+                body = self.c.build_chat(m, "S", "U", 100, thinking=True)
+                self.assertEqual(body["reasoning"], r)
+                self.assertNotIn("reasoning_effort", body)
+
+    def test_an_effort_the_catalogue_does_not_list_is_refused(self):
+        self.assertEqual(self.c.build_chat(
+            "z-ai/glm-5.3-flash", "S", "U", 100, thinking=True,
+            effort="low")["reasoning"], {"effort": "low"})
+        for m, e in (("z-ai/glm-5.2", "medium"),
+                     ("moonshotai/kimi-k2-thinking", "high"),
+                     ("qwen/qwen3-coder", "low")):
+            with self.subTest(model=m), self.assertRaises(infer.Refused):
+                self.c.build_chat(m, "S", "U", 100, thinking=True, effort=e)
+
+    def test_sampling_and_routing_are_sent_from_the_registry(self):
+        body = self.c.build_chat("qwen/qwen3-coder", "S", "U", 100)
+        self.assertEqual((body["temperature"], body["top_p"]), (0.7, 0.8))
+        self.assertEqual(body["provider"], {
+            "require_parameters": True,
+            "quantizations": ["fp8", "fp16", "bf16"]})
+        # One lab-run host that reports no precision, so `unknown` is admitted
+        # beside the fp8 the lab released; without it the model has no host.
+        only = self.c.build_chat("qwen/qwen3.5-flash-02-23", "S", "U", 100)
+        self.assertEqual(only["provider"]["quantizations"],
+                         ["fp8", "fp16", "bf16", "unknown"])
+        self.assertEqual((only["temperature"], only["top_p"]), (0.6, 0.95))
 
     def test_temperature_is_not_refused_alongside_thinking(self):
         """`build` refuses that because the Anthropic API 400s on it. That is
@@ -578,8 +636,13 @@ class TestTruncationIsDecidedOnFacts(unittest.TestCase):
 
 
 # --------------------------------------------- the ceiling is not the answer
+V1 = Protocol.V1
+
+
 class TestReasoningGetsRoomToThink(ClientCase):
-    """OpenRouter bills reasoning and output from one allowance, so an equal
+    """Protocol v1's rule, kept so its requests hash as they did.
+
+    OpenRouter bills reasoning and output from one allowance, so an equal
     `max_tokens` is an unequal experiment: the thinking model answers from
     what is left, the other answers from all of it.
 
@@ -591,15 +654,13 @@ class TestReasoningGetsRoomToThink(ClientCase):
     """
 
     def test_a_reasoning_model_gets_headroom_on_top(self):
-        self.assertEqual(infer.ceiling_for("z-ai/glm-5.2", 16000),
+        self.assertEqual(infer.ceiling_for("z-ai/glm-5.2", 16000, V1),
                          16000 + infer.REASONING_HEADROOM)
 
     def test_every_reasoning_model_gets_it(self):
-        effort = [s.id for s in models.REGISTRY.values()
-                  if s.reasoning is models.ReasoningControl.EFFORT]
-        self.assertTrue(effort)
-        for m in effort:
-            self.assertGreater(infer.ceiling_for(m, 8000), 8000, m)
+        self.assertEqual(len(infer.V1_EFFORT), 5)
+        for m in infer.V1_EFFORT:
+            self.assertGreater(infer.ceiling_for(m, 8000, V1), 8000, m)
 
     def test_a_non_reasoning_model_is_untouched(self):
         """Including the ones that merely happen to be verbose. qwen3.5-flash
@@ -609,13 +670,14 @@ class TestReasoningGetsRoomToThink(ClientCase):
         than the others it is being compared against."""
         for m in ("qwen/qwen3.5-flash-02-23", "openai/gpt-oss-120b",
                   "qwen/qwen3-coder"):
-            self.assertEqual(infer.ceiling_for(m, 16000), 16000, m)
+            self.assertEqual(infer.ceiling_for(m, 16000, V1), 16000, m)
 
     def test_the_anthropic_path_cannot_move(self):
         """The property the response cache is worth $4.34 of."""
         for m in ("claude-opus-5", "claude-sonnet-5",
                   "claude-haiku-4-5-20251001"):
-            self.assertEqual(infer.ceiling_for(m, 16000), 16000, m)
+            for p in Protocol:
+                self.assertEqual(infer.ceiling_for(m, 16000, p), 16000, m)
 
     def test_the_budget_is_checked_against_what_can_actually_be_spent(self):
         """Raise the ceiling in the request body alone and the guard
@@ -625,13 +687,15 @@ class TestReasoningGetsRoomToThink(ClientCase):
         self.client.budget.check = lambda m, i, o: seen.append((m, i, o))
         self.install(_FakeResponse(usage=_FakeUsage(
             prompt_tokens=10, completion_tokens=10, cost=0.01)))
-        self.client.message("z-ai/glm-5.2", "S", "U", 16000, "synthesis")
+        self.client.message("z-ai/glm-5.2", "S", "U", 16000, "synthesis",
+                            protocol=V1)
         self.assertEqual(seen[-1][2], 16000 + infer.REASONING_HEADROOM)
 
     def test_the_wire_carries_the_raised_ceiling(self):
         comps = self.install(_FakeResponse(usage=_FakeUsage(
             prompt_tokens=10, completion_tokens=10, cost=0.01)))
-        self.client.message("z-ai/glm-5.2", "S", "U", 16000, "synthesis")
+        self.client.message("z-ai/glm-5.2", "S", "U", 16000, "synthesis",
+                            protocol=V1)
         self.assertEqual(comps.bodies[-1]["max_tokens"],
                          16000 + infer.REASONING_HEADROOM)
 
@@ -643,23 +707,103 @@ class TestReasoningGetsRoomToThink(ClientCase):
         before typing --run, so the two have to agree by construction."""
         projected = infer.estimate(
             "z-ai/glm-5.2", 9000,
-            infer.ceiling_for("z-ai/glm-5.2", 16000))
+            infer.ceiling_for("z-ai/glm-5.2", 16000, V1))
         b = infer.Budget(projected + 1e-9)
         b.check("z-ai/glm-5.2", 9000,
-                infer.ceiling_for("z-ai/glm-5.2", 16000))
+                infer.ceiling_for("z-ai/glm-5.2", 16000, V1))
         b.ceiling = projected - 1e-4
         with self.assertRaises(infer.Refused):
             b.check("z-ai/glm-5.2", 9000,
-                    infer.ceiling_for("z-ai/glm-5.2", 16000))
+                    infer.ceiling_for("z-ai/glm-5.2", 16000, V1))
 
     def test_thinking_to_the_old_ceiling_is_no_longer_truncation(self):
         """The 16,000-token reasoning burn that voided the first run reads as
         a complete answer once the answer budget is actually 16,000."""
-        ceiling = infer.ceiling_for("z-ai/glm-5.2", 16000)
+        ceiling = infer.ceiling_for("z-ai/glm-5.2", 16000, V1)
         self.assertFalse(infer.truncated(
             "stop", infer.Usage(output_tokens=16000), ceiling))
         self.assertTrue(infer.truncated(
             "stop", infer.Usage(output_tokens=ceiling), ceiling))
+
+
+# ------------------------------------------------------------ protocol v2
+class TestProtocolV2(ClientCase):
+    """The step 3 policy: one cap, the vendor's own reasoning default,
+    sampling from the model card, host precision filtered, and every
+    setting recorded on the row that paid for it."""
+
+    def test_every_model_gets_the_same_cap(self):
+        caps = {infer.output_cap(s.id) for s in models.measured()}
+        self.assertEqual(caps, {models.OUTPUT_CAP})
+        for s in models.measured():
+            self.assertGreaterEqual(s.max_output, models.OUTPUT_CAP, s.id)
+
+    def test_the_cap_is_the_whole_allowance_with_nothing_on_top(self):
+        for s in models.measured():
+            self.assertEqual(infer.ceiling_for(s.id, 64000), 64000, s.id)
+
+    def test_haikus_thinking_budget_does_not_bind_before_the_cap(self):
+        body = self.client.build("claude-haiku-4-5-20251001", "S", "U",
+                                 64000, thinking=True)
+        self.assertEqual(body["thinking"]["budget_tokens"],
+                         64000 - infer.ANSWER_RESERVE)
+        v1 = self.client.build("claude-haiku-4-5-20251001", "S", "U",
+                               12000, thinking=True, protocol=V1)
+        self.assertEqual(v1["thinking"]["budget_tokens"], 6000)
+
+    def test_openrouter_only_fields_travel_in_extra_body(self):
+        """The OpenAI SDK raises on a keyword it does not know."""
+        comps = self.install(_FakeResponse(usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=10, cost=0.01)))
+        self.client.message("z-ai/glm-5.2", "S", "U", 64000, "synthesis",
+                            thinking=True)
+        self.assertEqual(comps.extras[-1], ["provider", "reasoning"])
+        self.assertEqual(comps.bodies[-1]["reasoning"], {"effort": "high"})
+
+    def test_the_row_records_what_was_asked_and_who_answered(self):
+        self.install(_FakeResponse(host="Novita", usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=900, cost=0.01,
+            completion_tokens_details={"reasoning_tokens": 700})))
+        reply = self.client.message("z-ai/glm-5.2", "S", "U", 64000,
+                                    "synthesis", thinking=True)
+        row = self.rows()[-1]
+        self.assertEqual(
+            (row.protocol, row.max_tokens, row.reasoning, row.temperature,
+             row.top_p, row.host, row.reasoning_tokens),
+            ("v2", 64000, "effort=high", 1.0, 0.95, "Novita", 700))
+        self.assertEqual((reply.host, reply.usage.reasoning_tokens),
+                         ("Novita", 700))
+
+    def test_a_replay_keeps_the_host(self):
+        self.install(_FakeResponse(host="Novita", usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=10, cost=0.01)))
+        args = ("z-ai/glm-5.2", "S", "U", 64000, "synthesis")
+        self.client.message(*args)
+        self.assertEqual(self.client.message(*args).host, "Novita")
+
+    def test_the_two_protocols_are_different_requests(self):
+        """So a v2 draw can never be answered from a v1 cache entry."""
+        c = self.client
+        for m in ("z-ai/glm-5.2", "openai/gpt-oss-120b",
+                  "claude-haiku-4-5-20251001"):
+            a = c.request(m, "S", "U", 16000, thinking=True, protocol=V1)
+            b = c.request(m, "S", "U", infer.output_cap(m), thinking=True)
+            self.assertNotEqual(c._key_for(a), c._key_for(b), m)
+
+    def test_claude_thinking_records_the_temperature_the_api_fixes(self):
+        body = self.client.build("claude-opus-5", "S", "U", 64000,
+                                 thinking=True)
+        self.assertNotIn("temperature", body)
+        self.assertEqual(infer.settings_sent(body, Protocol.V2)["temperature"],
+                         1.0)
+
+    def test_effort_is_refused_for_anthropic_and_under_v1(self):
+        with self.assertRaises(infer.Refused):
+            self.client.request("claude-opus-5", "S", "U", 64000,
+                                thinking=True, effort="low")
+        with self.assertRaises(infer.Refused):
+            self.client.request("z-ai/glm-5.3-flash", "S", "U", 16000,
+                                thinking=True, protocol=V1, effort="low")
 
 
 # ------------------------------------------ the table is a ceiling, not a bill

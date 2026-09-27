@@ -217,9 +217,8 @@ is pinned by tests, which is how the stale figures survived.
   and `short_model`. F2 is a direct consequence: capability is a hand-kept set rather than a field on
   the model. Fixed 2026-09-26: `permits/models.py` holds one `ModelSpec` per model (provider, tier,
   ceiling and list price, reasoning control, catalogue reasoning support, sampling, release date,
-  short name), and the seven are derived from it. The registry reproduces the requests already sent,
-  so F2 itself is still open. `tests/test_models.py` pins the three affected ids so the set can only
-  shrink.
+  short name), and the seven are derived from it. F2 itself closed with step 3: protocol v2 sends
+  every reasoning model a reasoning setting, and `tests/test_models.py` fails if one is sent none.
 - **Mutable run configuration.** `run_cells` overwrites `args.synth_model` and `args.draws` and does
   not restore them (`scripts/conformance.py:1167-1191`), and the argparse namespace is threaded into
   helpers such as `synth_system(args)` and `cell_key(..., args)`. Fixed 2026-09-26: each cell runs
@@ -360,7 +359,7 @@ Anthropic.
 |---|---|---|
 | 1 | (Done 2026-09-26: `ModelSpec` registry in `permits/models.py` replacing the seven tables; frozen `Usage`, `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec`, `RunConfig`; `Outcome` as a `StrEnum`; mypy strict in CI on five `permits/` files. Every cached request hashes as before, and a replay of four cells re-scores every draw identically.) | no |
 | 2 | (Done 2026-09-26: every call streams on both providers; read timeout 120 s between chunks; wall-clock limit 300 s + ceiling at 10 tok/s; `FatalError` stops the run, `TransientError` is retried once under the same draw then recorded as `infra_error`, outside the pass rate; `ttft_s` in the ledger; infra-error rate, median TTFT and tokens per second in `model_stats.json`. See "Step 2 as built" below.) | no |
-| 3 | Reasoning, sampling and routing policies above, driven by the registry; `reasoning_tokens` and serving host in the ledger. (Ceiling rates for glm-5.3-flash and deepseek-v4-flash: done 2026-09-26.) | no |
+| 3 | (Done 2026-09-26: protocol v2 in the registry and request builders; v1 frozen and still replaying; settings sent, serving host and reasoning tokens on every ledger row. See "Step 3 as built" below.) | no |
 | 4 | Atomic cache writes; a lock on `variance.json`; closed file handles. (`short_model` and the `cached()` / `Ledger.rows()` handles: done with step 1.) | no |
 | 5 | (Done 2026-09-26: R1 corrected in the report, the code comment and the test docstring; the report's cells pinned in `tests/test_model_stats.py`.) | no |
 | 6 | Pre-register roster, prompt hash, development/test split, n per cell and success criteria; dry-run the cost projection; then run | yes |
@@ -397,6 +396,100 @@ The policy under "Timeouts" above, with the values it left open:
 Not verified against a live stream, since this step spends nothing: that OpenRouter's last chunk
 carries usage and cost for every upstream, and that reasoning arrives as a `reasoning` delta. The
 smoke draw in step 6 is where that is checked.
+
+### Step 3 as built
+
+Planned 2026-09-26 before the code, and built as planned. Sources: the catalogue snapshot
+(`data/audit/2026-09-25-openrouter-models.json`), a per-model endpoint snapshot
+(`data/audit/2026-09-26-openrouter-endpoints.json`) and each open model's Hugging Face config
+(`data/audit/2026-09-26-huggingface-configs.json`).
+
+**A new finding under F3.** The catalogue lists the efforts each model accepts. The harness sends
+`reasoning_effort: "medium"` to five models, and four of them do not list it:
+
+| model | accepted efforts | catalogue default |
+|---|---|---|
+| glm-5.2 | xhigh, high | high |
+| deepseek-v4-pro | xhigh, high | high |
+| deepseek-v4-flash | xhigh, high | high |
+| glm-5.3-flash | max, high, low | max |
+| kimi-k2-thinking | none listed; always on | on |
+| gpt-oss-120b | high, medium, low | medium |
+
+What OpenRouter does with an effort a model does not accept is not documented, so the effort those
+cells ran at is unknown.
+
+**The old conditions stay replayable.** Every policy below changes the request body, and the
+cache key is the body's hash. So the request shape is versioned. **Protocol v1** is the shape used
+through 2026-09-26, frozen and pinned by the golden tests. **Protocol v2** is this policy and is
+the default for new runs. A v2 cell is keyed `target|model|v2` (and `target|model|hint|v2`), and
+its extractor files carry `_v2`, so a new run cannot overwrite or pool with an old cell. Existing
+cells keep their keys and are labelled v1.
+
+**Protocol v2, per the policy above, with the values it left open:**
+
+- **Cap.** 64,000 for every model. Every catalogue `max_completion_tokens` is at or above it:
+  Opus 5 and Sonnet 5 128,000, Haiku 4.5 64,000, the open models 65,536 to 384,000. No headroom
+  is added on top: the cap is the whole allowance, reasoning included, for every vendor.
+- **Reasoning at the vendor default.** Opus and Sonnet: adaptive thinking, as now. Haiku 4.5:
+  `budget_tokens` = cap − 16,000 (48,000), so the budget does not bind before the cap does.
+  OpenRouter: `reasoning: {"effort": <catalogue default>}` where the catalogue gives one, else
+  `reasoning: {"enabled": true}`; qwen3-coder gets none, since it does not reason. This closes F2
+  for qwen3.5-flash and gpt-oss-120b. `reasoning` and `provider` are not OpenAI SDK parameters,
+  so they travel in `extra_body`; the cache key still hashes the whole body.
+- **Effort sweeps.** A cell may name `model@effort` for an OpenRouter model, and the effort must
+  be one the catalogue lists. Anthropic effort controls are not wired: which parameter Opus 5 and
+  Sonnet 5 take is unverified, and Haiku's only control is the budget.
+- **Sampling.** The model card's recommendation, else the catalogue's `default_parameters`, else
+  the API default of 1.0 / 1.0. qwen3-coder 0.7 / 0.8 (card; its `top_k` 20 and
+  `repetition_penalty` 1.05 are not sent, since the policy covers temperature and top_p only);
+  kimi-k2-thinking 1.0 (card); deepseek-v4-pro and -flash 1.0 / 1.0 (card); glm-5.2 and
+  glm-5.3-flash 1.0 / 0.95 (catalogue, and the card's reasoning setting); qwen3.5-flash 0.6 / 0.95
+  (the Qwen3.5-35B-A3B card's thinking-mode setting for precise coding, since Flash is the hosted
+  version of that model); gpt-oss-120b 1.0 / 1.0 (nothing published). Sent on every OpenRouter request. Claude with
+  thinking runs at 1.0, which is not sent because the API fixes it.
+- **Routing.** `provider: {"require_parameters": true, "quantizations": [...]}`. The audit's
+  literal list, `["bf16", "fp8"]`, would route qwen3.5-flash nowhere, since its only host is
+  Alibaba and reports `unknown`. It would also exclude the hosts serving gpt-oss-120b (released
+  as MXFP4) and kimi-k2-thinking (released as INT4) at their released precision, while admitting
+  hosts that converted them upward. The rule is therefore: **a precision the lab itself released,
+  or higher.**
+
+  | model | lab-released | allowed |
+  |---|---|---|
+  | gpt-oss-120b | MXFP4 | fp4, fp8, fp16, bf16 |
+  | kimi-k2-thinking | INT4 | int4, int8, fp8, fp16, bf16 |
+  | qwen3-coder, glm-5.2 | bf16, and an fp8 checkpoint | fp8, fp16, bf16 |
+  | deepseek-v4-pro, deepseek-v4-flash, glm-5.3-flash | fp8 | fp8, fp16, bf16 |
+  | qwen3.5-flash | fp8, as Qwen3.5-35B-A3B-FP8 (Flash is its hosted version) | fp8, fp16, bf16, and `unknown` |
+
+  Hosts reporting `unknown`, which include Google, Azure, Together and Fireworks, are excluded,
+  except for qwen3.5-flash: its one host is Alibaba's own and reports `unknown`, so admitting it
+  is the only way to route the model at all. A third-party host serving it below fp8 would still
+  be excluded.
+- **Recorded on every ledger row:** protocol, the ceiling sent, the reasoning setting sent,
+  temperature, top_p, serving host, and reasoning tokens. Reasoning tokens come from OpenAI's
+  `completion_tokens_details.reasoning_tokens` and Anthropic's `output_tokens_details.thinking_tokens`;
+  both are part of `output_tokens`, not in addition to it. Draw records carry host and reasoning
+  tokens too.
+- **Truncation** is counted per cell in `model_stats.json`, so a nonzero rate is visible.
+
+Built with no spend and checked the same way as steps 1 and 2: every v1 draw still hashes to its
+cached response under v1 (240 replay, the same 5 known misses) and none hits under v2 (0 of 245);
+three v1 cells replayed at `--max-spend 0` re-score identically and write no ledger rows;
+`model_stats.json` differs only by `draws_truncated` and `reasoning_tokens_p50`. Replaying a v1
+Haiku cell now records its thinking tokens, which Anthropic's cached usage carried all along. The
+v1 OpenRouter cache entries did not keep reasoning tokens, so those stay unknown.
+
+A v2 cell's worst case is larger because the cap is: a 20-draw Opus 5 Clark cell projects to
+$32.90 at 64,000 tokens, against about $6 at 12,000. Spend is billed on tokens used, and the
+Opus 5 draws so far used at most 10,177.
+
+Not verified, since this step spends nothing: that OpenRouter accepts every value in the
+`quantizations` lists (the endpoint listing uses them, the filter's documentation names fewer),
+that it routes a 64,000-token request only to hosts whose own `max_completion_tokens` allows it
+(some list 16,384 or less), and that each chunk's `provider` field names the host. The step 6
+smoke draw per model checks all three before any cell is bought.
 
 ## What this does not establish
 

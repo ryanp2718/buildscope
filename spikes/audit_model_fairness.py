@@ -26,6 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from permits import infer  # noqa: E402
+from permits.models import Protocol  # noqa: E402
 
 LEDGER = os.path.join(ROOT, "data", "infer", "ledger.jsonl")
 VARIANCE = os.path.join(ROOT, "data", "infer", "variance.json")
@@ -48,14 +49,17 @@ def section(title):
 
 def reasoning_support(catalogue):
     """F2: which roster models OpenRouter says accept `reasoning`, against
-    the reasoning control the harness sends (OPENROUTER_REASONING until the
-    registry replaced it on 2026-09-26)."""
+    what protocol v1 sent (the audited state, `infer.V1_EFFORT`) and what
+    protocol v2 sends."""
     section("F2 reasoning support: catalogue vs harness")
     by = {m["id"]: m for m in catalogue}
     for mid in ROSTER_OR:
         sp = by[mid].get("supported_parameters") or []
-        print("  %-32s catalogue=%-5s harness=%-5s max_completion=%s"
-              % (mid, "reasoning" in sp, infer.spec(mid).reasoning == "effort",
+        body = infer.Client.__new__(infer.Client).build_chat(
+            mid, "", "", 100, thinking=True)
+        print("  %-32s catalogue=%-5s v1=%-5s v2=%-18s max_completion=%s"
+              % (mid, "reasoning" in sp, mid in infer.V1_EFFORT,
+                 infer.settings_sent(body, Protocol.V2)["reasoning"],
                  (by[mid].get("top_provider") or {}).get("max_completion_tokens")))
 
 
@@ -94,7 +98,8 @@ def throughput(rows):
     """F5: slowest OpenRouter calls, and what a full reasoning ceiling would
     take at that rate."""
     section("F5 slowest OpenRouter calls")
-    ceiling = infer.ceiling_for("moonshotai/kimi-k2-thinking", 16000)
+    ceiling = infer.ceiling_for("moonshotai/kimi-k2-thinking", 16000,
+                                Protocol.V1)
     orr = [r for r in rows if r.get("provider") == infer.OPENROUTER and r.get("seconds")]
     for r in sorted(orr, key=lambda r: -r["seconds"])[:5]:
         rate = r["output_tokens"] / r["seconds"]

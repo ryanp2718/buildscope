@@ -521,8 +521,9 @@ class TestSynthesisWindow(unittest.TestCase):
         artifact the comparison is between."""
         import inspect
         src = inspect.getsource(self.C.run_target)
-        self.assertIn("%s_%s_extract.py", src)
+        self.assertIn("%s_%s%s_extract.py", src)
         self.assertIn("tier", src)
+        self.assertIn("condition_suffix(cfg)", src)
 
     def test_extractor_runs_on_the_representation_it_was_shown(self):
         """Synthesis sees a stripped page, so it is run on stripped pages. On

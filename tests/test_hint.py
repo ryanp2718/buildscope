@@ -32,12 +32,15 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from permits import infer, models                                 # noqa: E402
+from permits.models import Protocol                                 # noqa: E402
 
 
 def args(**kw):
-    """An args namespace with the fields the prompt accessors read."""
+    """An args namespace with the fields the prompt accessors read. v1 by
+    default, because the keys and files pinned here are the ones on disk."""
     base = {"synth_hint": False, "synth_model": "claude-opus-5",
-            "synth_tokens": 8000, "synth_window": 24000}
+            "synth_tokens": 8000, "synth_window": 24000,
+            "protocol": Protocol.V1, "effort": None}
     base.update(kw)
     return argparse.Namespace(**base)
 
@@ -134,13 +137,35 @@ class TestTheArmsAreScoredApart(unittest.TestCase):
                             args(synth_hint=True)),
             "stjohns|openai/gpt-oss-120b:batch|hint")
 
+    def test_a_v2_cell_never_shares_a_key_with_a_v1_cell(self):
+        """A new request policy is a new condition. Sharing the key would
+        replace the v1 cell's draws, or pool the two into one rate."""
+        v2 = args(protocol=Protocol.V2)
+        self.assertEqual(self.C.cell_key("clarkco", "z-ai/glm-5.2", v2),
+                         "clarkco|z-ai/glm-5.2|v2")
+        self.assertEqual(
+            self.C.cell_key("clarkco", "z-ai/glm-5.2",
+                            args(protocol=Protocol.V2, synth_hint=True)),
+            "clarkco|z-ai/glm-5.2|hint|v2")
+        self.assertEqual(
+            self.C.cell_key("clarkco", "z-ai/glm-5.3-flash",
+                            args(protocol=Protocol.V2, effort="low")),
+            "clarkco|z-ai/glm-5.3-flash@low|v2")
+
     def test_the_hinted_run_writes_its_extractors_elsewhere(self):
         # The baseline sources are the evidence: re-scoring them per record
-        # is what identified the dropped row class. A hinted run that reused
-        # the filenames would overwrite them in place.
+        # is what identified the dropped row class. A hinted or v2 run that
+        # reused the filenames would overwrite them in place.
         import inspect
-        src = inspect.getsource(self.C.run_variance)
-        self.assertIn('"_hint" if cfg.synth_hint else ""', src)
+        self.assertIn("condition_suffix(cfg)",
+                      inspect.getsource(self.C.run_variance))
+        self.assertEqual(self.C.condition_suffix(args()), "")
+        self.assertEqual(self.C.condition_suffix(args(synth_hint=True)),
+                         "_hint")
+        self.assertEqual(
+            self.C.condition_suffix(args(protocol=Protocol.V2,
+                                         synth_hint=True, effort="low")),
+            "@low_hint_v2")
 
 
 class TestTheProjectionPricesWhatIsSent(unittest.TestCase):
@@ -183,9 +208,9 @@ class TestTheNewCheapTierIsDeclared(unittest.TestCase):
             self.assertIs(models.get(m).reasoning,
                           models.ReasoningControl.EFFORT)
 
-    def test_both_therefore_get_the_headroom(self):
+    def test_both_therefore_got_the_headroom_under_v1(self):
         for m in self.CHEAP:
-            self.assertEqual(infer.ceiling_for(m, 16000),
+            self.assertEqual(infer.ceiling_for(m, 16000, Protocol.V1),
                              16000 + infer.REASONING_HEADROOM)
 
     def test_the_ceiling_clears_list_price(self):

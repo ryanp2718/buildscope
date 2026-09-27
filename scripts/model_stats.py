@@ -51,9 +51,11 @@ def short(model):
 
     An id with no registry entry prints as itself. This only reads records
     already on disk, and a report that refuses to print a row is worse than
-    one that prints it wide."""
+    one that prints it wide. An effort cell's `model@effort` keeps its
+    effort."""
+    base, sep, effort = model.partition("@")
     try:
-        return infer.short_model(model)
+        return infer.short_model(base) + sep + effort
     except infer.Refused:
         return model
 
@@ -72,11 +74,22 @@ def read_ledger(path):
 
 
 def condition(cell):
-    """The experimental condition a variance cell was run under.
+    """The experimental condition a variance cell was run under: `baseline`,
+    or the parts that set it apart, `hint` and the protocol, joined with `|`
+    in the order `CellSpec.key` uses.
 
     Cells written before `--synth-hint` existed carry no flag and were all
-    run on the baseline prompt."""
-    return "hint" if cell.get("synth_hint") else "baseline"
+    run on the baseline prompt; cells with no `protocol` ran under v1."""
+    parts = ["hint"] if cell.get("synth_hint") else []
+    if cell.get("protocol", "v1") != "v1":
+        parts.append(cell["protocol"])
+    return "|".join(parts) or "baseline"
+
+
+def label(cell):
+    """The model as the cell names it, `model@effort` on an effort cell."""
+    return ("%s@%s" % (cell["model"], cell["effort"]) if cell.get("effort")
+            else cell["model"])
 
 
 def purchases(v, ledger):
@@ -153,7 +166,7 @@ def rows_from_variance(v, ledger=()):
     bought = purchases(v, ledger)
     out = []
     for key, cell in v["cells"].items():
-        target, model, cond = cell["target"], cell["model"], condition(cell)
+        target, model, cond = cell["target"], label(cell), condition(cell)
         for d in draws_of(cell):
             mode = failure_mode(d)
             uid = "d%02d" % d.draw
@@ -171,6 +184,7 @@ def rows_from_variance(v, ledger=()):
                     ("output_tokens", d.output_tokens),
                     ("source_bytes", d.bytes),
                     ("truncated", 1 if d.truncated else 0),
+                    ("reasoning_tokens", d.reasoning_tokens),
                 ]
                 i = bought.get((key, d.draw))
                 if i is None:
@@ -272,6 +286,10 @@ def aggregate(rows):
         fails = n - k
         n_silent = sum(silent)
         infra = sum(var("infra_error"))
+        # A truncated draw is a harness failure, not a model failure; the
+        # policy is that this is zero, and a cell where it is not is rerun
+        # at a higher cap.
+        truncated = sum(var("truncated"))
         lat = var("seconds")
         # Call errors are a property of the provider, not the prompt, and a
         # failed call has no draw to join to, so this one figure is pooled
@@ -316,6 +334,8 @@ def aggregate(rows):
             "latency_p95_s": pctile(lat, 0.95),
             # Draws the host failed twice, as a share of draws sent. Beside
             # the success rate, never inside it.
+            "draws_truncated": truncated,
+            "reasoning_tokens_p50": pctile(var("reasoning_tokens"), 0.50),
             "draws_infra_error": infra,
             "infra_error_rate": (float(infra) / (n + infra)
                                  if n + infra else None),

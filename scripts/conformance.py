@@ -102,6 +102,7 @@ sys.path.insert(0, ROOT)
 
 from permits import infer, models
 from permits.cells import CellSpec, DrawRecord, Outcome, RunConfig, draws_of
+from permits.models import Protocol
 from permits.stats import ORDER, failure_mode, wilson
 from permits import strip as _strip                          # noqa: E402
 from permits.adapters import accela, stjohns                 # noqa: E402
@@ -220,7 +221,31 @@ def synth_system(cfg):
 
 def cell_key(target_key, model, cfg):
     """The `variance.json` key for this cell. See `CellSpec.key`."""
-    return CellSpec(target_key, model, 0, cfg.synth_hint).key
+    return CellSpec(target_key, model, 0, cfg.synth_hint, cfg.protocol,
+                    cfg.effort).key
+
+
+def synth_budget(cfg, model=None):
+    """The synthesis `max_tokens` for `model` under this run's protocol.
+
+    v1: `--synth-tokens`, the answer budget, with headroom added by
+    `ceiling_for` for the models v1 gave it to. v2: the model's output cap,
+    the whole allowance, the same 64,000 for every model on the roster.
+    """
+    model = model or cfg.synth_model
+    if cfg.protocol is Protocol.V1:
+        return cfg.synth_tokens
+    return infer.output_cap(model)
+
+
+def condition_suffix(cfg):
+    """What distinguishes this cell's files from the v1 baseline's:
+    `@effort`, `_hint`, `_v2`. Empty for a v1 baseline cell, so files
+    already on disk keep their names and a new condition cannot overwrite
+    them."""
+    return (("@%s" % cfg.effort if cfg.effort else "")
+            + ("_hint" if cfg.synth_hint else "")
+            + ("" if cfg.protocol is Protocol.V1 else "_%s" % cfg.protocol))
 
 
 DIRECT_SYSTEM = CONTRACT + """
@@ -695,8 +720,8 @@ def plan(target, pages, refs, cfg):
     # understates such a cell threefold. `Budget.check` sees the raised
     # number at call time either way, so the two would silently disagree.
     syn = infer.estimate(cfg.synth_model, syn_in,
-                         infer.ceiling_for(cfg.synth_model,
-                                           cfg.synth_tokens))
+                         infer.ceiling_for(cfg.synth_model, synth_budget(cfg),
+                                           cfg.protocol))
 
     direct = []
     for fn, p in pages[:cfg.direct_pages]:
@@ -705,7 +730,8 @@ def plan(target, pages, refs, cfg):
         direct.append((fn, n_in, cap,
                        infer.estimate(
                            cfg.direct_model, n_in,
-                           infer.ceiling_for(cfg.direct_model, cap))))
+                           infer.ceiling_for(cfg.direct_model, cap,
+                                             cfg.protocol))))
     return {"synth_in": syn_in, "synth_window_frac": frac,
             "synth_window_at": at, "synth_usd": syn, "direct": direct,
             "direct_usd": sum(d[3] for d in direct)}
@@ -743,12 +769,14 @@ def matrix(targets, cfg):
             win, _, _ = window(read(pages[0][1]), cfg.synth_window)
             s_usd += infer.estimate(
                 model, infer.tokens(synth_system(cfg)) + infer.tokens(win),
-                infer.ceiling_for(model, cfg.synth_tokens))
+                infer.ceiling_for(model, synth_budget(cfg, model),
+                                  cfg.protocol))
             for fn, p in pages[:cfg.direct_pages]:
                 d_usd += infer.estimate(
                     model,
                     infer.tokens(DIRECT_SYSTEM) + infer.tokens(strip(read(p))),
-                    infer.ceiling_for(model, direct_budget(len(refs[fn]))))
+                    infer.ceiling_for(model, direct_budget(len(refs[fn])),
+                                      cfg.protocol))
         rows.append((model, s_usd, d_usd))
     print("\nprojected worst case")
     print("  Anthropic  %s" % infer.PRICES_AS_OF)
@@ -778,7 +806,15 @@ def main():
     ap.add_argument("--max-spend", type=float, default=2.00)
     ap.add_argument("--synth-window", type=int, default=24000,
                     help="chars of stripped page shown to synthesis")
-    ap.add_argument("--synth-tokens", type=int, default=8000)
+    ap.add_argument("--synth-tokens", type=int, default=8000,
+                    help="synthesis answer budget under protocol v1. v2 "
+                         "uses each model's output cap instead.")
+    ap.add_argument("--protocol", type=Protocol, choices=list(Protocol),
+                    default=Protocol.V2,
+                    help="request policy (permits/models.py Protocol). v1 "
+                         "replays the cells run before 2026-09-26; v2 is "
+                         "the fairness audit's policy and keys its cells "
+                         "separately.")
     ap.add_argument("--synth-hint", action="store_true",
                     help="append the row-state paragraph to the synthesis "
                          "prompt and score the draws into a separate "
@@ -846,7 +882,8 @@ def main():
         if args.cells:
             for entry in args.cells.split(","):
                 try:
-                    need.add(CellSpec.parse(entry).model)
+                    need.add(CellSpec.parse(entry, protocol=cfg.protocol)
+                             .model)
                 except ValueError as e:
                     raise SystemExit(str(e)) from None
         for m in sorted(need):
@@ -914,7 +951,7 @@ def main():
         print("    arm S  1 call, ~%.1fk in (%.0f%% of the page, window at "
               "char %d), <= %dk out  ->  $%.3f worst case"
               % (pl["synth_in"] / 1000.0, 100 * pl["synth_window_frac"],
-                 pl["synth_window_at"], cfg.synth_tokens // 1000,
+                 pl["synth_window_at"], synth_budget(cfg) // 1000,
                  pl["synth_usd"]))
         for fn, n_in, cap, usd in pl["direct"]:
             print("    arm D  %-34s ~%.1fk in, <= %.1fk out  ->  $%.3f"
@@ -989,6 +1026,14 @@ def run_variance(client, target, pages, refs, cfg):
     tier = infer.short_model(cfg.synth_model)
     prompt = ("Portal page excerpt (one page of the result grid, stripped of "
               "scripts, styles and non-structural attributes):\n\n" + win)
+    budget = synth_budget(cfg)
+    # What every draw of this cell asks for, recorded on the cell. Built by
+    # the same method `message` builds with, so it is what goes on the wire.
+    body = client.request(cfg.synth_model, synth_system(cfg), prompt, budget,
+                          thinking=True, protocol=cfg.protocol,
+                          effort=cfg.effort)
+    settings = dict(infer.settings_sent(body, cfg.protocol),
+                    routing=body.get("provider"))
     vdir = os.path.join(SYNTH, "variance")
     if not os.path.isdir(vdir):
         os.makedirs(vdir)
@@ -1002,9 +1047,10 @@ def run_variance(client, target, pages, refs, cfg):
         # rather than a key nothing ever reads.
         try:
             reply = client.message(
-                cfg.synth_model, synth_system(cfg), prompt, cfg.synth_tokens,
+                cfg.synth_model, synth_system(cfg), prompt, budget,
                 "synthesis", thinking=True,
-                tag="%s/var" % target.key, draw=d)
+                tag="%s/var" % target.key, draw=d, protocol=cfg.protocol,
+                effort=cfg.effort)
         except infer.TransientError as e:
             # The host failed twice under this draw number. That says
             # nothing about the model, so the draw is recorded, left out of
@@ -1014,7 +1060,7 @@ def run_variance(client, target, pages, refs, cfg):
             rec["why"] = str(e)[:200]
             draws.append(DrawRecord(**rec))
             print("      draw %2d  INFRA ERROR: %s" % (d, str(e)[:84]))
-            save_variance(target, cfg, draws, usd)
+            save_variance(target, cfg, draws, usd, settings)
             continue
         except (infer.Refused, infer.ApiError) as e:
             # Out of budget, out of credit, a bad credential or a request the
@@ -1024,12 +1070,14 @@ def run_variance(client, target, pages, refs, cfg):
             rec["why"] = str(e)[:200]
             draws.append(DrawRecord(**rec))
             print("      draw %2d  STOPPED: %s" % (d, str(e)[:88]))
-            save_variance(target, cfg, draws, usd)
+            save_variance(target, cfg, draws, usd, settings)
             raise
         usd += reply.usd
         rec.update({"usd": reply.usd, "cached": reply.cached,
                     "truncated": reply.truncated,
-                    "output_tokens": reply.usage.output_tokens})
+                    "output_tokens": reply.usage.output_tokens,
+                    "host": reply.host,
+                    "reasoning_tokens": reply.usage.reasoning_tokens})
         src = extract_block(reply.text, CODEBLOCK, "def extract(")
         rec["bytes"] = len(src)
         if not src:
@@ -1041,14 +1089,14 @@ def run_variance(client, target, pages, refs, cfg):
             if problems:
                 rec["outcome"] = Outcome.REFUSED
             else:
-                # The hint suffix is part of the filename, not just the cell
-                # key. Without it a hinted run overwrites the baseline
+                # The condition is part of the filename, not just the cell
+                # key. Without it a hinted or v2 run overwrites the baseline
                 # extractors in place, and those sources are the evidence -
                 # re-scoring them per record is what identified the row
-                # class every model drops.
+                # class most models drop.
                 sp = os.path.join(vdir, "%s_%s%s_d%02d.py"
-                                  % (target.key, tier,
-                                     "_hint" if cfg.synth_hint else "", d))
+                                  % (target.key, tier, condition_suffix(cfg),
+                                     d))
                 with io.open(sp, "w", encoding="utf-8") as fh:
                     fh.write(src)
                 rec["source"] = sp
@@ -1083,7 +1131,7 @@ def run_variance(client, target, pages, refs, cfg):
                  "  (replayed)" if drawn.cached else ""))
         # Saved after every draw: a key that dies at draw 14 of 20 must leave
         # 14 measurements behind, not nothing.
-        save_variance(target, cfg, draws, usd)
+        save_variance(target, cfg, draws, usd, settings)
 
     ok = sum(1 for r in draws if r.outcome is Outcome.PERFECT)
     n = sum(1 for r in draws if r.scored())
@@ -1094,8 +1142,11 @@ def run_variance(client, target, pages, refs, cfg):
     return draws, usd
 
 
-def save_variance(target, cfg, draws, usd):
-    """Merge this cell into data/infer/variance.json, keyed by `cell_key`."""
+def save_variance(target, cfg, draws, usd, settings=None):
+    """Merge this cell into data/infer/variance.json, keyed by `cell_key`.
+
+    A v1 cell is written in the shape it always had. A v2 cell also records
+    its protocol, any effort, and the settings every draw was sent with."""
     path = os.path.join(OUT, "variance.json")
     prior = {}
     if os.path.exists(path):
@@ -1117,11 +1168,18 @@ def save_variance(target, cfg, draws, usd):
         "rate": (float(ok) / n) if n else None,
         "ci95": [round(lo, 4), round(hi, 4)],
         "outcomes": counts, "usd": round(usd, 6),
-        "synth_tokens": cfg.synth_tokens,
+        "synth_tokens": synth_budget(cfg),
         "synth_window": cfg.synth_window,
-        "temperature": "1.0 (pinned by extended thinking)",
         "detail": [r.to_dict() for r in draws],
     }
+    cell = cells[cell_key(target.key, cfg.synth_model, cfg)]
+    if cfg.protocol is Protocol.V1:
+        cell["temperature"] = "1.0 (pinned by extended thinking)"
+    else:
+        cell["protocol"] = str(cfg.protocol)
+        cell["settings"] = settings
+        if cfg.effort:
+            cell["effort"] = cfg.effort
     with io.open(path, "w", encoding="utf-8") as fh:
         fh.write(json.dumps({"cells": cells,
                              "prices_as_of": infer.PRICES_AS_OF,
@@ -1145,7 +1203,7 @@ def run_cells(client, args, cfg):
     work.
     """
     try:
-        spec = [CellSpec.parse(c, cfg.synth_hint)
+        spec = [CellSpec.parse(c, cfg.synth_hint, cfg.protocol)
                 for c in args.cells.split(",")]
     except ValueError as e:
         raise SystemExit(str(e)) from None
@@ -1181,7 +1239,7 @@ def run_cells(client, args, cfg):
             raise SystemExit("%s Nothing has been sent." % e) from None
         total_worst += worst
         print("  %-9s %-26s %2d draws   <= $%.2f worst case"
-              % (tkey, cell.model, cell.draws, worst))
+              % (tkey, cell.label, cell.draws, worst))
     print("  %-37s %s   <= $%.2f worst case, ceiling $%.2f"
           % ("TOTAL", sum(c.draws for c in spec), total_worst,
              args.max_spend))
@@ -1191,7 +1249,8 @@ def run_cells(client, args, cfg):
 
     for cell in spec:
         target, pages, refs = loaded[cell.target]
-        print("\n=== %s x %s, %d draws" % (cell.target, cell.model, cell.draws))
+        print("\n=== %s x %s, %d draws, protocol %s"
+              % (cell.target, cell.label, cell.draws, cell.protocol))
         run_variance(client, target, pages, refs, cfg.for_cell(cell))
 
     rows = client.ledger.rows()
@@ -1386,12 +1445,17 @@ def variance_pool(target_key, model=None):
     except ValueError:
         return []
     out = []
-    for _key, cell in sorted(cells.items()):
+    for key, cell in sorted(cells.items()):
         if cell.get("target") != target_key:
             continue
         if model and cell.get("model") != model:
             continue
-        tier = infer.short_model(cell["model"])
+        # A hinted or v2 cell's draws are named apart from the baseline's,
+        # or two extractors would share one candidate name in drift.json.
+        effort = cell.get("effort")
+        tier = "-".join([infer.short_model(cell["model"])
+                         + ("@%s" % effort if effort else ""),
+                         *key.split("|")[2:]])
         for d in draws_of(cell):
             if d.outcome is Outcome.PERFECT and d.source:
                 if os.path.exists(d.source):
@@ -1604,12 +1668,14 @@ def run_target(client, target, pages, refs, cfg, rep):
         cfg.synth_model, synth_system(cfg),
         "Portal page excerpt (one page of the result grid, stripped of "
         "scripts, styles and non-structural attributes):\n\n" + win,
-        cfg.synth_tokens, "synthesis", thinking=True, tag=target.key)
+        synth_budget(cfg), "synthesis", thinking=True, tag=target.key,
+        protocol=cfg.protocol)
     src = extract_block(reply.text, CODEBLOCK, "def extract(")
     # Keyed by model: a second tier's extractor must not overwrite the first's,
     # or the two are not comparable afterwards and the cheap run has destroyed
     # the artifact the expensive one produced.
-    path = os.path.join(SYNTH, "%s_%s_extract.py" % (target.key, tier))
+    path = os.path.join(SYNTH, "%s_%s%s_extract.py"
+                        % (target.key, tier, condition_suffix(cfg)))
     with io.open(path, "w", encoding="utf-8") as fh:
         fh.write(src)
     problems, imports = audit(src)
@@ -1654,7 +1720,8 @@ def run_target(client, target, pages, refs, cfg, rep):
             cfg.direct_model, DIRECT_SYSTEM,
             "Portal page (stripped of scripts, styles and non-structural "
             "attributes):\n\n" + strip(read(p)),
-            cap, "extraction", tag="%s/%s" % (target.key, fn))
+            cap, "extraction", tag="%s/%s" % (target.key, fn),
+            protocol=cfg.protocol)
         d_usd += reply.usd
         try:
             rows = json.loads(extract_block(reply.text, JSONBLOCK))

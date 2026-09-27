@@ -147,8 +147,7 @@ class TestTimeouts(unittest.TestCase):
             self):
         """The slowest successful call in the ledger generated 41,680 tokens
         in 2,802 s; the stalled one took 65,161 s for 5,434."""
-        limit = infer.wall_limit(
-            infer.ceiling_for("deepseek/deepseek-v4-flash", 16000))
+        limit = infer.wall_limit(infer.output_cap("deepseek/deepseek-v4-flash"))
         self.assertGreater(limit, 2802)
         self.assertLess(limit, 65161)
 

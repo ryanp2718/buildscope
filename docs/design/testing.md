@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 350 tests, ~18s, no network
+python scripts/run_tests.py           # everything: 373 tests, ~18s, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -46,8 +46,8 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_artifacts.py` | published figures, classification shape, D1's capture invariant, record store | the 112 → 180 re-quote |
 | `test_structure.py` | the `permits/`/`scripts/` boundary ratchet, declared-dependency rule, adapters stay thin | 23 scripts importing the capture layer |
 | `test_capture.py` | robots, politeness, the budget ceiling, schema migration, the verdict rules, and D1's page-and-row invariant | the unrecorded page it found on its first run |
-| `test_providers.py` | provider routing, the OpenAI/Anthropic usage translation, which figure gets billed, and the golden cache keys | the `stream` cache-key bug, and four ways a second wire format can produce a wrong number |
-| `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, and the known reasoning gap that may only shrink | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
+| `test_providers.py` | provider routing, the OpenAI/Anthropic usage translation, which figure gets billed, the golden cache keys, protocol v1 frozen and protocol v2's request and ledger fields | the `stream` cache-key bug, and four ways a second wire format can produce a wrong number |
+| `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, every model that reasons is asked to, and the protocol v2 efforts, caps, sampling and host filters against the catalogue and endpoint snapshots | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
 | `test_transport.py` | streaming on both providers, the read timeout and wall-clock limit, the fatal/transient error split with one retry per draw, time to first token, and infra errors reported beside the pass rate | a 900 s per-read timeout that let one call run 65,161 s, and a timeout, a revoked key and a budget refusal all stopping the cell as one outcome |
 | `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
 

@@ -18,6 +18,7 @@ sys.path.insert(0, ROOT)
 
 from permits.cells import (CellSpec, DrawRecord, Outcome,     # noqa: E402
                            RunConfig, draws_of)
+from permits.models import Protocol                          # noqa: E402
 
 
 def _cfg(**kw):
@@ -41,10 +42,31 @@ class TestCellSpec(unittest.TestCase):
                 CellSpec.parse(bad)
 
     def test_the_hinted_cell_has_its_own_key(self):
-        self.assertEqual(CellSpec("clarkco", "z-ai/glm-5.2", 5).key,
+        v1 = Protocol.V1
+        self.assertEqual(CellSpec("clarkco", "z-ai/glm-5.2", 5, False, v1).key,
                          "clarkco|z-ai/glm-5.2")
-        self.assertEqual(CellSpec("clarkco", "z-ai/glm-5.2", 5, True).key,
+        self.assertEqual(CellSpec("clarkco", "z-ai/glm-5.2", 5, True, v1).key,
                          "clarkco|z-ai/glm-5.2|hint")
+
+    def test_a_v2_cell_is_keyed_apart_from_the_v1_cells_on_disk(self):
+        self.assertEqual(CellSpec("clarkco", "z-ai/glm-5.2", 5).key,
+                         "clarkco|z-ai/glm-5.2|v2")
+        self.assertEqual(CellSpec("clarkco", "z-ai/glm-5.2", 5, True).key,
+                         "clarkco|z-ai/glm-5.2|hint|v2")
+
+    def test_an_effort_is_parsed_off_the_model_and_kept_in_the_key(self):
+        c = CellSpec.parse("clarkco:z-ai/glm-5.3-flash@low:10")
+        self.assertEqual((c.model, c.effort, c.draws),
+                         ("z-ai/glm-5.3-flash", "low", 10))
+        self.assertEqual(c.key, "clarkco|z-ai/glm-5.3-flash@low|v2")
+        c = CellSpec.parse("stjohns:openai/gpt-oss-120b:batch@high:5")
+        self.assertEqual((c.model, c.effort), ("openai/gpt-oss-120b:batch",
+                                               "high"))
+
+    def test_v1_has_no_effort(self):
+        with self.assertRaises(ValueError):
+            CellSpec.parse("clarkco:z-ai/glm-5.3-flash@low:10",
+                           protocol=Protocol.V1)
 
 
 class TestRunConfig(unittest.TestCase):

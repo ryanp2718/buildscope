@@ -69,7 +69,7 @@ import openai
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from permits import models, telemetry
-from permits.models import ModelSpec, Provider, ReasoningControl
+from permits.models import ModelSpec, Protocol, Provider, ReasoningControl
 
 # A request body as it goes on the wire and into the cache key. Left as a
 # plain JSON object on purpose: its bytes are the cache identity, and a typed
@@ -139,18 +139,64 @@ def short_model(model: str) -> str:
     return spec(model).short
 
 
-def ceiling_for(model: str, max_tokens: int) -> int:
-    """The `max_tokens` to put on the wire so `max_tokens` is the answer.
+# Protocol v1, frozen: the models v1 sent `reasoning_effort: "medium"` and
+# `REASONING_HEADROOM` to. A record of what was sent, not a capability list:
+# gpt-oss-120b and qwen3.5-flash reason and are not here (finding F2), and
+# four of the five do not accept "medium" (the step 3 plan in the audit).
+V1_EFFORT = frozenset({
+    "moonshotai/kimi-k2-thinking", "z-ai/glm-5.2", "deepseek/deepseek-v4-pro",
+    "z-ai/glm-5.3-flash", "deepseek/deepseek-v4-flash"})
 
-    Equal ceilings are not equal treatment when reasoning is billed from the
-    same allowance, so the ceiling is a function of the model and the answer
-    budget is the thing held constant. Models not asked to reason through
-    OpenRouter are returned unchanged, which keeps every Anthropic request
-    byte-identical to the ones already bought and cached.
+# Protocol v2: tokens kept out of Haiku's thinking budget for the answer, so
+# the budget never binds before the cap does. It matches the answer budget
+# v1 held constant for the OpenRouter reasoning models.
+ANSWER_RESERVE = 16000
+
+
+def ceiling_for(model: str, max_tokens: int,
+                protocol: Protocol = Protocol.V2) -> int:
+    """The `max_tokens` to put on the wire.
+
+    Under v2 the caller's `max_tokens` is the whole allowance, reasoning
+    included, and goes out unchanged; synthesis passes `output_cap(model)`,
+    the same 64,000 for every model. Under v1 the answer budget was held
+    constant and the OpenRouter models sent a reasoning effort got
+    `REASONING_HEADROOM` on top, while Claude's thinking came out of its own
+    budget (finding F1). That rule is kept so v1 requests hash as they did.
     """
-    if spec(model).reasoning is ReasoningControl.EFFORT:
+    spec(model)
+    if protocol is Protocol.V1 and model in V1_EFFORT:
         return max_tokens + REASONING_HEADROOM
     return max_tokens
+
+
+def output_cap(model: str) -> int:
+    """Protocol v2's cap for `model`: see `models.OUTPUT_CAP`."""
+    return models.output_cap(spec(model))
+
+
+def settings_sent(body: Body, protocol: Protocol) -> dict[str, Any]:
+    """The experimental settings a request body carries, for the ledger.
+
+    Read back from the body rather than from the registry, so the row
+    records what went on the wire. Temperature is 1.0 on a Claude thinking
+    call, which the API fixes and the body does not carry; None elsewhere
+    means nothing was sent and the API or host chose.
+    """
+    thinking = body.get("thinking")
+    reasoning: str | None = None
+    if thinking:
+        reasoning = ("adaptive" if thinking["type"] == "adaptive"
+                     else "budget=%d" % thinking["budget_tokens"])
+    elif "reasoning" in body:
+        r = body["reasoning"]
+        reasoning = "effort=%s" % r["effort"] if "effort" in r else "enabled"
+    elif "reasoning_effort" in body:
+        reasoning = "effort=%s" % body["reasoning_effort"]
+    temperature = body.get("temperature", 1.0 if thinking else None)
+    return {"protocol": str(protocol), "max_tokens": int(body["max_tokens"]),
+            "reasoning": reasoning, "temperature": temperature,
+            "top_p": body.get("top_p")}
 
 
 # Cache reads bill at 0.1x input; 5-minute writes at 1.25x. Section 6 lever 3.
@@ -253,22 +299,33 @@ class Usage:
     output_tokens: int = 0
     cache_read_input_tokens: int = 0
     cache_creation_input_tokens: int = 0
+    # The part of `output_tokens` spent reasoning, on both providers. None
+    # when the response did not say, which is not the same as zero: the
+    # OpenRouter cache entries written before 2026-09-26 did not keep it.
+    reasoning_tokens: int | None = None
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any] | None) -> "Usage":
         """From a stored or SDK-dumped usage block.
 
-        A missing or null field is zero: a deployment may omit the cache
+        A missing or null count is zero: a deployment may omit the cache
         fields entirely, and a missing field must not be billed as a
-        full-price input token. Fields this type does not name (Anthropic's
-        `service_tier`, `output_tokens_details`) stay in the cache entry and
-        are not read here.
+        full-price input token. Reasoning tokens are read from the translated
+        OpenRouter field or from Anthropic's
+        `output_tokens_details.thinking_tokens`. Other fields (Anthropic's
+        `service_tier`) stay in the cache entry and are not read here.
         """
         d = d or {}
-        return cls(**{f.name: int(d.get(f.name) or 0) for f in fields(cls)})
+        counts = {k: int(d.get(k) or 0) for k in (
+            "input_tokens", "output_tokens", "cache_read_input_tokens",
+            "cache_creation_input_tokens")}
+        r = d.get("reasoning_tokens")
+        if r is None:
+            r = (d.get("output_tokens_details") or {}).get("thinking_tokens")
+        return cls(**counts, reasoning_tokens=None if r is None else int(r))
 
     def to_dict(self) -> dict[str, int]:
-        return asdict(self)
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 @dataclass(frozen=True)
@@ -288,6 +345,13 @@ class Completion:
     # family this project keeps meeting. It is surfaced as a flag the caller
     # has to look at rather than a short list that looks fine.
     truncated: bool
+    # The OpenRouter upstream that served it, or "anthropic". None for a
+    # response cached before hosts were recorded.
+    host: str | None = None
+
+
+_WHEN_KNOWN = ("ttft_s", "protocol", "max_tokens", "reasoning", "temperature",
+               "top_p", "host", "reasoning_tokens")
 
 
 @dataclass(frozen=True)
@@ -297,7 +361,8 @@ class LedgerRow:
     Success rows carry `usd_reported`; failure rows carry `error_type` and
     `status_code` instead. `to_dict` reproduces exactly that shape, so rows
     written through this type are byte-compatible with the 266 written before
-    it existed. `ttft_s` is written only when known.
+    it existed. The fields after `status_code` were added later and are
+    written only when known.
     """
     at: str
     call_class: str
@@ -325,14 +390,24 @@ class LedgerRow:
     # so the host may have billed for them; `usd` there is still 0.0 because
     # nothing reports what.
     ttft_s: float | None = None
+    # What was asked for (`settings_sent`) and who answered. Absent on rows
+    # written before 2026-09-26, whose settings are protocol v1's.
+    protocol: str | None = None
+    max_tokens: int | None = None
+    reasoning: str | None = None
+    temperature: float | None = None
+    top_p: float | None = None
+    host: str | None = None
+    reasoning_tokens: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         drop = ("error_type", "status_code") if self.ok else ("usd_reported",)
         for k in drop:
             del d[k]
-        if self.ttft_s is None:
-            del d["ttft_s"]
+        for k in _WHEN_KNOWN:
+            if d[k] is None:
+                del d[k]
         return d
 
     @classmethod
@@ -595,8 +670,30 @@ def _usage_from_chat(u: Any) -> tuple[dict[str, int], float | None]:
         "cache_read_input_tokens": cached,
         "cache_creation_input_tokens": written,
     }
+    # Part of `completion_tokens`, not in addition to it. Kept only when the
+    # response reports it, so a missing figure does not read as zero.
+    thought = (d.get("completion_tokens_details") or {}).get("reasoning_tokens")
+    if thought is not None:
+        usage["reasoning_tokens"] = int(thought)
     billed = d.get("cost")
     return usage, (float(billed) if billed is not None else None)
+
+
+# Request fields OpenRouter reads that the OpenAI SDK has no parameter for.
+EXTRA_BODY = frozenset({"reasoning", "provider"})
+
+
+@dataclass(frozen=True)
+class _Reply:
+    """What a transport hands back to `message`. `billed` is the provider's
+    reported charge (None on Anthropic, which reports none); `host` is who
+    served the request."""
+    text: str
+    usage: dict[str, Any]
+    stop_reason: str | None
+    model: str
+    billed: float | None
+    host: str | None
 
 
 class Client:
@@ -711,9 +808,14 @@ class Client:
             fh.write(json.dumps(resp, sort_keys=True, indent=1))
 
     def build(self, model: str, system: str, user: str, max_tokens: int,
-              thinking: bool = False, temperature: float | None = None) -> Body:
+              thinking: bool = False, temperature: float | None = None,
+              protocol: Protocol = Protocol.V2) -> Body:
         """The request body, separated out so a dry run can price the exact
-        bytes that would be sent rather than an approximation of them."""
+        bytes that would be sent rather than an approximation of them.
+
+        The two protocols differ only in Haiku's thinking budget: half the
+        ceiling under v1, the ceiling less `ANSWER_RESERVE` under v2. Claude
+        with thinking takes no sampling parameter in either."""
         body: Body = {
             "model": model,
             "max_tokens": max_tokens,
@@ -729,11 +831,12 @@ class Client:
             if control is ReasoningControl.ADAPTIVE:
                 body["thinking"] = {"type": "adaptive"}
             elif control is ReasoningControl.BUDGET:
-                # `budget_tokens` must leave room for the answer, so it takes
-                # half the ceiling. 1024 is the documented floor.
+                # `budget_tokens` must leave room for the answer. 1024 is the
+                # documented floor.
+                budget = (max_tokens // 2 if protocol is Protocol.V1
+                          else max_tokens - ANSWER_RESERVE)
                 body["thinking"] = {"type": "enabled",
-                                    "budget_tokens": max(1024,
-                                                         max_tokens // 2)}
+                                    "budget_tokens": max(1024, budget)}
             else:
                 raise Refused("%s has no Anthropic thinking control (%s). "
                               "Nothing was sent." % (model, control))
@@ -761,7 +864,9 @@ class Client:
 
     def build_chat(self, model: str, system: str, user: str, max_tokens: int,
                    thinking: bool = False,
-                   temperature: float | None = None) -> Body:
+                   temperature: float | None = None,
+                   protocol: Protocol = Protocol.V2,
+                   effort: str | None = None) -> Body:
         """The same question in OpenAI Chat Completions shape.
 
         Three deliberate differences from `build`, each of which is why there
@@ -774,9 +879,11 @@ class Client:
           almost nothing either way: the cacheable prefix is 889 tokens of a
           13,535-token request, so the ceiling on prefix caching for this
           workload is about 6% of input spend.
-        - **Reasoning is an effort level, not a token budget.** Sent as
-          `reasoning_effort`, which the SDK takes as a named parameter, so
-          this body splats into `create()` exactly as the Anthropic one does.
+        - **Reasoning is an effort level or a switch, not a token budget.**
+          Under v2 it is `reasoning: {"effort": ...}` at the catalogue's
+          default, or `{"enabled": true}` where no levels are listed, and a
+          cell may name another listed effort. v1 sent a top-level
+          `reasoning_effort: "medium"` to the models in `V1_EFFORT`.
         - **Temperature is not refused alongside thinking.** That refusal in
           `build` exists because the Anthropic API returns a 400 for it. It
           is a fact about one vendor, not a house rule, and asserting it here
@@ -791,16 +898,70 @@ class Client:
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
         }
-        if thinking and spec(model).reasoning is ReasoningControl.EFFORT:
-            body["reasoning_effort"] = "medium"
-        if temperature is not None:
-            body["temperature"] = temperature
+        s = spec(model)
+        if protocol is Protocol.V1:
+            if effort is not None:
+                raise Refused("protocol v1 has no effort setting. Nothing "
+                              "was sent.")
+            if thinking and model in V1_EFFORT:
+                body["reasoning_effort"] = "medium"
+            if temperature is not None:
+                body["temperature"] = temperature
+            return body
+
+        if effort is not None and (not thinking
+                                   or s.reasoning is not ReasoningControl.EFFORT
+                                   or effort not in s.efforts):
+            raise Refused("%s does not take reasoning effort %r (catalogue "
+                          "lists %s). Nothing was sent."
+                          % (model, effort, ", ".join(s.efforts) or "none"))
+        if thinking and s.reasoning is ReasoningControl.EFFORT:
+            body["reasoning"] = {"effort": effort or s.effort}
+        elif thinking and s.reasoning is ReasoningControl.SWITCH:
+            body["reasoning"] = {"enabled": True}
+        # Sent explicitly because on OpenRouter "default" is whatever the
+        # serving host defaults to, and hosts differ (finding F6).
+        t = temperature if temperature is not None else s.temperature
+        if t is not None:
+            body["temperature"] = t
+        if s.top_p is not None:
+            body["top_p"] = s.top_p
+        # `require_parameters` drops hosts that would ignore any of the
+        # above; `quantizations` drops hosts below the lab's own precision
+        # (finding F4).
+        route: dict[str, Any] = {"require_parameters": True}
+        if s.quantizations is not None:
+            route["quantizations"] = list(s.quantizations)
+        body["provider"] = route
         return body
+
+    def request(self, model: str, system: str, user: str, max_tokens: int,
+                thinking: bool = False, temperature: float | None = None,
+                protocol: Protocol = Protocol.V2,
+                effort: str | None = None) -> Body:
+        """The body `message` sends for these arguments, ceiling applied.
+
+        Public so a caller can record the settings a cell runs under from
+        the same bytes the calls carry, rather than restating them.
+        """
+        max_tokens = ceiling_for(model, max_tokens, protocol)
+        if provider_for(model) == OPENROUTER:
+            return self.build_chat(model, system, user, max_tokens, thinking,
+                                   temperature, protocol, effort)
+        if effort is not None:
+            # Which effort parameter Opus 5 and Sonnet 5 take is unverified,
+            # and Haiku 4.5's only control is the thinking budget.
+            raise Refused("effort settings are not wired for Anthropic "
+                          "models. Nothing was sent.")
+        return self.build(model, system, user, max_tokens, thinking,
+                          temperature, protocol)
 
     # --------------------------------------------------------------- call
     def message(self, model: str, system: str, user: str, max_tokens: int,
                 call_class: str, thinking: bool = False, tag: str = "",
-                temperature: float | None = None, draw: int = 0) -> Completion:
+                temperature: float | None = None, draw: int = 0,
+                protocol: Protocol = Protocol.V2,
+                effort: str | None = None) -> Completion:
         """One model call, on whichever provider owns `model`.
 
         `Completion.usage` is in Anthropic field names whatever the provider
@@ -817,17 +978,15 @@ class Client:
         it caches is 6.6% of the request.
         """
         prov = provider_for(model)
-        # Resolved once, here, so the ceiling that goes on the wire is the
-        # same one the budget is checked against, the span records, and
-        # `truncated` compares output against. Computing it at any one of
+        body = self.request(model, system, user, max_tokens, thinking,
+                            temperature, protocol, effort)
+        # Resolved once, in `request`, so the ceiling that goes on the wire
+        # is the same one the budget is checked against, the span records,
+        # and `truncated` compares output against. Computing it at any one of
         # those sites and not the others is how a run gets pre-authorized for
         # a third of what it can actually spend.
-        max_tokens = ceiling_for(model, max_tokens)
-        body = (self.build_chat(model, system, user, max_tokens, thinking,
-                                temperature)
-                if prov == OPENROUTER
-                else self.build(model, system, user, max_tokens, thinking,
-                                temperature))
+        max_tokens = int(body["max_tokens"])
+        sent = settings_sent(body, protocol)
         # Computed from the request body alone. Transport concerns - streaming,
         # retries, backoff - belong to the SDK now and cannot reach this dict,
         # which is structurally the bug `_store` describes.
@@ -849,9 +1008,15 @@ class Client:
             span.set_attribute("gen_ai.operation.name", "chat")
             span.set_attribute("gen_ai.request.model", model)
             span.set_attribute("gen_ai.request.max_tokens", max_tokens)
-            if "temperature" in body:
+            if sent["temperature"] is not None:
                 span.set_attribute("gen_ai.request.temperature",
-                                   float(body["temperature"]))
+                                   float(sent["temperature"]))
+            if sent["top_p"] is not None:
+                span.set_attribute("gen_ai.request.top_p",
+                                   float(sent["top_p"]))
+            span.set_attribute("permits.protocol", str(protocol))
+            if sent["reasoning"]:
+                span.set_attribute("permits.reasoning", sent["reasoning"])
             # Project dimensions, so a span joins to a ledger row.
             span.set_attribute("permits.call_class", call_class)
             span.set_attribute("permits.draw", draw)
@@ -866,7 +1031,8 @@ class Client:
                     text=hit["text"], usage=usage, model=model, provider=prov,
                     cached=True, usd=0.0, stop_reason=hit.get("stop_reason"),
                     truncated=truncated(hit.get("stop_reason"), usage,
-                                        max_tokens))
+                                        max_tokens),
+                    host=hit.get("host"))
 
             est_in = tokens(system) + tokens(user)
             self.budget.check(model, est_in, max_tokens)
@@ -890,12 +1056,9 @@ class Client:
             while True:
                 clock = _Clock(wall_limit(max_tokens))
                 try:
-                    if prov == OPENROUTER:
-                        (text, raw_usage, stop_reason, resp_model,
-                         billed) = self._send_chat(body, clock)
-                    else:
-                        (text, raw_usage, stop_reason, resp_model,
-                         billed) = self._send_messages(body, clock)
+                    reply = (self._send_chat(body, clock)
+                             if prov == OPENROUTER
+                             else self._send_messages(body, clock))
                     break
                 except TRANSPORT_ERRORS as e:
                     status = getattr(e, "status_code", None)
@@ -905,7 +1068,7 @@ class Client:
                     # meant "67 calls that happened to work". Every failed
                     # attempt is a row, billed at 0.
                     self._log_failure(model, call_class, tag, draw, clock,
-                                      type(e).__name__, status)
+                                      type(e).__name__, status, sent)
                     if clock.first is not None:
                         # Tokens were generated before the call died and the
                         # host may bill for them; nothing says how many. The
@@ -936,6 +1099,9 @@ class Client:
                     raise FatalError(detail) from e
             elapsed = clock.elapsed()
             span.set_attribute("permits.attempts", attempt)
+            text, raw_usage, stop_reason = (reply.text, reply.usage,
+                                            reply.stop_reason)
+            billed, host = reply.billed, reply.host
             usage = Usage.from_dict(raw_usage)
 
             # What the provider says it charged beats what the local table
@@ -943,7 +1109,12 @@ class Client:
             # prices from the registry exactly as it always has.
             usd = cost(model, usage) if billed is None else billed
 
-            span.set_attribute("gen_ai.response.model", resp_model or model)
+            span.set_attribute("gen_ai.response.model", reply.model or model)
+            if host:
+                span.set_attribute("permits.host", host)
+            if usage.reasoning_tokens is not None:
+                span.set_attribute("permits.usage.reasoning_tokens",
+                                   usage.reasoning_tokens)
             span.set_attribute("gen_ai.response.finish_reasons",
                                [stop_reason or "unknown"])
             span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens)
@@ -965,21 +1136,20 @@ class Client:
                 output_tokens=usage.output_tokens,
                 cache_read_input_tokens=usage.cache_read_input_tokens,
                 cache_creation_input_tokens=usage.cache_creation_input_tokens,
-                ttft_s=clock.ttft()))
-            # The raw usage block, not the typed view: it keeps fields such
-            # as Anthropic's `output_tokens_details` that `Usage` does not
-            # read yet.
+                ttft_s=clock.ttft(), host=host,
+                reasoning_tokens=usage.reasoning_tokens, **sent))
+            # The raw usage block, not the typed view, so fields `Usage`
+            # does not read stay available to a later reader.
             self._store(key, {"text": text, "usage": raw_usage,
-                              "stop_reason": stop_reason})
+                              "stop_reason": stop_reason, "host": host})
             return Completion(
                 text=text, usage=usage, model=model, provider=prov,
                 cached=False, usd=usd, stop_reason=stop_reason,
-                truncated=truncated(stop_reason, usage, max_tokens))
+                truncated=truncated(stop_reason, usage, max_tokens),
+                host=host)
 
-    def _send_messages(
-            self, body: Body, clock: _Clock,
-    ) -> tuple[str, dict[str, Any], str | None, str, float | None]:
-        """Anthropic transport. Returns the five things `message` needs.
+    def _send_messages(self, body: Body, clock: _Clock) -> "_Reply":
+        """Anthropic transport.
 
         Always streamed. Streaming is a method here, not a flag on the
         request, so it cannot change the request's identity. Until 2026-09-26
@@ -999,18 +1169,20 @@ class Client:
         usage = msg.usage.model_dump(mode="json")
         text = "".join(b.text for b in msg.content
                        if isinstance(b, anthropic.types.TextBlock))
-        return text, usage, msg.stop_reason, msg.model, None
+        return _Reply(text, usage, msg.stop_reason, msg.model, None,
+                      "anthropic")
 
-    def _send_chat(
-            self, body: Body, clock: _Clock | None = None,
-    ) -> tuple[str, dict[str, Any], str | None, str, float | None]:
-        """OpenRouter transport, same five things, streamed.
+    def _send_chat(self, body: Body, clock: _Clock | None = None) -> "_Reply":
+        """OpenRouter transport, streamed.
 
         `stream` and `stream_options` are arguments to the SDK call and never
         keys in `body`, so they stay out of the cache key. `include_usage`
         makes the last chunk carry the usage block and OpenRouter's reported
         cost. Reasoning deltas count toward the first token and are not kept:
         the text is `content` alone, as it was before this path streamed.
+        `reasoning` and `provider` are OpenRouter fields the OpenAI SDK has
+        no parameter for, so they go in `extra_body`; the serving host comes
+        back as `provider` on each chunk.
 
         Three ways a stream can end without an answer, each a host failure
         rather than an empty reply. With no choices at all, the caller would
@@ -1027,13 +1199,19 @@ class Client:
         raw_usage: Any = None
         saw_choice = False
         last: Any = None
+        host: str | None = None
+        args = {k: v for k, v in body.items() if k not in EXTRA_BODY}
+        extra = {k: v for k, v in body.items() if k in EXTRA_BODY}
+        if extra:
+            args["extra_body"] = extra
         stream = self.oai().chat.completions.create(
-            **body, stream=True, stream_options={"include_usage": True})
+            **args, stream=True, stream_options={"include_usage": True})
         with stream:
             for chunk in stream:
                 clock.check()
                 last = chunk
                 resp_model = chunk.model or resp_model
+                host = getattr(chunk, "provider", None) or host
                 if chunk.usage is not None:
                     raw_usage = chunk.usage
                 for choice in chunk.choices:
@@ -1059,11 +1237,11 @@ class Client:
                              "usage block" % (model,))
         usage, billed = _usage_from_chat(raw_usage)
         stop = FINISH_REASONS.get(finish, finish) if finish else finish
-        return "".join(parts), usage, stop, resp_model, billed
+        return _Reply("".join(parts), usage, stop, resp_model, billed, host)
 
     def _log_failure(self, model: str, call_class: str, tag: str, draw: int,
                      clock: _Clock, error_type: str,
-                     status: int | None) -> None:
+                     status: int | None, sent: dict[str, Any]) -> None:
         """A ledger row for a call that reached the API and failed.
 
         `usd` is zero because a rejected request is not billed, but the row
@@ -1079,4 +1257,4 @@ class Client:
             provider=provider_for(model), draw=draw, ok=False,
             error_type=error_type, status_code=status,
             usd=0.0, seconds=clock.elapsed(), stop_reason=None,
-            ttft_s=clock.ttft()))
+            ttft_s=clock.ttft(), **sent))
