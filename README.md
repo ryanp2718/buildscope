@@ -13,7 +13,7 @@ jurisdictions the ordinary way costs a hundred hand-written extractors, and then
 time a vendor ships a restyle.
 
 The obvious idea is to have a model write each extractor. Code generation has a metric family for this:
-pass@k (Chen et al., 2021) — draw k completions, ask whether at least one passes. This project reports the
+pass@k (Chen et al., 2021): draw k completions and ask whether at least one passes. This project reports the
 quantity underneath it, pass@1: one completion per draw, scored against a reference, the draw repeated
 independently to measure a rate instead of a single outcome. A scraper fails in ways that rate doesn't cover
 on its own. Does the generated code agree with a hand-written parser? Does it still work when the page
@@ -33,9 +33,9 @@ above as wrapper maintenance (Kushmerick, 1997; Lerman, Minton & Knoblock, 2003)
 | | | where |
 |---|---|---|
 | **29,668 records** across **7 jurisdictions**, three source families | reconciled against the Census Building Permits Survey to within **3.0–4.1%** over 12 jurisdiction-months | [report](docs/evidence/2026-09-20-step1-stjohns-reconciliation.md) |
-| **26 model-generated extractors**, pass@1, never hand-edited | **agreement 1.0000** on 4,188 records over 71 pages — and that benchmark turned out to be saturated | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
+| **26 model-generated extractors**, pass@1, never hand-edited | **agreement 1.0000** on 4,188 records over 71 pages, and that benchmark turned out to be saturated | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
 | **8 record-preserving page mutations**, no labels required | 20 extractors that scored *identically perfect* split under drift; **5 of 20** survived a CSS class rename | [report](docs/evidence/2026-09-21-drift-robustness.md) |
-| **55 draws, pass@1**, across 3 models × 2 layouts | success rates from 5% to 100%; **86% of failures were silent** — zero rows, no exception | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
+| **55 draws, pass@1**, across 3 models × 2 layouts | success rates from 5% to 100%; **86% of failures were silent**: zero rows, no exception | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
 | **67 priced calls, $4.3411**, every one ledgered before it billed | **cost per working extractor inverts the per-token price list**: $0.286/success on the frontier model against $0.686 on the cheapest | [report](docs/evidence/2026-09-22-cost-per-success.md) |
 
 The last row generalises furthest. A cheap model that succeeds once in twenty attempts bills for all twenty,
@@ -69,7 +69,7 @@ the build if one is missing.
 ## Repository map
 
 ```
-permits/      the library — capture, strip, identity, vocabulary, adapters,
+permits/      the library: capture, strip, identity, vocabulary, adapters,
               emit, inference, telemetry, statistics.  14 modules, 3,670 lines.
 scripts/      six maintained tools.  conformance.py is the experiment harness;
               model_stats.py rolls every measurement into one tidy table;
@@ -93,7 +93,7 @@ uv sync --group dev
 uv run pytest
 ```
 
-No API key needed and no network calls — the suite replays over stored pages. Tests that need the private
+No API key needed and no network calls; the suite replays over stored pages. Tests that need the private
 raw store skip themselves and say so.
 
 To re-derive the published model statistics from the stored artifacts:
@@ -109,20 +109,21 @@ end to end for $0.00.
 
 ## The captured pages are not in this repository
 
-`data/` is deliberately absent. It holds the raw store — captured HTML, the inference cache, the cost
-ledger — and it stays on the machine that fetched it, for the reasons in
+`data/` is deliberately absent. It holds the raw store (captured HTML, the inference cache, the cost
+ledger), and it stays on the machine that fetched it, for the reasons in
 [ADR-0015](docs/adr/0015-the-raw-store-is-permanently-private.md). Everything derived from it is published
 in `docs/evidence/`, with the producing script and input row counts named in each report's front matter.
 
 Capture itself is rate-limited, robots-aware, and identifies itself honestly: `permits/capture.py` refuses
 to issue a request at all if no crawler contact is configured, and writes the page and its manifest row in
-a single operation so a file cannot exist on disk without a record of how it was got.
+a single operation so a file cannot exist on disk without a record of how it was got. The crawler's
+public page, which its User-Agent links to, is at <https://ryanp2718.github.io/buildscope/>.
 
 ## Where to read next
 
-- **[`DESIGN.md`](DESIGN.md)** — the full narrative, front to back. Start here if you want the reasoning.
-- **[`docs/evidence/`](docs/evidence/)** — every number, dated, with the command that reproduces it.
-- **[`docs/adr/`](docs/adr/)** — 17 decision records. [ADR-0017](docs/adr/0017-the-inference-layer-uses-the-vendor-sdk.md)
+- **[`DESIGN.md`](DESIGN.md)**: the full narrative, front to back. Start here if you want the reasoning.
+- **[`docs/evidence/`](docs/evidence/)**: every number, dated, with the command that reproduces it.
+- **[`docs/adr/`](docs/adr/)**: 17 decision records. [ADR-0017](docs/adr/0017-the-inference-layer-uses-the-vendor-sdk.md)
   is the most recent and the most self-critical: it reverses an earlier rule that had this project
   hand-rolling its own API client.
 

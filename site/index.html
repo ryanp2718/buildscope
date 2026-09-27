@@ -22,6 +22,7 @@
   table { border-collapse:collapse; width:100%; font-size:.93rem; margin:.5rem 0; }
   td { padding:.45rem .6rem .45rem 0; border-bottom:1px solid var(--line); vertical-align:top; }
   td:first-child { color:var(--mut); width:11rem; white-space:nowrap; }
+  .gist { border-left:3px solid var(--line); padding:.2rem 0 .2rem 1rem; margin:1.4rem 0; }
   .stop { border-left:3px solid var(--accent); padding:.9rem 1rem; margin:1rem 0;
           background:color-mix(in srgb, var(--accent) 7%, transparent); border-radius:0 6px 6px 0; }
   footer { margin-top:3.5rem; padding-top:1.2rem; border-top:1px solid var(--line);
@@ -38,13 +39,19 @@
 building permits.</p>
 
 <p>If you found this page in your server logs, this explains what the traffic is and how to
-stop it. You do not need to contact anyone to make it stop &mdash; see the last section.</p>
+stop it. You do not need to contact anyone to make it stop; see
+<a href="#stop">how to make it stop</a>.</p>
+
+<p class="gist">It is deliberately slow and light: <strong>one request at a time, at least
+1.5&nbsp;seconds apart</strong> on any one host, <strong>no retries</strong>, and a
+<strong>fixed cap on requests per run</strong>. It reads only public pages and backs off from
+anything that looks like a block.</p>
 
 <h2>What it is</h2>
 <p>A research crawler assembling a cross-jurisdiction dataset of residential building permits
 for economic research. The goal is measuring how permit issuance varies across jurisdictions
-over time &mdash; the kind of question the Census Bureau's Building Permits Survey answers at
-an aggregate level, at finer resolution.</p>
+over time. The Census Bureau's Building Permits Survey answers that question at an aggregate
+level; this dataset aims at finer resolution.</p>
 <p>It reads the same public search pages a member of the public would. It does not attempt to
 authenticate, does not submit forms other than public record searches, does not follow links
 behind a login, and does not access anything a visitor could not reach in a browser.</p>
@@ -78,7 +85,7 @@ name next to a home address, for example on an owner-builder permit. The pages a
 on the machine that fetched them and are not released in any form. The extracted dataset has no
 owner or applicant name field.</p>
 
-<h2>How to make it stop</h2>
+<h2 id="stop">How to make it stop</h2>
 <div class="stop">
   <p style="margin:.2rem 0 .6rem">Add this to your <code>robots.txt</code> and the crawler will
   stop on its next run, with no further action needed:</p>
