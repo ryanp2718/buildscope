@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 328 tests, ~18s, no network
+python scripts/run_tests.py           # everything: 350 tests, ~18s, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -48,6 +48,7 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_capture.py` | robots, politeness, the budget ceiling, schema migration, the verdict rules, and D1's page-and-row invariant | the unrecorded page it found on its first run |
 | `test_providers.py` | provider routing, the OpenAI/Anthropic usage translation, which figure gets billed, and the golden cache keys | the `stream` cache-key bug, and four ways a second wire format can produce a wrong number |
 | `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, and the known reasoning gap that may only shrink | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
+| `test_transport.py` | streaming on both providers, the read timeout and wall-clock limit, the fatal/transient error split with one retry per draw, time to first token, and infra errors reported beside the pass rate | a 900 s per-read timeout that let one call run 65,161 s, and a timeout, a revoked key and a budget refusal all stopping the cell as one outcome |
 | `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
 
 ## Four ideas worth knowing before editing these
@@ -93,8 +94,8 @@ exactly how a project stops measuring accuracy.
 **It does not test the reconciliation arithmetic end to end.** `test_artifacts.py` checks the properties
 of emitted records and the gate metric, not the BPS fold that produces the 1.0% / 4.4% / 4.1% figures.
 
-**It does not test either vendor's transport.** `test_providers.py` runs
-against fake response objects, which is the opposite of the choice
+**It does not test either vendor's transport.** `test_providers.py` and
+`test_transport.py` run against fake streams, which is the opposite of the choice
 `test_capture.py` makes and is deliberate. There the risk *was* the transport -
 what real `urllib` does on a real error path - so a real server was worth
 starting. Here the transport is the vendor's, tested by the vendor, and what
@@ -102,7 +103,10 @@ this project owns is the translation between two wire formats and the decision
 about which number to bill. A fake response exercises exactly that and nothing
 else. What is consequently untested is whether OpenRouter's live response
 actually carries the fields `_usage_from_chat` reads; the first real call is
-what establishes that, and it is cheap to make against a free model.
+what establishes that, and it is cheap to make against a free model. The same
+goes for the stream: that the last chunk carries usage and cost, and that
+reasoning arrives as a `reasoning` delta, which is what time to first token
+counts on a model that thinks.
 
 **It does not test the postback path.** `test_capture.py` covers `fetch` over GET. The ASP.NET POST
 sequence — `__VIEWSTATE` round-tripping, the `Referer`/`Origin` headers Accela demands, the cookie that

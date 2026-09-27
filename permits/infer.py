@@ -60,10 +60,11 @@ import json
 import os
 import time
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 import anthropic
+import httpx2
 import openai
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
@@ -75,11 +76,39 @@ from permits.models import ModelSpec, Provider, ReasoningControl
 # wrapper would be one more place for them to drift.
 Body = dict[str, Any]
 
-# Retry and timeout are the SDK's, stated explicitly rather than inherited:
-# the default is 2 retries and this project's calls are long, expensive and
-# run unattended in batches of dozens.
+# Retries, timeouts and the wall-clock limit. The fairness audit (F5,
+# docs/evidence/2026-09-26-model-comparison-fairness-audit.md) found that a
+# single 900 s float bounded each socket read, not the call: one deepseek
+# draw held a request open for 65,161 s, and nothing could tell a slow host
+# from a sleeping client.
+#
+# Every call streams, so the SDK's own retries (MAX_RETRIES, with backoff)
+# happen only before the response starts. A retry therefore never re-buys a
+# generation. The SDK default is 2; this workload is long, expensive and
+# unattended, so 429s and 5xx at connect time get more.
 MAX_RETRIES = 5
-TIMEOUT_S = 900.0
+# `read` is the longest silence allowed between two chunks of a stream, not
+# the length of the call. Both APIs send keep-alives while a model thinks, so
+# 120 s of nothing is a dead connection.
+TIMEOUT = httpx2.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
+# The harness bounds the call itself: a fixed allowance for queueing and
+# first token, plus the ceiling at 10 tokens a second. The slowest successful
+# call in the ledger ran at 15 tok/s (41,680 tokens in 2,802 s) and the median
+# at 113, so this limit binds on a stalled or trickling host, not on a slow
+# model. A call that hits it is an infrastructure error, not a model failure.
+WALL_GRACE_S = 300.0
+MIN_TOKENS_PER_S = 10.0
+# Attempts per draw at the harness level: one retry of a transient failure,
+# under the same draw number, then the draw is recorded as `infra_error`.
+ATTEMPTS = 2
+# HTTP statuses a retry can fix. Everything else below 500 is a rejection
+# that will repeat (bad request, credential, credit, unknown model).
+RETRYABLE_STATUS = frozenset({408, 409, 429})
+
+
+def wall_limit(max_tokens: int) -> float:
+    """Seconds one attempt may take, end to end."""
+    return WALL_GRACE_S + max_tokens / MIN_TOKENS_PER_S
 
 # Every per-model fact - provider, price, reasoning control, short name - is
 # in the registry in `permits/models.py`. These names are re-exported because
@@ -128,23 +157,83 @@ def ceiling_for(model: str, max_tokens: int) -> int:
 CACHE_READ = 0.1
 CACHE_WRITE = 1.25
 
-# Above this `max_tokens`, stream. A non-streaming request whose ceiling is
-# large enough to run past the server's request timeout is refused outright,
-# and one that merely runs long dies on the client socket with the tokens
-# already billed. Found by measurement: a 259-record St. Johns page needs
-# roughly 22k output tokens to come back as JSON, which is over the line.
-#
-# This is now a choice of SDK method rather than a key added to `body` after
-# the cache key was computed, which is what made the two diverge before.
-STREAM_ABOVE = 8192
-
-
 class Refused(Exception):
     """A call that was not made. Never raised after money has been spent."""
 
 
 class ApiError(Exception):
-    pass
+    """A call that was sent and failed."""
+
+
+class FatalError(ApiError):
+    """Rejected for a reason a retry will not fix: a credential, credit, or a
+    malformed request. Stops the run."""
+
+
+class TransientError(ApiError):
+    """Failed on the host side on every attempt: a timeout, a dropped
+    connection, overload or a 5xx, an error inside the stream, or the
+    wall-clock limit. The draw is recorded as `infra_error` and the cell
+    continues."""
+
+
+class _HostError(Exception):
+    """A host failure the harness detects itself rather than the SDK: a
+    stream that ended without choices or usage, an `error` finish, or the
+    wall-clock limit."""
+
+
+# What a transport can raise. `httpx2.RequestError` is listed because the
+# Anthropic SDK lets transport errors escape unwrapped from inside a stream;
+# the OpenAI SDK wraps the same errors as `APIConnectionError`.
+TRANSPORT_ERRORS = (anthropic.APIError, openai.APIError, httpx2.RequestError,
+                    _HostError)
+
+
+def is_transient(e: BaseException) -> bool:
+    """Whether a failed call is worth one more attempt.
+
+    A status below 400 is an error sent inside a stream that started with
+    200; Anthropic reports those with the stream's status. An API error with
+    no status at all is the OpenAI SDK's form of the same thing.
+    """
+    if isinstance(e, (_HostError, httpx2.RequestError,
+                      anthropic.APIConnectionError,
+                      openai.APIConnectionError)):
+        return True
+    status = getattr(e, "status_code", None)
+    if status is None:
+        return True
+    return int(status) < 400 or status in RETRYABLE_STATUS or status >= 500
+
+
+@dataclass
+class _Clock:
+    """The wall time of one attempt, and when its first token arrived.
+
+    Monotonic, and on Windows it keeps counting while the machine sleeps, so
+    a suspended client now trips the wall-clock limit instead of being
+    recorded as a 65,000-second call.
+    """
+    limit_s: float
+    start: float = field(default_factory=time.monotonic)
+    first: float | None = None
+
+    def token(self) -> None:
+        if self.first is None:
+            self.first = time.monotonic()
+
+    def check(self) -> None:
+        if time.monotonic() - self.start > self.limit_s:
+            raise _HostError("wall-clock limit of %.0f s reached"
+                             % self.limit_s)
+
+    def elapsed(self) -> float:
+        return round(time.monotonic() - self.start, 1)
+
+    def ttft(self) -> float | None:
+        return None if self.first is None else round(self.first - self.start,
+                                                     1)
 
 
 # ------------------------------------------------------------ records
@@ -208,7 +297,7 @@ class LedgerRow:
     Success rows carry `usd_reported`; failure rows carry `error_type` and
     `status_code` instead. `to_dict` reproduces exactly that shape, so rows
     written through this type are byte-compatible with the 266 written before
-    it existed.
+    it existed. `ttft_s` is written only when known.
     """
     at: str
     call_class: str
@@ -230,12 +319,20 @@ class LedgerRow:
     usd_reported: bool | None = None
     error_type: str | None = None
     status_code: int | None = None
+    # Seconds from sending to the first streamed token, thinking included
+    # where the host streams it. Absent on rows written before 2026-09-26.
+    # On a failure row it means tokens were generated before the call died,
+    # so the host may have billed for them; `usd` there is still 0.0 because
+    # nothing reports what.
+    ttft_s: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         drop = ("error_type", "status_code") if self.ok else ("usd_reported",)
         for k in drop:
             del d[k]
+        if self.ttft_s is None:
+            del d["ttft_s"]
         return d
 
     @classmethod
@@ -547,8 +644,7 @@ class Client:
         """
         if self._sdk is None:
             self._sdk = anthropic.Anthropic(
-                api_key=self.key, max_retries=MAX_RETRIES,
-                timeout=TIMEOUT_S)
+                api_key=self.key, max_retries=MAX_RETRIES, timeout=TIMEOUT)
         return self._sdk
 
     def oai(self) -> openai.OpenAI:
@@ -562,7 +658,7 @@ class Client:
         if self._oai is None:
             self._oai = openai.OpenAI(
                 api_key=self.or_key, base_url=OPENROUTER_BASE_URL,
-                max_retries=MAX_RETRIES, timeout=TIMEOUT_S)
+                max_retries=MAX_RETRIES, timeout=TIMEOUT)
         return self._oai
 
     # -------------------------------------------------------------- cache
@@ -790,34 +886,56 @@ class Client:
                        OPENROUTER_KEY_FILE if prov == OPENROUTER
                        else KEY_FILE))
 
-            t0 = time.time()
-            try:
-                if prov == OPENROUTER:
-                    (text, raw_usage, stop_reason, resp_model,
-                     billed) = self._send_chat(body)
-                else:
-                    (text, raw_usage, stop_reason, resp_model,
-                     billed) = self._send_messages(body, max_tokens)
-            except (anthropic.APIError, openai.APIError) as e:
-                elapsed = time.time() - t0
-                status = getattr(e, "status_code", None)
-                # A failed call was invisible until 2026-09-22: the old client
-                # raised before it reached the ledger, so the error rate was
-                # structurally unobservable and "67 calls" meant "67 calls
-                # that happened to work". Failures are rows now, billed at 0.
-                self._log_failure(model, call_class, tag, draw, elapsed,
-                                  type(e).__name__, status)
-                span.set_attribute("error.type", type(e).__name__)
-                if status is not None:
-                    span.set_attribute(
-                        "gen_ai.response.status_code", int(status))
-                span.record_exception(e)
-                span.set_status(Status(StatusCode.ERROR, str(e)[:200]))
-                raise ApiError("%s%s: %s"
-                               % (type(e).__name__,
-                                  "" if status is None else " %s" % status,
-                                  str(e)[:400])) from e
-            elapsed = time.time() - t0
+            attempt = 1
+            while True:
+                clock = _Clock(wall_limit(max_tokens))
+                try:
+                    if prov == OPENROUTER:
+                        (text, raw_usage, stop_reason, resp_model,
+                         billed) = self._send_chat(body, clock)
+                    else:
+                        (text, raw_usage, stop_reason, resp_model,
+                         billed) = self._send_messages(body, clock)
+                    break
+                except TRANSPORT_ERRORS as e:
+                    status = getattr(e, "status_code", None)
+                    # A failed call was invisible until 2026-09-22: the old
+                    # client raised before it reached the ledger, so the
+                    # error rate was structurally unobservable and "67 calls"
+                    # meant "67 calls that happened to work". Every failed
+                    # attempt is a row, billed at 0.
+                    self._log_failure(model, call_class, tag, draw, clock,
+                                      type(e).__name__, status)
+                    if clock.first is not None:
+                        # Tokens were generated before the call died and the
+                        # host may bill for them; nothing says how many. The
+                        # ceiling is a guarantee, so it is charged the worst
+                        # case.
+                        self.budget.record(estimate(model, est_in,
+                                                    max_tokens))
+                    span.record_exception(e)
+                    detail = "%s%s: %s" % (
+                        type(e).__name__,
+                        "" if status is None else " %s" % status,
+                        str(e)[:400])
+                    transient = is_transient(e)
+                    if transient and attempt < ATTEMPTS:
+                        attempt += 1
+                        self.budget.check(model, est_in, max_tokens)
+                        continue
+                    span.set_attribute("permits.attempts", attempt)
+                    span.set_attribute("error.type", type(e).__name__)
+                    if status is not None:
+                        span.set_attribute(
+                            "gen_ai.response.status_code", int(status))
+                    span.set_status(Status(StatusCode.ERROR, detail[:200]))
+                    if transient:
+                        raise TransientError(
+                            "%s (after %d attempts)" % (detail, attempt)
+                        ) from e
+                    raise FatalError(detail) from e
+            elapsed = clock.elapsed()
+            span.set_attribute("permits.attempts", attempt)
             usage = Usage.from_dict(raw_usage)
 
             # What the provider says it charged beats what the local table
@@ -832,19 +950,22 @@ class Client:
             span.set_attribute("gen_ai.usage.output_tokens",
                                usage.output_tokens)
             span.set_attribute("permits.usd", usd)
-            span.set_attribute("permits.seconds", round(elapsed, 1))
+            span.set_attribute("permits.seconds", elapsed)
+            if clock.ttft() is not None:
+                span.set_attribute("permits.ttft_s", clock.ttft() or 0.0)
 
             self.budget.record(usd)
             self.ledger.write(LedgerRow(
                 at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 call_class=call_class, tag=tag, model=model, provider=prov,
                 draw=draw, ok=True, usd_reported=billed is not None,
-                usd=round(usd, 6), seconds=round(elapsed, 1),
+                usd=round(usd, 6), seconds=elapsed,
                 stop_reason=stop_reason,
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
                 cache_read_input_tokens=usage.cache_read_input_tokens,
-                cache_creation_input_tokens=usage.cache_creation_input_tokens))
+                cache_creation_input_tokens=usage.cache_creation_input_tokens,
+                ttft_s=clock.ttft()))
             # The raw usage block, not the typed view: it keeps fields such
             # as Anthropic's `output_tokens_details` that `Usage` does not
             # read yet.
@@ -856,61 +977,92 @@ class Client:
                 truncated=truncated(stop_reason, usage, max_tokens))
 
     def _send_messages(
-            self, body: Body, max_tokens: int,
+            self, body: Body, clock: _Clock,
     ) -> tuple[str, dict[str, Any], str | None, str, float | None]:
         """Anthropic transport. Returns the five things `message` needs.
+
+        Always streamed. Streaming is a method here, not a flag on the
+        request, so it cannot change the request's identity. Until 2026-09-26
+        calls at or under 8,192 tokens used `create`, where the read timeout
+        spans the whole generation and an SDK retry re-sends a request the
+        host may already have generated and billed.
 
         `billed` is None because Anthropic does not report a charge on the
         response; that path prices from the registry, as it always has.
         """
-        msg: anthropic.types.Message
-        if max_tokens > STREAM_ABOVE:
-            # Streaming is a method here, not a flag on the request, so it
-            # cannot change the request's identity.
-            with self.sdk().messages.stream(**body) as stream:
-                msg = stream.get_final_message()
-        else:
-            msg = self.sdk().messages.create(**body)
+        with self.sdk().messages.stream(**body) as stream:
+            for event in stream:
+                clock.check()
+                if event.type == "content_block_delta":
+                    clock.token()
+            msg = stream.get_final_message()
         usage = msg.usage.model_dump(mode="json")
         text = "".join(b.text for b in msg.content
                        if isinstance(b, anthropic.types.TextBlock))
         return text, usage, msg.stop_reason, msg.model, None
 
     def _send_chat(
-            self, body: Body,
+            self, body: Body, clock: _Clock | None = None,
     ) -> tuple[str, dict[str, Any], str | None, str, float | None]:
-        """OpenRouter transport, same five things.
+        """OpenRouter transport, same five things, streamed.
 
-        No streaming branch. STREAM_ABOVE exists because a long Anthropic
-        request can outlive the server's own request timeout; OpenRouter holds
-        the connection for the upstream and the 900-second client timeout is
-        the binding one. Adding a streaming path here on the strength of the
-        other vendor's constraint would be guessing, and a guess that changes
-        how a request is sent is how the `stream` cache-key bug happened.
+        `stream` and `stream_options` are arguments to the SDK call and never
+        keys in `body`, so they stay out of the cache key. `include_usage`
+        makes the last chunk carry the usage block and OpenRouter's reported
+        cost. Reasoning deltas count toward the first token and are not kept:
+        the text is `content` alone, as it was before this path streamed.
+
+        Three ways a stream can end without an answer, each a host failure
+        rather than an empty reply. With no choices at all, the caller would
+        read empty text as an extractor that produced nothing. With an
+        `error` finish, OpenRouter is reporting an upstream failure after a
+        200. With no usage block, what the call cost is unknown, and a
+        zero-token row would price a paid call at nothing.
         """
-        resp = self.oai().chat.completions.create(**body)
-        if not resp.choices:
-            # A response with no choices is a wrong answer waiting to happen:
-            # the caller would read empty text as an extractor that produced
-            # nothing rather than a call that returned nothing.
-            #
-            # The reason is in the body, not the status line. OpenRouter
-            # answers an upstream failure with HTTP 200 and an `error` object,
-            # so the SDK raises nothing and there is no status code to report.
-            # Without this the operator sees "no choices" and cannot tell a
-            # rate limit from a context overflow from a dead provider.
-            raise ApiError(
-                "OpenRouter returned no choices for %r: %s"
-                % (body.get("model"), _error_detail(resp)))
-        choice = resp.choices[0]
-        text = choice.message.content or ""
-        usage, billed = _usage_from_chat(resp.usage)
-        finish: str | None = choice.finish_reason
+        if clock is None:
+            clock = _Clock(wall_limit(int(body.get("max_tokens") or 0)))
+        parts: list[str] = []
+        finish: str | None = None
+        resp_model = str(body["model"])
+        raw_usage: Any = None
+        saw_choice = False
+        last: Any = None
+        stream = self.oai().chat.completions.create(
+            **body, stream=True, stream_options={"include_usage": True})
+        with stream:
+            for chunk in stream:
+                clock.check()
+                last = chunk
+                resp_model = chunk.model or resp_model
+                if chunk.usage is not None:
+                    raw_usage = chunk.usage
+                for choice in chunk.choices:
+                    saw_choice = True
+                    delta = choice.delta
+                    if delta.content:
+                        parts.append(delta.content)
+                        clock.token()
+                    elif (getattr(delta, "reasoning", None)
+                          or getattr(delta, "reasoning_content", None)):
+                        clock.token()
+                    if choice.finish_reason:
+                        finish = choice.finish_reason
+        model = body.get("model")
+        if not saw_choice:
+            raise _HostError("OpenRouter returned no choices for %r: %s"
+                             % (model, _error_detail(last)))
+        if finish == "error":
+            raise _HostError("OpenRouter stream for %r ended in an error: %s"
+                             % (model, _error_detail(last)))
+        if raw_usage is None:
+            raise _HostError("OpenRouter stream for %r ended without its "
+                             "usage block" % (model,))
+        usage, billed = _usage_from_chat(raw_usage)
         stop = FINISH_REASONS.get(finish, finish) if finish else finish
-        return text, usage, stop, resp.model, billed
+        return "".join(parts), usage, stop, resp_model, billed
 
     def _log_failure(self, model: str, call_class: str, tag: str, draw: int,
-                     elapsed: float, error_type: str,
+                     clock: _Clock, error_type: str,
                      status: int | None) -> None:
         """A ledger row for a call that reached the API and failed.
 
@@ -918,11 +1070,13 @@ class Client:
         exists so that the denominator of any success rate computed from this
         ledger is the number of calls *made*. Rows written before 2026-09-22
         have no `ok` field and are read as successes, which they are: the old
-        client could not write anything else.
+        client could not write anything else. A row with `ttft_s` failed
+        after tokens arrived and may have been billed for them.
         """
         self.ledger.write(LedgerRow(
             at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             call_class=call_class, tag=tag, model=model,
             provider=provider_for(model), draw=draw, ok=False,
             error_type=error_type, status_code=status,
-            usd=0.0, seconds=round(elapsed, 1), stop_reason=None))
+            usd=0.0, seconds=clock.elapsed(), stop_reason=None,
+            ttft_s=clock.ttft()))

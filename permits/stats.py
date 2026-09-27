@@ -60,6 +60,8 @@ def failure_mode(d: DrawRecord) -> str:
         return "perfect"
     if d.outcome is Outcome.NOT_ATTEMPTED:
         return "not_attempted"
+    if d.outcome is Outcome.INFRA_ERROR:
+        return "infra_error"
     if d.outcome is not Outcome.IMPERFECT:
         return "loud"
     if d.recall_min == 0.0:

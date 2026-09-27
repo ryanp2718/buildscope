@@ -359,12 +359,44 @@ Anthropic.
 | step | work | spends money |
 |---|---|---|
 | 1 | (Done 2026-09-26: `ModelSpec` registry in `permits/models.py` replacing the seven tables; frozen `Usage`, `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec`, `RunConfig`; `Outcome` as a `StrEnum`; mypy strict in CI on five `permits/` files. Every cached request hashes as before, and a replay of four cells re-scores every draw identically.) | no |
-| 2 | Streaming on OpenRouter, `httpx.Timeout` plus a wall-clock limit, the three-way error split, `infra_error` outcome, latency fields | no |
+| 2 | (Done 2026-09-26: every call streams on both providers; read timeout 120 s between chunks; wall-clock limit 300 s + ceiling at 10 tok/s; `FatalError` stops the run, `TransientError` is retried once under the same draw then recorded as `infra_error`, outside the pass rate; `ttft_s` in the ledger; infra-error rate, median TTFT and tokens per second in `model_stats.json`. See "Step 2 as built" below.) | no |
 | 3 | Reasoning, sampling and routing policies above, driven by the registry; `reasoning_tokens` and serving host in the ledger. (Ceiling rates for glm-5.3-flash and deepseek-v4-flash: done 2026-09-26.) | no |
 | 4 | Atomic cache writes; a lock on `variance.json`; closed file handles. (`short_model` and the `cached()` / `Ledger.rows()` handles: done with step 1.) | no |
 | 5 | (Done 2026-09-26: R1 corrected in the report, the code comment and the test docstring; the report's cells pinned in `tests/test_model_stats.py`.) | no |
 | 6 | Pre-register roster, prompt hash, development/test split, n per cell and success criteria; dry-run the cost projection; then run | yes |
 | 7 | Run generated extractors in a container with no network | no, deferred |
+
+### Step 2 as built
+
+The policy under "Timeouts" above, with the values it left open:
+
+- **Both providers stream every call**, not only OpenRouter. Anthropic calls at or under 8,192
+  tokens used `create`, where the read timeout spans the whole generation and an SDK retry
+  re-sends a request the host may already have generated. With every call streamed, the SDKs'
+  own retries (5, with backoff) happen only before the response starts. `stream` and
+  `stream_options` are SDK arguments, so every cached request still hashes to the same key.
+- **Timeouts.** `httpx2.Timeout(connect=10, read=120, write=30, pool=10)`; both SDKs now run on
+  `httpx2`. The wall-clock limit is 300 s plus the ceiling at 10 tokens per second: 5,100 s for a
+  48,000-token reasoning ceiling. The slowest successful call in the ledger ran at 15 tok/s
+  (41,680 tokens in 2,802 s) and the median at 113, so the limit binds on a stalled host rather
+  than a slow model.
+- **Error split.** `Refused` (not sent: budget, no key, unregistered model) and `FatalError`
+  (400, 401, 402, 403, 404, 413, 422) stop the run with every paid draw saved. `TransientError`
+  (connection and timeout errors, 408, 409, 429, 5xx, an error inside a 200 stream, a stream with
+  no choices, an `error` finish, no usage block, the wall-clock limit) is retried once under the
+  same draw number, then recorded as `infra_error`, and the cell continues. Re-running the cell
+  retries that draw, since it has no cached response.
+- **Spend on a failed call.** A failure after the first token may have been billed and nothing
+  reports how much. The ledger row keeps `usd` at 0 and carries `ttft_s`, which marks it; the
+  budget counts the worst case. Reconciling those rows against OpenRouter's generation records is
+  not built.
+- **Latency.** `ttft_s` is time to the first streamed token, thinking included where the host
+  streams it. Tokens per second is output tokens over the time after the first token, derived in
+  `model_stats.py`. Rows written before 2026-09-26 have neither.
+
+Not verified against a live stream, since this step spends nothing: that OpenRouter's last chunk
+carries usage and cost for every upstream, and that reasoning arrives as a `reasoning` delta. The
+smoke draw in step 6 is where that is checked.
 
 ## What this does not establish
 

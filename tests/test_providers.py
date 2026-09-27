@@ -63,27 +63,59 @@ class _FakeUsage(object):
 
 
 class _FakeChoice(object):
+    """One streamed choice: the whole answer in a single delta."""
+
     def __init__(self, text, finish_reason="stop"):
         self.finish_reason = finish_reason
-        self.message = type("M", (), {"content": text})()
+        self.delta = type("D", (), {"content": text})()
+
+
+class _FakeChunk(object):
+    def __init__(self, model, choices, usage):
+        self.model = model
+        self.choices = choices
+        self.usage = usage
 
 
 class _FakeResponse(object):
+    """A streamed chat completion, as `create(..., stream=True)` returns it:
+    a context manager yielding one chunk per choice, then the usage chunk
+    that `include_usage` asks for. `usage=None` sends an empty usage block,
+    which reads as zeros, the same as a missing block did unstreamed."""
+
     def __init__(self, text="ok", finish_reason="stop", model="x/y",
                  usage=None, choices=None):
         self.model = model
-        self.usage = usage
+        self.usage = usage if usage is not None else _FakeUsage()
         self.choices = (choices if choices is not None
                         else [_FakeChoice(text, finish_reason)])
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        for c in self.choices:
+            yield _FakeChunk(self.model, [c], None)
+        yield _FakeChunk(self.model, [], self.usage)
+
 
 class _FakeCompletions(object):
+    """`bodies` holds the request body; the streaming arguments, which the
+    client passes beside the body and never in it, go to `transport`."""
+
     def __init__(self, result):
         self.result = result
         self.bodies = []
+        self.transport = []
 
-    def create(self, **body):
-        self.bodies.append(body)
+    def create(self, **kw):
+        self.transport.append({k: kw.pop(k) for k in ("stream",
+                                                      "stream_options")
+                               if k in kw})
+        self.bodies.append(kw)
         if isinstance(self.result, Exception):
             raise self.result
         return self.result

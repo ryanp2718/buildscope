@@ -109,7 +109,7 @@ def purchases(v, ledger):
     claimed, out = set(), {}
     for key, cell in sorted(v["cells"].items()):
         for d in draws_of(cell):
-            if not d.attempted():
+            if not d.scored():
                 continue
             hits = [i for i in index.get((cell["model"], cell["target"],
                                           d.draw, d.output_tokens), [])
@@ -140,9 +140,15 @@ def rows_from_variance(v, ledger=()):
     budget has a different denominator from one that ran out of successes,
     and dropping the row loses that distinction.
 
-    `usd` is what the run that wrote the record paid; `usd_purchase` and
-    `seconds` come from the ledger row that bought the response (see
-    `purchases`). A draw with no such row gets `purchase_unknown=1` instead.
+    An infrastructure error is emitted as `attempted=0, infra_error=1`: it
+    is reported beside the pass rate, not as a failure in it.
+
+    `usd` is what the run that wrote the record paid; `usd_purchase`,
+    `seconds`, `ttft_s` and `tokens_per_s` come from the ledger row that
+    bought the response (see `purchases`). A draw with no such row gets
+    `purchase_unknown=1` instead. Tokens per second is output tokens over
+    the time after the first token, so queueing and thinking that the host
+    does not stream are not counted as slow generation.
     """
     bought = purchases(v, ledger)
     out = []
@@ -153,6 +159,8 @@ def rows_from_variance(v, ledger=()):
             uid = "d%02d" % d.draw
             if mode == "not_attempted":
                 metrics = [("attempted", 0)]
+            elif mode == "infra_error":
+                metrics = [("attempted", 0), ("infra_error", 1)]
             else:
                 metrics = [
                     ("attempted", 1),
@@ -168,8 +176,15 @@ def rows_from_variance(v, ledger=()):
                 if i is None:
                     metrics.append(("purchase_unknown", 1))
                 else:
-                    metrics.append(("usd_purchase", ledger[i].usd))
-                    metrics.append(("seconds", ledger[i].seconds))
+                    row = ledger[i]
+                    metrics.append(("usd_purchase", row.usd))
+                    metrics.append(("seconds", row.seconds))
+                    if row.ttft_s is not None:
+                        metrics.append(("ttft_s", row.ttft_s))
+                        gen = row.seconds - row.ttft_s
+                        if gen > 0:
+                            metrics.append(("tokens_per_s",
+                                            round(row.output_tokens / gen, 1)))
             for metric, value in metrics:
                 out.append({"experiment": "variance", "target": target,
                             "model": model, "condition": cond,
@@ -256,6 +271,7 @@ def aggregate(rows):
         n, k = len(perf), sum(perf)
         fails = n - k
         n_silent = sum(silent)
+        infra = sum(var("infra_error"))
         lat = var("seconds")
         # Call errors are a property of the provider, not the prompt, and a
         # failed call has no draw to join to, so this one figure is pooled
@@ -298,6 +314,14 @@ def aggregate(rows):
             "usd_is_replayed": bool(usd and usd_run < usd),
             "latency_p50_s": pctile(lat, 0.50),
             "latency_p95_s": pctile(lat, 0.95),
+            # Draws the host failed twice, as a share of draws sent. Beside
+            # the success rate, never inside it.
+            "draws_infra_error": infra,
+            "infra_error_rate": (float(infra) / (n + infra)
+                                 if n + infra else None),
+            # None on draws bought before the ledger recorded first token.
+            "ttft_p50_s": pctile(var("ttft_s"), 0.50),
+            "tokens_per_s_p50": pctile(var("tokens_per_s"), 0.50),
             "api_calls": len(errs),
             "api_error_rate": (1.0 - float(sum(errs)) / len(errs)
                                if errs else None),
@@ -320,17 +344,17 @@ def aggregate(rows):
 def report(agg):
     print("\nper-cell model statistics   (success = perfect agreement on "
           "every page)")
-    print("%-9s %-20s %-8s %5s %8s %-16s %8s %9s %9s %7s"
-          % ("target", "model", "cond", "n", "success", "95% CI", "silent",
-             "$/success", "drift", "p95 s"))
+    print("%-9s %-20s %-8s %5s %5s %8s %-16s %8s %9s %9s %7s"
+          % ("target", "model", "cond", "n", "infra", "success", "95% CI",
+             "silent", "$/success", "drift", "p95 s"))
     for _, e in sorted(agg.items()):
         sil = ("%d/%d" % (e["silent_failures"], e["failures"])
                if e["failures"] else "-")
         dr = ("%.2f (n=%d)" % (e["drift_survival"], e["drift_n"])
               if "drift_survival" in e else "-")
-        print("%-9s %-20s %-8s %5d %7.0f%% [%.2f, %.2f]      %8s %9s %9s %7s"
+        print("%-9s %-20s %-8s %5d %5d %7.0f%% [%.2f, %.2f]      %8s %9s %9s %7s"
               % (e["target"], short(e["model"]), e["condition"],
-                 e["draws_scored"],
+                 e["draws_scored"], e["draws_infra_error"],
                  100 * (e["success_rate"] or 0),
                  e["success_ci95"][0], e["success_ci95"][1], sil,
                  ("$%.4f" % e["usd_per_success"]

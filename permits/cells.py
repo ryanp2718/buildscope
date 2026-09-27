@@ -17,7 +17,8 @@ from typing import Any
 class Outcome(StrEnum):
     """How one draw ended. Exactly one per draw, decided in this order: the
     call, the code block, the AST audit, execution, then the score."""
-    NOT_ATTEMPTED = "not_attempted"   # the call was refused or failed
+    NOT_ATTEMPTED = "not_attempted"   # refused, or rejected; the run stopped
+    INFRA_ERROR = "infra_error"       # the host failed on every attempt
     NO_CODE = "no_code"               # no `def extract(` block in the reply
     REFUSED = "refused"               # the AST audit rejected the module
     EXEC_ERROR = "exec_error"         # the runner itself failed
@@ -125,15 +126,23 @@ class DrawRecord:
             raise ValueError("unknown draw field(s) %s" % ", ".join(extra))
         return cls(**{**d, "outcome": Outcome(d["outcome"])})
 
-    def attempted(self) -> bool:
-        return self.outcome is not Outcome.NOT_ATTEMPTED
+    def scored(self) -> bool:
+        """Whether this draw counts toward the pass rate.
+
+        An infrastructure error is a property of the host and the network,
+        not of the model, so it is reported beside the rate rather than
+        folded into it as a failure (fairness audit, "Timeouts"). A draw
+        that was never sent is not a measurement of anything.
+        """
+        return self.outcome not in (Outcome.NOT_ATTEMPTED, Outcome.INFRA_ERROR)
 
     def spend(self) -> float:
         """What the run that wrote this record paid for it. Zero for a draw
-        replayed from the cache. Raises on an attempted draw with no figure,
-        which is a malformed record and not a free one."""
+        replayed from the cache. Raises on a scored draw with no figure,
+        which is a malformed record and not a free one. An infrastructure
+        error has no figure because the host does not report one."""
         if self.usd is None:
-            if self.attempted():
+            if self.scored():
                 raise ValueError("draw %d of %s|%s has no usd"
                                  % (self.draw, self.target, self.model))
             return 0.0

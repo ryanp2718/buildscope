@@ -171,10 +171,16 @@ class TestRequestCache(unittest.TestCase):
                       "store must reuse the lookup key, not re-hash the "
                       "mutated body")
 
-    def test_streaming_threshold_is_below_the_dense_page(self):
-        """A 259-record page needs ~30k output tokens. If the threshold were
-        above that the call would be sent unstreamed and die."""
-        self.assertLess(infer.STREAM_ABOVE, 21000)
+    def test_a_small_call_streams_too(self):
+        """Streaming used to start above 8,192 tokens, because a longer
+        unstreamed call can outlive the server's request timeout. Every call
+        streams now, so the read timeout is a gap between chunks and an SDK
+        retry never re-sends a generation. The fake has no `create`."""
+        c = infer.Client(tempfile.mkdtemp(), 10.0, api_key="k")
+        c._sdk = _FakeSDK(_FakeMessage("ok", output_tokens=1))
+        self.assertFalse(hasattr(c._sdk.messages, "create"))
+        self.assertEqual(
+            c.message("claude-opus-5", "s", "u", 100, "synthesis").text, "ok")
 
     def test_system_carries_a_cache_breakpoint(self):
         """Section 6 lever 3. Without the breakpoint the stable prefix bills
@@ -225,23 +231,57 @@ class _FakeMessage(object):
         self.content = [anthropic.types.TextBlock(type="text", text=text)]
 
 
-class _FakeMessages(object):
-    """Stands in for `client.messages`. Either raises or returns."""
+class _Event(object):
+    def __init__(self, type_):
+        self.type = type_
 
-    def __init__(self, result):
-        self.result = result
+
+class _FakeStream(object):
+    """What `messages.stream()` returns: a context manager that yields
+    events and then hands over the final message. `fail` is raised after the
+    events, which is a connection dying mid-generation."""
+
+    def __init__(self, message, events=("content_block_delta",), fail=None):
+        self.message = message
+        self.events = [_Event(t) for t in events]
+        self.fail = fail
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        for e in self.events:
+            yield e
+        if self.fail is not None:
+            raise self.fail
+
+    def get_final_message(self):
+        return self.message
+
+
+class _FakeMessages(object):
+    """Stands in for `client.messages`, one result per attempt; the last
+    result repeats. An exception is raised as the SDK raises a rejected
+    request, before any event. There is no `create`: every call streams."""
+
+    def __init__(self, *results):
+        self.results = list(results)
         self.calls = 0
 
-    def create(self, **body):
+    def stream(self, **body):
+        r = self.results[min(self.calls, len(self.results) - 1)]
         self.calls += 1
-        if isinstance(self.result, Exception):
-            raise self.result
-        return self.result
+        if isinstance(r, Exception):
+            raise r
+        return r if isinstance(r, _FakeStream) else _FakeStream(r)
 
 
 class _FakeSDK(object):
-    def __init__(self, result):
-        self.messages = _FakeMessages(result)
+    def __init__(self, *results):
+        self.messages = _FakeMessages(*results)
 
 
 class _Err(anthropic.APIError):
@@ -263,19 +303,19 @@ class TestFailedCallsReachTheLedger(unittest.TestCase):
     logging preference.
     """
 
-    def client(self, result):
+    def client(self, *results):
         c = infer.Client(tempfile.mkdtemp(), 10.0, api_key="k")
-        c._sdk = _FakeSDK(result)
+        c._sdk = _FakeSDK(*results)
         return c
 
     def test_a_failed_call_is_a_row(self):
-        c = self.client(_Err("overloaded", 529))
+        c = self.client(_Err("invalid x-api-key", 401))
         with self.assertRaises(infer.ApiError):
             c.message("claude-opus-5", "s", "u", 100, "synthesis")
         rows = c.ledger.rows()
         self.assertEqual(len(rows), 1)
         self.assertIs(rows[0].ok, False)
-        self.assertEqual(rows[0].status_code, 529)
+        self.assertEqual(rows[0].status_code, 401)
         self.assertEqual(rows[0].error_type, "_Err")
 
     def test_a_failed_call_bills_nothing(self):

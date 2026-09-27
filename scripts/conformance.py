@@ -871,7 +871,11 @@ def main():
                                       "not accuracy - see module docstring"}
 
     if args.cells:
-        run_cells(client, args, cfg)
+        try:
+            run_cells(client, args, cfg)
+        except (infer.Refused, infer.ApiError) as e:
+            raise SystemExit("run stopped: %s\nDraws already bought are saved "
+                             "in data/infer/variance.json." % e) from None
         return
 
     for key in args.targets.split(","):
@@ -1001,14 +1005,27 @@ def run_variance(client, target, pages, refs, cfg):
                 cfg.synth_model, synth_system(cfg), prompt, cfg.synth_tokens,
                 "synthesis", thinking=True,
                 tag="%s/var" % target.key, draw=d)
+        except infer.TransientError as e:
+            # The host failed twice under this draw number. That says
+            # nothing about the model, so the draw is recorded, left out of
+            # the pass rate, and the cell moves on. A later run of the same
+            # cell retries it: the draw has no cached response to replay.
+            rec["outcome"] = Outcome.INFRA_ERROR
+            rec["why"] = str(e)[:200]
+            draws.append(DrawRecord(**rec))
+            print("      draw %2d  INFRA ERROR: %s" % (d, str(e)[:84]))
+            save_variance(target, cfg, draws, usd)
+            continue
         except (infer.Refused, infer.ApiError) as e:
-            # Out of budget or out of credit. Stop this cell, keep every draw
-            # already paid for, and record which of the two it was.
+            # Out of budget, out of credit, a bad credential or a request the
+            # API rejects. Every later call would fail the same way, so the
+            # run stops here, keeping every draw already paid for.
             rec["outcome"] = Outcome.NOT_ATTEMPTED
             rec["why"] = str(e)[:200]
             draws.append(DrawRecord(**rec))
             print("      draw %2d  STOPPED: %s" % (d, str(e)[:88]))
-            break
+            save_variance(target, cfg, draws, usd)
+            raise
         usd += reply.usd
         rec.update({"usd": reply.usd, "cached": reply.cached,
                     "truncated": reply.truncated,
@@ -1069,7 +1086,7 @@ def run_variance(client, target, pages, refs, cfg):
         save_variance(target, cfg, draws, usd)
 
     ok = sum(1 for r in draws if r.outcome is Outcome.PERFECT)
-    n = sum(1 for r in draws if r.attempted())
+    n = sum(1 for r in draws if r.scored())
     lo, hi = wilson(ok, n)
     print("    %s x %s: %d/%d perfect   rate %.2f   95%% CI [%.3f, %.3f]"
           "   $%.4f" % (target.key, tier, ok, n,
@@ -1088,7 +1105,7 @@ def save_variance(target, cfg, draws, usd):
             prior = {}
     cells = prior.get("cells", {})
     ok = sum(1 for r in draws if r.outcome is Outcome.PERFECT)
-    n = sum(1 for r in draws if r.attempted())
+    n = sum(1 for r in draws if r.scored())
     lo, hi = wilson(ok, n)
     counts = {}
     for r in draws:
@@ -1298,11 +1315,13 @@ def variance_report():
         raise SystemExit("no variance.json; run --cells first")
     cells = json.load(io.open(path, encoding="utf-8"))["cells"]
     print("\nfailure taxonomy by cell   (success = perfect on every page)")
-    print("%-42s %5s %8s %8s %8s %8s   %-18s %s"
-          % ("cell", "n", "perfect", "s-part", "s-empty", "loud",
+    print("%-42s %5s %5s %8s %8s %8s %8s   %-18s %s"
+          % ("cell", "n", "infra", "perfect", "s-part", "s-empty", "loud",
              "success 95% CI", "silent"))
     for key, c in sorted(cells.items()):
-        det = [d for d in draws_of(c) if d.attempted()]
+        allc = draws_of(c)
+        det = [d for d in allc if d.scored()]
+        infra = sum(1 for d in allc if d.outcome is Outcome.INFRA_ERROR)
         if not det:
             continue
         counts = dict.fromkeys(ORDER, 0)
@@ -1312,13 +1331,14 @@ def variance_report():
         lo, hi = wilson(counts["perfect"], n)
         silent = counts["silent_partial"] + counts["silent_empty"]
         slo, shi = wilson(silent, n)
-        print("%-42s %5d %8d %8d %8d %8d   [%.2f, %.2f]       %d/%d [%.2f, %.2f]"
-              % (key, n, counts["perfect"], counts["silent_partial"],
+        print("%-42s %5d %5d %8d %8d %8d %8d   [%.2f, %.2f]       %d/%d [%.2f, %.2f]"
+              % (key, n, infra, counts["perfect"], counts["silent_partial"],
                  counts["silent_empty"], counts["loud"], lo, hi,
                  silent, n, slo, shi))
     print("\n  s-part  returned rows, some missing, no exception")
     print("  s-empty returned zero rows on a page, no exception")
     print("  loud    raised, or refused by the AST audit")
+    print("  infra   the host failed twice; not in n or the rate")
 
     # The denominator is failures, not draws. Dividing silent failures
     # by every draw understates the rate whenever a cell mostly
@@ -1327,9 +1347,9 @@ def variance_report():
     allsil = allfail = alln = 0
     for c in cells.values():
         for d in draws_of(c):
-            m = failure_mode(d)
-            if m == "not_attempted":
+            if not d.scored():
                 continue
+            m = failure_mode(d)
             alln += 1
             if m == "perfect":
                 continue

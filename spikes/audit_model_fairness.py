@@ -98,9 +98,9 @@ def throughput(rows):
     orr = [r for r in rows if r.get("provider") == infer.OPENROUTER and r.get("seconds")]
     for r in sorted(orr, key=lambda r: -r["seconds"])[:5]:
         rate = r["output_tokens"] / r["seconds"]
-        print("  %-30s %6.1fs %6d tok %6.1f tok/s -> %d-token ceiling in %.0fs (timeout %.0fs)"
+        print("  %-30s %6.1fs %6d tok %6.1f tok/s -> %d-token ceiling in %.0fs (wall limit %.0fs)"
               % (r["model"], r["seconds"], r["output_tokens"], rate, ceiling,
-                 ceiling / rate, infer.TIMEOUT_S))
+                 ceiling / rate, infer.wall_limit(ceiling)))
 
 
 def roster_age(catalogue):
