@@ -43,6 +43,11 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Type check
+        # Strict, on the files listed under [tool.mypy] in pyproject.toml.
+        # The list grows file by file and never shrinks.
+        run: uv run mypy
+
       - name: Test
         run: uv run pytest -q
 

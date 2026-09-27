@@ -100,7 +100,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from permits import infer
+from permits import infer, models
+from permits.cells import CellSpec, DrawRecord, Outcome, RunConfig, draws_of
 from permits.stats import ORDER, failure_mode, wilson
 from permits import strip as _strip                          # noqa: E402
 from permits.adapters import accela, stjohns                 # noqa: E402
@@ -206,7 +207,7 @@ drops whichever state lacks one.
 """
 
 
-def synth_system(args):
+def synth_system(cfg):
     """The synthesis system prompt for this run.
 
     One accessor rather than four call sites, because the prompt is also what
@@ -214,18 +215,12 @@ def synth_system(args):
     that priced the short prompt and sent the long one would under-authorize
     itself in exactly the way `ceiling_for` was added to stop.
     """
-    return SYNTH_SYSTEM + SYNTH_HINT if args.synth_hint else SYNTH_SYSTEM
+    return SYNTH_SYSTEM + SYNTH_HINT if cfg.synth_hint else SYNTH_SYSTEM
 
 
-def cell_key(target_key, model, args):
-    """`target|model`, or `target|model|hint` when the hint is on.
-
-    A hinted draw is a different condition, so it gets its own cell. Merging
-    the two under one key would pool draws from two prompts into one rate and
-    report it as one experiment.
-    """
-    base = "%s|%s" % (target_key, model)
-    return base + "|hint" if args.synth_hint else base
+def cell_key(target_key, model, cfg):
+    """The `variance.json` key for this cell. See `CellSpec.key`."""
+    return CellSpec(target_key, model, 0, cfg.synth_hint).key
 
 
 DIRECT_SYSTEM = CONTRACT + """
@@ -691,32 +686,32 @@ def direct_budget(n_records):
     return max(2000, min(48000, int(n_records * TOKENS_PER_RECORD) + 2000))
 
 
-def plan(target, pages, refs, args):
+def plan(target, pages, refs, cfg):
     """What the run would cost, from the real bytes, before any call."""
-    win, frac, at = window(read(pages[0][1]), args.synth_window)
-    syn_in = infer.tokens(synth_system(args)) + infer.tokens(win)
+    win, frac, at = window(read(pages[0][1]), cfg.synth_window)
+    syn_in = infer.tokens(synth_system(cfg)) + infer.tokens(win)
     # The ceiling, not the answer budget: a reasoning model is authorized
     # for its thinking too, and a projection that quotes the answer budget
     # understates such a cell threefold. `Budget.check` sees the raised
     # number at call time either way, so the two would silently disagree.
-    syn = infer.estimate(args.synth_model, syn_in,
-                         infer.ceiling_for(args.synth_model,
-                                           args.synth_tokens))
+    syn = infer.estimate(cfg.synth_model, syn_in,
+                         infer.ceiling_for(cfg.synth_model,
+                                           cfg.synth_tokens))
 
     direct = []
-    for fn, p in pages[:args.direct_pages]:
+    for fn, p in pages[:cfg.direct_pages]:
         n_in = infer.tokens(DIRECT_SYSTEM) + infer.tokens(strip(read(p)))
         cap = direct_budget(len(refs[fn]))
         direct.append((fn, n_in, cap,
                        infer.estimate(
-                           args.direct_model, n_in,
-                           infer.ceiling_for(args.direct_model, cap))))
+                           cfg.direct_model, n_in,
+                           infer.ceiling_for(cfg.direct_model, cap))))
     return {"synth_in": syn_in, "synth_window_frac": frac,
             "synth_window_at": at, "synth_usd": syn, "direct": direct,
             "direct_usd": sum(d[3] for d in direct)}
 
 
-def matrix(targets, args):
+def matrix(targets, cfg):
     """Projected worst-case cost of each arm on each priced model.
 
     Printed rather than argued, because the interesting fact about the second
@@ -731,14 +726,11 @@ def matrix(targets, args):
     open-weight rows reach roughly 90x below Opus 5. That is the whole reason
     they are here; see the `permits/infer.py` docstring.
     """
-    priced = dict(infer.PRICES)
-    priced.update(infer.OPENROUTER_PRICES)
     # Free endpoints are excluded: this table plans measurements, and a free
     # route does not promise a fixed upstream or quantization, so a cell drawn
     # from one is not a sample of a single condition. It would also sort to
     # the top and make the cheapest-tier line below quote a zero.
-    for m in infer.OPENROUTER_FREE:
-        priced.pop(m, None)
+    priced = {s.id: s.price for s in models.measured()}
     rows = []
     for model in sorted(priced, key=lambda m: priced[m][0]):
         s_usd = d_usd = 0.0
@@ -748,11 +740,11 @@ def matrix(targets, args):
             if not pages:
                 continue
             refs = {fn: t.reference(read(p)) for fn, p in pages}
-            win, _, _ = window(read(pages[0][1]), args.synth_window)
+            win, _, _ = window(read(pages[0][1]), cfg.synth_window)
             s_usd += infer.estimate(
-                model, infer.tokens(synth_system(args)) + infer.tokens(win),
-                infer.ceiling_for(model, args.synth_tokens))
-            for fn, p in pages[:args.direct_pages]:
+                model, infer.tokens(synth_system(cfg)) + infer.tokens(win),
+                infer.ceiling_for(model, cfg.synth_tokens))
+            for fn, p in pages[:cfg.direct_pages]:
                 d_usd += infer.estimate(
                     model,
                     infer.tokens(DIRECT_SYSTEM) + infer.tokens(strip(read(p))),
@@ -835,8 +827,9 @@ def main():
         run_drift(args)
         return
 
+    cfg = RunConfig.from_args(args)
     if args.matrix:
-        matrix([k.strip() for k in args.targets.split(",")], args)
+        matrix([k.strip() for k in args.targets.split(",")], cfg)
         return
 
     if not os.path.isdir(SYNTH):
@@ -849,14 +842,19 @@ def main():
         # not just Anthropic's. Having one of the two configured must not read
         # as having the other, or the run dies partway through an allocation
         # with some cells paid for and some not.
-        need = {args.synth_model, args.direct_model}
+        need = {cfg.synth_model, cfg.direct_model}
         if args.cells:
-            for cell in args.cells.split(","):
-                bits = cell.strip().split(":", 1)
-                if len(bits) == 2 and bits[1].count(":"):
-                    need.add(bits[1].rsplit(":", 1)[0])
+            for entry in args.cells.split(","):
+                try:
+                    need.add(CellSpec.parse(entry).model)
+                except ValueError as e:
+                    raise SystemExit(str(e)) from None
         for m in sorted(need):
-            if not client.key_for(m):
+            try:
+                have = client.key_for(m)
+            except infer.Refused as e:
+                raise SystemExit("%s Nothing has been sent." % e) from None
+            if not have:
                 prov = infer.provider_for(m)
                 raise SystemExit(
                     "no API key for %s, needed by %s. Set %s or write it to "
@@ -867,13 +865,13 @@ def main():
                        infer.OPENROUTER_KEY_FILE
                        if prov == infer.OPENROUTER else infer.KEY_FILE))
     report = {"targets": {}, "prices_as_of": infer.PRICES_AS_OF,
-              "synth_model": args.synth_model,
-              "direct_model": args.direct_model,
+              "synth_model": cfg.synth_model,
+              "direct_model": cfg.direct_model,
               "note": "agreement with the adapter, "
                                       "not accuracy - see module docstring"}
 
     if args.cells:
-        run_cells(client, args)
+        run_cells(client, args, cfg)
         return
 
     for key in args.targets.split(","):
@@ -898,21 +896,21 @@ def main():
         if bad:
             raise SystemExit("scorer is broken; no calls made")
 
-        if args.draws > 1:
-            per = plan(target, pages, refs, args)["synth_usd"]
+        if cfg.draws > 1:
+            per = plan(target, pages, refs, cfg)["synth_usd"]
             print("    variance: %d draws x $%.4f worst case = $%.2f ceiling"
-                  % (args.draws, per, args.draws * per))
+                  % (cfg.draws, per, cfg.draws * per))
             if args.run:
-                run_variance(client, target, pages, refs, args)
+                run_variance(client, target, pages, refs, cfg)
             else:
                 print("    (dry run - nothing sent; add --run)")
             continue
 
-        pl = plan(target, pages, refs, args)
+        pl = plan(target, pages, refs, cfg)
         print("    arm S  1 call, ~%.1fk in (%.0f%% of the page, window at "
               "char %d), <= %dk out  ->  $%.3f worst case"
               % (pl["synth_in"] / 1000.0, 100 * pl["synth_window_frac"],
-                 pl["synth_window_at"], args.synth_tokens // 1000,
+                 pl["synth_window_at"], cfg.synth_tokens // 1000,
                  pl["synth_usd"]))
         for fn, n_in, cap, usd in pl["direct"]:
             print("    arm D  %-34s ~%.1fk in, <= %.1fk out  ->  $%.3f"
@@ -922,11 +920,11 @@ def main():
             "plan": {k: v for k, v in pl.items() if k != "direct"},
         }
         if args.run:
-            run_target(client, target, pages, refs, args, rep)
+            run_target(client, target, pages, refs, cfg, rep)
 
     rows = client.ledger.rows()
     print("\nledger: %d calls, $%.4f lifetime"
-          % (len(rows), sum(r.get("usd", 0.0) for r in rows)))
+          % (len(rows), sum(r.usd for r in rows)))
     for cls, a in sorted(client.ledger.by_class().items()):
         print("  %-12s %3d calls  $%7.4f  in %8d  out %7d  cache-read %8d"
               % (cls, a["calls"], a["usd"], a["in"], a["out"],
@@ -948,7 +946,7 @@ def main():
             if arm not in rep:
                 continue
             model = rep[arm].get("model") or (
-                args.synth_model if arm == "arm_s" else args.direct_model)
+                cfg.synth_model if arm == "arm_s" else cfg.direct_model)
             runs["%s|%s|%s" % (key, arm, model)] = rep[arm]
     out = {"runs": runs, "prices_as_of": infer.PRICES_AS_OF,
            "note": report["note"],
@@ -962,7 +960,7 @@ def main():
 
 
 # ----------------------------------------------------- variance over draws
-def run_variance(client, target, pages, refs, args):
+def run_variance(client, target, pages, refs, cfg):
     """k independent draws of one identical synthesis request: a pass@1 rate,
     in the pass@k family (Chen et al., 2021) of repeated-sampling code-gen
     evaluation.
@@ -983,8 +981,8 @@ def run_variance(client, target, pages, refs, args):
     every page. Anything less is a failure. A strict criterion is the honest
     one when the alternative is partial credit nobody can act on.
     """
-    win, _frac, _at = window(read(pages[0][1]), args.synth_window)
-    tier = infer.short_model(args.synth_model)
+    win, _frac, _at = window(read(pages[0][1]), cfg.synth_window)
+    tier = infer.short_model(cfg.synth_model)
     prompt = ("Portal page excerpt (one page of the result grid, stripped of "
               "scripts, styles and non-structural attributes):\n\n" + win)
     vdir = os.path.join(SYNTH, "variance")
@@ -993,35 +991,38 @@ def run_variance(client, target, pages, refs, args):
     corpus_pages = [q for _, q in stripped_corpus(target, pages)]
 
     draws, usd = [], 0.0
-    for d in range(args.draws):
-        rec = {"draw": d, "model": args.synth_model, "target": target.key}
+    for d in range(cfg.draws):
+        rec = {"draw": d, "model": cfg.synth_model, "target": target.key}
+        # Assembled as keyword arguments and frozen into a `DrawRecord` at
+        # the end of the draw, so a misspelled field is a TypeError here
+        # rather than a key nothing ever reads.
         try:
-            text, usage, meta = client.message(
-                args.synth_model, synth_system(args), prompt, args.synth_tokens,
+            reply = client.message(
+                cfg.synth_model, synth_system(cfg), prompt, cfg.synth_tokens,
                 "synthesis", thinking=True,
                 tag="%s/var" % target.key, draw=d)
         except (infer.Refused, infer.ApiError) as e:
             # Out of budget or out of credit. Stop this cell, keep every draw
             # already paid for, and record which of the two it was.
-            rec["outcome"] = "not_attempted"
+            rec["outcome"] = Outcome.NOT_ATTEMPTED
             rec["why"] = str(e)[:200]
-            draws.append(rec)
+            draws.append(DrawRecord(**rec))
             print("      draw %2d  STOPPED: %s" % (d, str(e)[:88]))
             break
-        usd += meta["usd"]
-        rec.update({"usd": meta["usd"], "cached": meta["cached"],
-                    "truncated": meta.get("truncated"),
-                    "output_tokens": usage.get("output_tokens", 0)})
-        src = extract_block(text, CODEBLOCK, "def extract(")
+        usd += reply.usd
+        rec.update({"usd": reply.usd, "cached": reply.cached,
+                    "truncated": reply.truncated,
+                    "output_tokens": reply.usage.output_tokens})
+        src = extract_block(reply.text, CODEBLOCK, "def extract(")
         rec["bytes"] = len(src)
         if not src:
-            rec["outcome"] = "no_code"
+            rec["outcome"] = Outcome.NO_CODE
         else:
             problems, imports = audit(src)
             rec["imports"] = imports
             rec["audit_problems"] = problems
             if problems:
-                rec["outcome"] = "refused"
+                rec["outcome"] = Outcome.REFUSED
             else:
                 # The hint suffix is part of the filename, not just the cell
                 # key. Without it a hinted run overwrites the baseline
@@ -1030,19 +1031,19 @@ def run_variance(client, target, pages, refs, args):
                 # class every model drops.
                 sp = os.path.join(vdir, "%s_%s%s_d%02d.py"
                                   % (target.key, tier,
-                                     "_hint" if args.synth_hint else "", d))
+                                     "_hint" if cfg.synth_hint else "", d))
                 with io.open(sp, "w", encoding="utf-8") as fh:
                     fh.write(src)
                 rec["source"] = sp
                 res, err = run_synth(sp, corpus_pages)
                 if err:
-                    rec["outcome"] = "exec_error"
+                    rec["outcome"] = Outcome.EXEC_ERROR
                     rec["error"] = err[:300]
                 else:
                     raised = [i for i in res if not i["ok"]]
                     rec["raised_on"] = len(raised)
                     if raised:
-                        rec["outcome"] = "raised"
+                        rec["outcome"] = Outcome.RAISED
                         rec["error"] = (raised[0].get("error") or "")[:200]
                     else:
                         sc = [score(target,
@@ -1054,20 +1055,21 @@ def run_variance(client, target, pages, refs, args):
                         rec["recall_mean"] = sum(rr) / len(rr)
                         rec["precision_min"] = min(pp)
                         rec["pages_scored"] = len(sc)
-                        rec["outcome"] = ("perfect"
+                        rec["outcome"] = (Outcome.PERFECT
                                           if min(rr) == 1.0 and min(pp) == 1.0
-                                          else "imperfect")
-        draws.append(rec)
+                                          else Outcome.IMPERFECT)
+        drawn = DrawRecord(**rec)
+        draws.append(drawn)
         print("      draw %2d  %-12s %5d bytes  out=%-6s $%.4f%s"
-              % (d, rec["outcome"], rec.get("bytes", 0),
-                 rec.get("output_tokens", "-"), rec.get("usd", 0.0),
-                 "  (replayed)" if rec.get("cached") else ""))
+              % (d, drawn.outcome, drawn.bytes or 0,
+                 drawn.output_tokens, drawn.spend(),
+                 "  (replayed)" if drawn.cached else ""))
         # Saved after every draw: a key that dies at draw 14 of 20 must leave
         # 14 measurements behind, not nothing.
-        save_variance(target, args, draws, usd)
+        save_variance(target, cfg, draws, usd)
 
-    ok = sum(1 for r in draws if r.get("outcome") == "perfect")
-    n = sum(1 for r in draws if r.get("outcome") != "not_attempted")
+    ok = sum(1 for r in draws if r.outcome is Outcome.PERFECT)
+    n = sum(1 for r in draws if r.attempted())
     lo, hi = wilson(ok, n)
     print("    %s x %s: %d/%d perfect   rate %.2f   95%% CI [%.3f, %.3f]"
           "   $%.4f" % (target.key, tier, ok, n,
@@ -1075,7 +1077,7 @@ def run_variance(client, target, pages, refs, args):
     return draws, usd
 
 
-def save_variance(target, args, draws, usd):
+def save_variance(target, cfg, draws, usd):
     """Merge this cell into data/infer/variance.json, keyed by `cell_key`."""
     path = os.path.join(OUT, "variance.json")
     prior = {}
@@ -1085,23 +1087,23 @@ def save_variance(target, args, draws, usd):
         except ValueError:
             prior = {}
     cells = prior.get("cells", {})
-    ok = sum(1 for r in draws if r.get("outcome") == "perfect")
-    n = sum(1 for r in draws if r.get("outcome") != "not_attempted")
+    ok = sum(1 for r in draws if r.outcome is Outcome.PERFECT)
+    n = sum(1 for r in draws if r.attempted())
     lo, hi = wilson(ok, n)
     counts = {}
     for r in draws:
-        counts[r.get("outcome")] = counts.get(r.get("outcome"), 0) + 1
-    cells[cell_key(target.key, args.synth_model, args)] = {
-        "target": target.key, "model": args.synth_model,
-        "synth_hint": bool(args.synth_hint),
+        counts[str(r.outcome)] = counts.get(str(r.outcome), 0) + 1
+    cells[cell_key(target.key, cfg.synth_model, cfg)] = {
+        "target": target.key, "model": cfg.synth_model,
+        "synth_hint": bool(cfg.synth_hint),
         "draws_attempted": n, "perfect": ok,
         "rate": (float(ok) / n) if n else None,
         "ci95": [round(lo, 4), round(hi, 4)],
         "outcomes": counts, "usd": round(usd, 6),
-        "synth_tokens": args.synth_tokens,
-        "synth_window": args.synth_window,
+        "synth_tokens": cfg.synth_tokens,
+        "synth_window": cfg.synth_window,
         "temperature": "1.0 (pinned by extended thinking)",
-        "detail": draws,
+        "detail": [r.to_dict() for r in draws],
     }
     with io.open(path, "w", encoding="utf-8") as fh:
         fh.write(json.dumps({"cells": cells,
@@ -1112,7 +1114,7 @@ def save_variance(target, args, draws, usd):
                             indent=1, sort_keys=True, default=str))
 
 
-def run_cells(client, args):
+def run_cells(client, args, cfg):
     """Run an explicit target x model x draws allocation in one session.
 
     The point of one session is the budget. `Budget` accumulates `spent` per
@@ -1125,29 +1127,17 @@ def run_cells(client, args):
     cheap cell that failed, fewest to the expensive cell already known to
     work.
     """
-    spec = []
-    for cell in args.cells.split(","):
-        # Split off the target at the first colon and the draw count at the
-        # last, rather than splitting on every colon: an OpenRouter model id
-        # may contain one itself, as in `openai/gpt-oss-120b:batch`, and a
-        # three-way split would reject the cheapest models on the menu.
-        cell = cell.strip()
-        if cell.count(":") < 2:
-            raise SystemExit("bad --cells entry %r, want target:model:draws"
-                             % cell)
-        tkey, rest = cell.split(":", 1)
-        model, draws = rest.rsplit(":", 1)
-        try:
-            n = int(draws)
-        except ValueError:
-            raise SystemExit("bad draw count %r in --cells entry %r"
-                             % (draws, cell)) from None
-        spec.append((tkey, model, n))
+    try:
+        spec = [CellSpec.parse(c, cfg.synth_hint)
+                for c in args.cells.split(",")]
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
 
     loaded = {}
     total_worst = 0.0
     print("\nallocation")
-    for tkey, model, n in spec:
+    for cell in spec:
+        tkey = cell.target
         if tkey not in loaded:
             target = TARGETS[tkey]
             pages = corpus(target)
@@ -1164,37 +1154,32 @@ def run_cells(client, args):
                   % (tkey, len(pages), sum(len(v) for v in refs.values()),
                      len(checks) - len(bad), len(checks)))
         target, pages, refs = loaded[tkey]
-        saved = args.synth_model
-        args.synth_model = model
         try:
-            worst = plan(target, pages, refs, args)["synth_usd"] * n
+            worst = (plan(target, pages, refs, cfg.for_cell(cell))["synth_usd"]
+                     * cell.draws)
         except infer.Refused as e:
             # An unpriced model is a refusal, not a crash. It is the most
             # likely thing to be wrong about a hand-typed --cells line, and a
             # traceback buries the one sentence that says how to fix it.
             raise SystemExit("%s Nothing has been sent." % e) from None
-        finally:
-            args.synth_model = saved
         total_worst += worst
         print("  %-9s %-26s %2d draws   <= $%.2f worst case"
-              % (tkey, model, n, worst))
+              % (tkey, cell.model, cell.draws, worst))
     print("  %-37s %s   <= $%.2f worst case, ceiling $%.2f"
-          % ("TOTAL", sum(n for _, _, n in spec), total_worst,
+          % ("TOTAL", sum(c.draws for c in spec), total_worst,
              args.max_spend))
     if not args.run:
         print("\n  dry run - nothing sent. Add --run.")
         return
 
-    for tkey, model, n in spec:
-        target, pages, refs = loaded[tkey]
-        args.synth_model = model
-        args.draws = n
-        print("\n=== %s x %s, %d draws" % (tkey, model, n))
-        run_variance(client, target, pages, refs, args)
+    for cell in spec:
+        target, pages, refs = loaded[cell.target]
+        print("\n=== %s x %s, %d draws" % (cell.target, cell.model, cell.draws))
+        run_variance(client, target, pages, refs, cfg.for_cell(cell))
 
     rows = client.ledger.rows()
     print("\nledger: %d calls, $%.4f lifetime"
-          % (len(rows), sum(r.get("usd", 0.0) for r in rows)))
+          % (len(rows), sum(r.usd for r in rows)))
     print("this session: $%.4f of $%.2f ceiling"
           % (client.budget.spent, client.budget.ceiling))
 
@@ -1317,8 +1302,7 @@ def variance_report():
           % ("cell", "n", "perfect", "s-part", "s-empty", "loud",
              "success 95% CI", "silent"))
     for key, c in sorted(cells.items()):
-        det = [d for d in c["detail"]
-               if d.get("outcome") != "not_attempted"]
+        det = [d for d in draws_of(c) if d.attempted()]
         if not det:
             continue
         counts = dict.fromkeys(ORDER, 0)
@@ -1342,7 +1326,7 @@ def variance_report():
     # goes wrong, does it say so, or does it hand back a quiet zero.
     allsil = allfail = alln = 0
     for c in cells.values():
-        for d in c["detail"]:
+        for d in draws_of(c):
             m = failure_mode(d)
             if m == "not_attempted":
                 continue
@@ -1388,11 +1372,10 @@ def variance_pool(target_key, model=None):
         if model and cell.get("model") != model:
             continue
         tier = infer.short_model(cell["model"])
-        for d in cell.get("detail", []):
-            if d.get("outcome") == "perfect" and d.get("source"):
-                if os.path.exists(d["source"]):
-                    out.append(("draw %s d%02d" % (tier, d["draw"]),
-                                d["source"]))
+        for d in draws_of(cell):
+            if d.outcome is Outcome.PERFECT and d.source:
+                if os.path.exists(d.source):
+                    out.append(("draw %s d%02d" % (tier, d.draw), d.source))
     return out
 
 
@@ -1593,16 +1576,16 @@ def summarize_drift(report):
                                             lo, hi))
 
 
-def run_target(client, target, pages, refs, args, rep):
+def run_target(client, target, pages, refs, cfg, rep):
     # ---- arm S ---------------------------------------------------------
-    win, frac, _at = window(read(pages[0][1]), args.synth_window)
-    tier = infer.short_model(args.synth_model)
-    text, usage, meta = client.message(
-        args.synth_model, synth_system(args),
+    win, frac, _at = window(read(pages[0][1]), cfg.synth_window)
+    tier = infer.short_model(cfg.synth_model)
+    reply = client.message(
+        cfg.synth_model, synth_system(cfg),
         "Portal page excerpt (one page of the result grid, stripped of "
         "scripts, styles and non-structural attributes):\n\n" + win,
-        args.synth_tokens, "synthesis", thinking=True, tag=target.key)
-    src = extract_block(text, CODEBLOCK, "def extract(")
+        cfg.synth_tokens, "synthesis", thinking=True, tag=target.key)
+    src = extract_block(reply.text, CODEBLOCK, "def extract(")
     # Keyed by model: a second tier's extractor must not overwrite the first's,
     # or the two are not comparable afterwards and the cheap run has destroyed
     # the artifact the expensive one produced.
@@ -1613,13 +1596,13 @@ def run_target(client, target, pages, refs, args, rep):
     print("    arm S: %d bytes, imports %s%s"
           % (len(src), ", ".join(imports) or "nothing",
              ("; REFUSED: " + "; ".join(problems)) if problems else ""))
-    rep["arm_s"] = {"model": args.synth_model, "usd": meta["usd"],
-                    "cached": meta["cached"], "source": path,
+    rep["arm_s"] = {"model": cfg.synth_model, "usd": reply.usd,
+                    "cached": reply.cached, "source": path,
                     "bytes": len(src), "imports": imports,
                     "audit_problems": problems, "window_frac": frac,
-                    "truncated": meta.get("truncated"),
-                    "input_tokens": usage.get("input_tokens", 0),
-                    "output_tokens": usage.get("output_tokens", 0)}
+                    "truncated": reply.truncated,
+                    "input_tokens": reply.usage.input_tokens,
+                    "output_tokens": reply.usage.output_tokens}
     if not problems:
         res, err = run_synth(path, [q for _, q in stripped_corpus(target,
                                                                   pages)])
@@ -1645,22 +1628,22 @@ def run_target(client, target, pages, refs, args, rep):
     # the truncation, and the question of whether direct extraction quietly
     # drops records once a page is long is one of the things worth knowing.
     d_scores, d_usd = [], 0.0
-    for fn, p in pages[:args.direct_pages]:
+    for fn, p in pages[:cfg.direct_pages]:
         cap = direct_budget(len(refs[fn]))
-        text, usage, meta = client.message(
-            args.direct_model, DIRECT_SYSTEM,
+        reply = client.message(
+            cfg.direct_model, DIRECT_SYSTEM,
             "Portal page (stripped of scripts, styles and non-structural "
             "attributes):\n\n" + strip(read(p)),
             cap, "extraction", tag="%s/%s" % (target.key, fn))
-        d_usd += meta["usd"]
+        d_usd += reply.usd
         try:
-            rows = json.loads(extract_block(text, JSONBLOCK))
+            rows = json.loads(extract_block(reply.text, JSONBLOCK))
         except ValueError as e:
             d_scores.append({"page": fn, "error": "bad JSON: %s" % e,
-                             "truncated": meta.get("truncated"),
-                             "usd": meta["usd"]})
+                             "truncated": reply.truncated,
+                             "usd": reply.usd})
             print("    arm D: %s -> unparseable output (truncated=%s)"
-                  % (fn, meta.get("truncated")))
+                  % (fn, reply.truncated))
             continue
         if not isinstance(rows, list):
             # Valid JSON that is not an array. `null` would crash the scorer
@@ -1670,20 +1653,20 @@ def run_target(client, target, pages, refs, args, rep):
             d_scores.append({"page": fn,
                              "error": "not a JSON array: %s"
                                       % type(rows).__name__,
-                             "truncated": meta.get("truncated"),
-                             "usd": meta["usd"]})
+                             "truncated": reply.truncated,
+                             "usd": reply.usd})
             print("    arm D: %s -> output was %s, not an array"
                   % (fn, type(rows).__name__))
             continue
         sc = score(target, refs[fn], rows)
-        sc.update({"page": fn, "usd": meta["usd"],
-                   "truncated": meta.get("truncated"),
-                   "input_tokens": usage.get("input_tokens", 0),
-                   "output_tokens": usage.get("output_tokens", 0)})
+        sc.update({"page": fn, "usd": reply.usd,
+                   "truncated": reply.truncated,
+                   "input_tokens": reply.usage.input_tokens,
+                   "output_tokens": reply.usage.output_tokens})
         d_scores.append(sc)
     rep["arm_d"] = {"usd": d_usd, "pages": d_scores}
     summarize("arm D", [s for s in d_scores if "recall" in s],
-              args.direct_pages)
+              cfg.direct_pages)
 
 
 def summarize(label, scores, n_pages):

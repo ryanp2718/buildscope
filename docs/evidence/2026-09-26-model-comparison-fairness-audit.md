@@ -207,20 +207,31 @@ is pinned by tests, which is how the stale figures survived.
   and CI runs no type checker. The SDKs return typed response objects that are converted to plain dicts
   immediately (`infer.py:519`, `infer.py:902`). Every later read is `.get("field", 0) or 0`, so a
   misspelled field reads as zero instead of raising: the silent-wrong-number failure this project
-  exists to catch.
+  exists to catch. Fixed 2026-09-26 for the inference layer and the variance records: `Usage`,
+  `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec` and `RunConfig` are frozen dataclasses, the
+  ledger and draw readers reject unknown fields, and CI runs mypy in strict mode on
+  `permits/{cells,infer,models,stats,telemetry}.py`. The rest of `permits/` and `scripts/` is not
+  yet type-checked.
 - **Model facts are spread across seven places.** `PRICES`, `OPENROUTER_PRICES`,
   `OPENROUTER_REASONING`, `ADAPTIVE_THINKING`, `OPENROUTER_FREE`, the slash test in `provider_for`,
   and `short_model`. F2 is a direct consequence: capability is a hand-kept set rather than a field on
-  the model.
+  the model. Fixed 2026-09-26: `permits/models.py` holds one `ModelSpec` per model (provider, tier,
+  ceiling and list price, reasoning control, catalogue reasoning support, sampling, release date,
+  short name), and the seven are derived from it. The registry reproduces the requests already sent,
+  so F2 itself is still open. `tests/test_models.py` pins the three affected ids so the set can only
+  shrink.
 - **Mutable run configuration.** `run_cells` overwrites `args.synth_model` and `args.draws` and does
   not restore them (`scripts/conformance.py:1167-1191`), and the argparse namespace is threaded into
-  helpers such as `synth_system(args)` and `cell_key(..., args)`.
+  helpers such as `synth_system(args)` and `cell_key(..., args)`. Fixed 2026-09-26: each cell runs
+  on its own copy of a frozen `RunConfig`.
 - **Filename bug on Windows.** `short_model("openai/gpt-oss-120b:batch")` keeps the colon. On NTFS,
   `stjohns_gpt-oss-120b:batch_d00.py` writes an alternate data stream of a file named
   `stjohns_gpt-oss-120b`, not a file. `test_short_model_is_filename_safe` checks only for `/`.
+  Fixed 2026-09-26: short names are registry fields (`gpt-oss-120b-batch`), and the test rejects
+  every character NTFS reserves. No artifact on disk was named with a colon, so nothing moved.
 - **Non-atomic cache writes.** `_store` (`infer.py:638`) writes the response file in place. A crash
   mid-write leaves truncated JSON that fails to load every time that key is hit afterwards.
-  `cached()` and `Ledger.rows()` also leave file handles open.
+  `cached()` and `Ledger.rows()` also leave file handles open (closed 2026-09-26, with step 1).
 - **The price ceiling is already too low for the two newest models.** The reconciliation test in
   the working tree (`test_no_paid_call_billed_more_than_the_table_projected`) fails on 4 paid rows
   from 2026-09-25: glm-5.3-flash billed 1.67x its ceiling-table projection, and deepseek-v4-flash
@@ -347,10 +358,10 @@ Anthropic.
 
 | step | work | spends money |
 |---|---|---|
-| 1 | Model registry (`ModelSpec`: provider, pinned id, tier, prices, reasoning control and default, sampling, release date) replacing the seven scattered tables; frozen dataclasses for `Usage`, `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec`, `RunConfig`; outcomes as a `StrEnum`; a type checker in CI, ratcheted file by file from `permits/infer.py` | no |
+| 1 | (Done 2026-09-26: `ModelSpec` registry in `permits/models.py` replacing the seven tables; frozen `Usage`, `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec`, `RunConfig`; `Outcome` as a `StrEnum`; mypy strict in CI on five `permits/` files. Every cached request hashes as before, and a replay of four cells re-scores every draw identically.) | no |
 | 2 | Streaming on OpenRouter, `httpx.Timeout` plus a wall-clock limit, the three-way error split, `infra_error` outcome, latency fields | no |
 | 3 | Reasoning, sampling and routing policies above, driven by the registry; `reasoning_tokens` and serving host in the ledger. (Ceiling rates for glm-5.3-flash and deepseek-v4-flash: done 2026-09-26.) | no |
-| 4 | `short_model` strips `:`; atomic cache writes; a lock on `variance.json`; closed file handles | no |
+| 4 | Atomic cache writes; a lock on `variance.json`; closed file handles. (`short_model` and the `cached()` / `Ledger.rows()` handles: done with step 1.) | no |
 | 5 | (Done 2026-09-26: R1 corrected in the report, the code comment and the test docstring; the report's cells pinned in `tests/test_model_stats.py`.) | no |
 | 6 | Pre-register roster, prompt hash, development/test split, n per cell and success criteria; dry-run the cost projection; then run | yes |
 | 7 | Run generated extractors in a container with no network | no, deferred |

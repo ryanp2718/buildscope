@@ -22,6 +22,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
+from permits import infer                                     # noqa: E402
+from permits.cells import DrawRecord, Outcome                 # noqa: E402
 from permits.stats import failure_mode, pctile, wilson       # noqa: E402
 
 STATS = os.path.join(ROOT, "data", "infer", "model_stats.json")
@@ -53,26 +55,29 @@ class TestEstimators(unittest.TestCase):
     def test_an_empty_result_is_silent_not_loud(self):
         """The distinction the whole failure taxonomy rests on: a module that
         returns `[]` does not stop a pipeline."""
-        self.assertEqual(
-            failure_mode({"outcome": "imperfect", "recall_min": 0.0}),
-            "silent_empty")
-        self.assertEqual(
-            failure_mode({"outcome": "imperfect", "recall_min": 0.4}),
-            "silent_partial")
-        self.assertEqual(failure_mode({"outcome": "raised"}), "loud")
+        def d(outcome, recall_min=None):
+            return DrawRecord(0, "m/x", "clarkco", Outcome(outcome),
+                              recall_min=recall_min)
+        self.assertEqual(failure_mode(d("imperfect", 0.0)), "silent_empty")
+        self.assertEqual(failure_mode(d("imperfect", 0.4)), "silent_partial")
+        self.assertEqual(failure_mode(d("raised")), "loud")
 
 
 def _draw(i, out, perfect, cached=False, usd=0.01):
-    return {"draw": i, "output_tokens": out, "cached": cached,
+    return {"draw": i, "model": "m/x", "target": "clarkco",
+            "output_tokens": out, "cached": cached, "bytes": 100,
+            "truncated": False,
             "usd": 0.0 if cached else usd,
             "outcome": "perfect" if perfect else "imperfect",
             "recall_min": 1.0 if perfect else 0.0}
 
 
 def _buy(i, out, usd=0.01, model="m/x"):
-    return {"call_class": "synthesis", "tag": "clarkco/var", "model": model,
-            "draw": i, "output_tokens": out, "usd": usd, "ok": True,
-            "seconds": 1.0}
+    return infer.LedgerRow(
+        at="2026-09-26T00:00:00Z", call_class="synthesis", tag="clarkco/var",
+        model=model, provider="openrouter", draw=i, ok=True, usd=usd,
+        seconds=1.0, stop_reason="end_turn", output_tokens=out,
+        usd_reported=True)
 
 
 class TestCellsAreConditions(unittest.TestCase):

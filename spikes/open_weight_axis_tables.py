@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import conformance as C                          # noqa: E402
 from permits import infer                        # noqa: E402
+from permits.cells import DrawRecord             # noqa: E402
 from permits.stats import failure_mode           # noqa: E402
 
 OUT = os.path.join(ROOT, "data", "infer")
@@ -60,7 +61,7 @@ def clark_regimes(v):
         for d in cell["detail"]:
             if d.get("outcome") == "not_attempted":
                 continue
-            m = failure_mode(d)
+            m = failure_mode(DrawRecord.from_dict(d))
             # `refused` and `no_code` are the model breaking the output
             # contract - no top-level extract(), or no code at all - which is
             # neither a loud nor a silent extraction failure.

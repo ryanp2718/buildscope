@@ -35,6 +35,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from permits import infer                                   # noqa: E402
+from permits.cells import draws_of                           # noqa: E402
 from permits.stats import failure_mode, pctile, wilson      # noqa: E402
 
 OUT = os.path.join(ROOT, "data", "infer")
@@ -46,8 +47,15 @@ def short(model):
     """`claude-haiku-4-5-20251001` -> `haiku-4-5`, `qwen/qwen3-coder` ->
     `qwen3-coder`. Delegated so the two tables that name models agree; this
     file had its own copy, which predated the second provider and rendered a
-    vendor-prefixed id at full width straight through the column."""
-    return infer.short_model(model)
+    vendor-prefixed id at full width straight through the column.
+
+    An id with no registry entry prints as itself. This only reads records
+    already on disk, and a report that refuses to print a row is worse than
+    one that prints it wide."""
+    try:
+        return infer.short_model(model)
+    except infer.Refused:
+        return model
 
 
 def load(name):
@@ -59,11 +67,8 @@ def load(name):
 
 
 def read_ledger(path):
-    """Ledger rows as dicts, in file order. Line position is the row id."""
-    if not os.path.exists(path):
-        return []
-    with io.open(path, encoding="utf-8") as fh:
-        return [json.loads(line) for line in fh if line.strip()]
+    """Ledger rows in file order. Line position is the row id."""
+    return infer.Ledger(path).rows() if os.path.exists(path) else []
 
 
 def condition(cell):
@@ -98,35 +103,35 @@ def purchases(v, ledger):
     """
     index = collections.defaultdict(list)
     for i, r in enumerate(ledger):
-        tag = r.get("tag") or ""
-        if (r.get("call_class") == "synthesis" and tag.endswith("/var")
-                and r.get("ok", True)):
-            index[(r.get("model"), tag.split("/")[0], r.get("draw"),
-                   r.get("output_tokens"))].append(i)
+        if _is_variance_purchase(r):
+            index[(r.model, r.tag.split("/")[0], r.draw,
+                   r.output_tokens)].append(i)
     claimed, out = set(), {}
     for key, cell in sorted(v["cells"].items()):
-        for d in cell["detail"]:
-            if failure_mode(d) == "not_attempted":
+        for d in draws_of(cell):
+            if not d.attempted():
                 continue
             hits = [i for i in index.get((cell["model"], cell["target"],
-                                          d["draw"], d.get("output_tokens")),
-                                         [])
+                                          d.draw, d.output_tokens), [])
                     if i not in claimed]
             if hits:
                 claimed.add(hits[-1])
-                out[(key, d["draw"])] = hits[-1]
+                out[(key, d.draw)] = hits[-1]
             else:
-                out[(key, d["draw"])] = None
+                out[(key, d.draw)] = None
     return out
+
+
+def _is_variance_purchase(r):
+    return (r.call_class == "synthesis" and r.tag.endswith("/var")
+            and r.ok)
 
 
 def unclaimed(v, ledger):
     """Variance synthesis rows that no scored draw was bought by."""
     used = {i for i in purchases(v, ledger).values() if i is not None}
     return [i for i, r in enumerate(ledger)
-            if r.get("call_class") == "synthesis"
-            and (r.get("tag") or "").endswith("/var")
-            and r.get("ok", True) and i not in used]
+            if _is_variance_purchase(r) and i not in used]
 
 
 def rows_from_variance(v, ledger=()):
@@ -143,9 +148,9 @@ def rows_from_variance(v, ledger=()):
     out = []
     for key, cell in v["cells"].items():
         target, model, cond = cell["target"], cell["model"], condition(cell)
-        for d in cell["detail"]:
+        for d in draws_of(cell):
             mode = failure_mode(d)
-            uid = "d%02d" % d["draw"]
+            uid = "d%02d" % d.draw
             if mode == "not_attempted":
                 metrics = [("attempted", 0)]
             else:
@@ -154,17 +159,17 @@ def rows_from_variance(v, ledger=()):
                     ("perfect", 1 if mode == "perfect" else 0),
                     ("silent_failure", 1 if mode.startswith("silent") else 0),
                     ("loud_failure", 1 if mode == "loud" else 0),
-                    ("usd", d.get("usd", 0.0)),
-                    ("output_tokens", d.get("output_tokens", 0)),
-                    ("source_bytes", d.get("bytes", 0)),
-                    ("truncated", 1 if d.get("truncated") else 0),
+                    ("usd", d.spend()),
+                    ("output_tokens", d.output_tokens),
+                    ("source_bytes", d.bytes),
+                    ("truncated", 1 if d.truncated else 0),
                 ]
-                i = bought.get((key, d["draw"]))
+                i = bought.get((key, d.draw))
                 if i is None:
                     metrics.append(("purchase_unknown", 1))
                 else:
-                    metrics.append(("usd_purchase", ledger[i].get("usd", 0.0)))
-                    metrics.append(("seconds", ledger[i].get("seconds")))
+                    metrics.append(("usd_purchase", ledger[i].usd))
+                    metrics.append(("seconds", ledger[i].seconds))
             for metric, value in metrics:
                 out.append({"experiment": "variance", "target": target,
                             "model": model, "condition": cond,
@@ -198,20 +203,23 @@ def rows_from_drift(dr):
 def rows_from_ledger(ledger):
     """One row per API call. `ok` is absent on rows written before
     2026-09-22 and reads as a success, which is what it was - the client of
-    the day could not record anything else."""
+    the day could not record anything else (`LedgerRow.from_dict`)."""
     out = []
     for i, r in enumerate(ledger):
-        target = (r.get("tag") or "").split("/")[0]
-        for metric in ("usd", "seconds", "input_tokens", "output_tokens",
-                       "cache_read_input_tokens"):
+        target = r.tag.split("/")[0]
+        for metric, value in (("usd", r.usd), ("seconds", r.seconds),
+                              ("input_tokens", r.input_tokens),
+                              ("output_tokens", r.output_tokens),
+                              ("cache_read_input_tokens",
+                               r.cache_read_input_tokens)):
             out.append({"experiment": "ledger", "target": target,
-                        "model": r.get("model", "?"), "condition": "",
+                        "model": r.model, "condition": "",
                         "unit": "call", "unit_id": "c%04d" % i,
-                        "metric": metric, "value": r.get(metric, 0)})
+                        "metric": metric, "value": value})
         out.append({"experiment": "ledger", "target": target,
-                    "model": r.get("model", "?"), "condition": "",
+                    "model": r.model, "condition": "",
                     "unit": "call", "unit_id": "c%04d" % i, "metric": "ok",
-                    "value": 1 if r.get("ok", True) else 0})
+                    "value": 1 if r.ok else 0})
     return out
 
 
@@ -240,7 +248,7 @@ def aggregate(rows):
                     if r["experiment"] == "variance"})
     out = {}
     for target, model, cond in cells:
-        def var(metric):
+        def var(metric, target=target, model=model, cond=cond):
             return pick(rows, "variance", metric, target, model, cond)
         att = var("attempted")
         perf = var("perfect")
@@ -381,7 +389,7 @@ def main():
             print("\n  %d variance calls ($%.4f) bought a response no scored "
                   "draw uses:\n  superseded by a later ceiling, or bought "
                   "twice. Not counted in any cell."
-                  % (len(spare), sum(ledger[i].get("usd", 0.0)
+                  % (len(spare), sum(ledger[i].usd
                                      for i in spare)))
 
 

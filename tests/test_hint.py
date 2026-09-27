@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from permits import infer                                     # noqa: E402
+from permits import infer, models                                 # noqa: E402
 
 
 def args(**kw):
@@ -140,7 +140,7 @@ class TestTheArmsAreScoredApart(unittest.TestCase):
         # the filenames would overwrite them in place.
         import inspect
         src = inspect.getsource(self.C.run_variance)
-        self.assertIn('"_hint" if args.synth_hint else ""', src)
+        self.assertIn('"_hint" if cfg.synth_hint else ""', src)
 
 
 class TestTheProjectionPricesWhatIsSent(unittest.TestCase):
@@ -172,15 +172,16 @@ class TestTheNewCheapTierIsDeclared(unittest.TestCase):
 
     CHEAP = ("z-ai/glm-5.3-flash", "deepseek/deepseek-v4-flash")
 
-    def test_both_are_priced(self):
+    def test_both_are_registered(self):
         for m in self.CHEAP:
-            self.assertIn(m, infer.OPENROUTER_PRICES)
+            self.assertIn(m, models.REGISTRY)
 
     def test_both_are_declared_reasoning(self):
         # Probed 2026-09-25: both return a populated `reasoning` field and
         # non-zero `reasoning_tokens` with no reasoning parameter sent.
         for m in self.CHEAP:
-            self.assertIn(m, infer.OPENROUTER_REASONING)
+            self.assertIs(models.get(m).reasoning,
+                          models.ReasoningControl.EFFORT)
 
     def test_both_therefore_get_the_headroom(self):
         for m in self.CHEAP:
@@ -192,11 +193,11 @@ class TestTheNewCheapTierIsDeclared(unittest.TestCase):
         # sit above the published rate it was taken from.
         for m, lst in ((self.CHEAP[0], (0.045, 0.140)),
                        (self.CHEAP[1], (0.047, 0.095))):
-            pin, pout = infer.OPENROUTER_PRICES[m]
+            pin, pout = infer.price(m)
             self.assertGreater(pin, lst[0])
             self.assertGreater(pout, lst[1])
 
-    def test_the_slash_still_routes_them_to_openrouter(self):
+    def test_they_route_to_openrouter(self):
         for m in self.CHEAP:
             self.assertEqual(infer.provider_for(m), "openrouter")
 

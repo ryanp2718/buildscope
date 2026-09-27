@@ -9,11 +9,14 @@ copy of an interval estimator, which is how two reports end up quoting
 different confidence bounds for the same count.
 """
 import math
+from collections.abc import Iterable
+
+from permits.cells import DrawRecord, Outcome
 
 ORDER = ["perfect", "silent_partial", "silent_empty", "loud"]
 
 
-def wilson(x, n, z=1.96):
+def wilson(x: int, n: int, z: float = 1.96) -> tuple[float, float]:
     """95% score interval for x successes in n draws.
 
     A bare 3/3 reads as certainty. It is not: the interval is [0.31, 1.00].
@@ -30,7 +33,7 @@ def wilson(x, n, z=1.96):
     return (max(0.0, c - h), min(1.0, c + h))
 
 
-def pctile(values, q):
+def pctile(values: Iterable[float | None], q: float) -> float | None:
     """Nearest-rank percentile. No interpolation, no numpy.
 
     Nearest-rank because these samples are small - a p95 over 20 latencies is
@@ -44,7 +47,7 @@ def pctile(values, q):
     return vs[k]
 
 
-def failure_mode(d):
+def failure_mode(d: DrawRecord) -> str:
     """Classify one synthesis draw.
 
     The distinction that matters operationally is silent versus loud, not
@@ -53,12 +56,12 @@ def failure_mode(d):
     discovered a month later, which is the failure family this whole project
     keeps meeting.
     """
-    o = d.get("outcome")
-    if o == "perfect":
+    if d.outcome is Outcome.PERFECT:
         return "perfect"
-    if o in ("raised", "exec_error", "refused", "no_code", "not_attempted"):
-        return "loud" if o != "not_attempted" else "not_attempted"
-    r = d.get("recall_min")
-    if r == 0.0:
+    if d.outcome is Outcome.NOT_ATTEMPTED:
+        return "not_attempted"
+    if d.outcome is not Outcome.IMPERFECT:
+        return "loud"
+    if d.recall_min == 0.0:
         return "silent_empty"
     return "silent_partial"

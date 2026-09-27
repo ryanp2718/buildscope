@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 307 tests, ~18s, no network
+python scripts/run_tests.py           # everything: 328 tests, ~18s, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -13,6 +13,10 @@ run, which is the only property that makes a suite actually get run. The decisio
 [ADR-0016](../adr/0016-tests-are-replay-over-the-raw-store.md).
 
 `check_docs.py` and `check_identity.py` are invoked as tests, so `run_tests.py` is the single command.
+
+CI also runs `ruff check .` and `mypy`. mypy is strict and covers only the files listed under
+`[tool.mypy]` in `pyproject.toml`; a file joins that list once it passes, starting from the inference
+layer.
 
 ## What is being defended against
 
@@ -43,6 +47,8 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_structure.py` | the `permits/`/`scripts/` boundary ratchet, declared-dependency rule, adapters stay thin | 23 scripts importing the capture layer |
 | `test_capture.py` | robots, politeness, the budget ceiling, schema migration, the verdict rules, and D1's page-and-row invariant | the unrecorded page it found on its first run |
 | `test_providers.py` | provider routing, the OpenAI/Anthropic usage translation, which figure gets billed, and the golden cache keys | the `stream` cache-key bug, and four ways a second wire format can produce a wrong number |
+| `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, and the known reasoning gap that may only shrink | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
+| `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
 
 ## Four ideas worth knowing before editing these
 

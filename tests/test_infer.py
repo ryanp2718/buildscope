@@ -21,6 +21,7 @@ The rest exist because they compute dollars. `cost()` is the only thing
 standing between a `usage` block and a figure that goes in an evidence report.
 """
 import io
+import json
 import os
 import sys
 import unittest
@@ -50,43 +51,41 @@ class TestPricing(unittest.TestCase):
         """The rates are quoted from DESIGN.md section 6. If they are edited
         here without editing there, a cost figure and its stated source
         disagree - which is the re-quoting failure in its cheapest form."""
-        self.assertEqual(infer.PRICES["claude-opus-5"], (5.0, 25.0))
-        self.assertEqual(infer.PRICES["claude-sonnet-5"], (2.0, 10.0))
-        self.assertEqual(infer.PRICES["claude-haiku-4-5-20251001"], (1.0, 5.0))
+        self.assertEqual(infer.price("claude-opus-5"), (5.0, 25.0))
+        self.assertEqual(infer.price("claude-sonnet-5"), (2.0, 10.0))
+        self.assertEqual(infer.price("claude-haiku-4-5-20251001"), (1.0, 5.0))
         self.assertIn("2026-06-24", infer.PRICES_AS_OF)
 
     def test_cost_arithmetic(self):
-        usd = infer.cost("claude-opus-5",
-                         {"input_tokens": 1000000, "output_tokens": 0})
+        usd = infer.cost("claude-opus-5", infer.Usage(input_tokens=1000000))
         self.assertAlmostEqual(usd, 5.0, places=6)
-        usd = infer.cost("claude-opus-5",
-                         {"input_tokens": 0, "output_tokens": 1000000})
+        usd = infer.cost("claude-opus-5", infer.Usage(output_tokens=1000000))
         self.assertAlmostEqual(usd, 25.0, places=6)
 
     def test_cache_read_bills_at_a_tenth(self):
-        full = infer.cost("claude-opus-5", {"input_tokens": 100000})
+        full = infer.cost("claude-opus-5", infer.Usage(input_tokens=100000))
         cached = infer.cost("claude-opus-5",
-                            {"cache_read_input_tokens": 100000})
+                            infer.Usage(cache_read_input_tokens=100000))
         self.assertAlmostEqual(cached, full * 0.1, places=8)
 
     def test_cache_write_bills_at_a_premium(self):
-        full = infer.cost("claude-opus-5", {"input_tokens": 100000})
+        full = infer.cost("claude-opus-5", infer.Usage(input_tokens=100000))
         write = infer.cost("claude-opus-5",
-                           {"cache_creation_input_tokens": 100000})
+                           infer.Usage(cache_creation_input_tokens=100000))
         self.assertAlmostEqual(write, full * 1.25, places=8)
 
     def test_missing_cache_fields_are_not_billed_as_input(self):
         """A deployment may omit the cache fields. Treating a missing field as
         a full-price input token would inflate every figure quietly."""
-        self.assertAlmostEqual(
-            infer.cost("claude-opus-5", {"input_tokens": 1000}),
-            infer.cost("claude-opus-5", {"input_tokens": 1000,
-                                         "cache_read_input_tokens": None,
-                                         "cache_creation_input_tokens": None}))
+        self.assertEqual(
+            infer.Usage.from_dict({"input_tokens": 1000}),
+            infer.Usage.from_dict({"input_tokens": 1000,
+                                   "cache_read_input_tokens": None,
+                                   "cache_creation_input_tokens": None}))
 
     def test_an_unpriced_model_is_refused_not_guessed(self):
         with self.assertRaises(infer.Refused):
-            infer.cost("some-future-model", {"input_tokens": 10})
+            infer.cost("some-future-model", infer.Usage(input_tokens=10))
 
 
 class TestBudget(unittest.TestCase):
@@ -218,19 +217,12 @@ class _FakeUsage(object):
         return dict(self.kw)
 
 
-class _FakeBlock(object):
-    type = "text"
-
-    def __init__(self, text):
-        self.text = text
-
-
 class _FakeMessage(object):
     def __init__(self, text, stop_reason="end_turn", **usage):
         self.model = "claude-opus-5"
         self.stop_reason = stop_reason
         self.usage = _FakeUsage(**usage)
-        self.content = [_FakeBlock(text)]
+        self.content = [anthropic.types.TextBlock(type="text", text=text)]
 
 
 class _FakeMessages(object):
@@ -282,9 +274,9 @@ class TestFailedCallsReachTheLedger(unittest.TestCase):
             c.message("claude-opus-5", "s", "u", 100, "synthesis")
         rows = c.ledger.rows()
         self.assertEqual(len(rows), 1)
-        self.assertIs(rows[0]["ok"], False)
-        self.assertEqual(rows[0]["status_code"], 529)
-        self.assertEqual(rows[0]["error_type"], "_Err")
+        self.assertIs(rows[0].ok, False)
+        self.assertEqual(rows[0].status_code, 529)
+        self.assertEqual(rows[0].error_type, "_Err")
 
     def test_a_failed_call_bills_nothing(self):
         """A rejected request is not billed, and a row that claimed
@@ -292,7 +284,7 @@ class TestFailedCallsReachTheLedger(unittest.TestCase):
         c = self.client(_Err("rate limited", 429))
         with self.assertRaises(infer.ApiError):
             c.message("claude-opus-5", "s", "u", 100, "synthesis")
-        self.assertEqual(c.ledger.rows()[0]["usd"], 0.0)
+        self.assertEqual(c.ledger.rows()[0].usd, 0.0)
         self.assertEqual(c.budget.spent, 0.0)
 
     def test_a_refusal_is_not_a_row(self):
@@ -309,29 +301,71 @@ class TestFailedCallsReachTheLedger(unittest.TestCase):
         existed. They are successes - the old client could not write a row
         for anything else."""
         c = self.client(_FakeMessage("ok", input_tokens=10, output_tokens=5))
-        c.ledger.write({"call_class": "synthesis", "usd": 1.0})
+        # The shape of the first rows on disk: no `ok`, `provider`, `draw` or
+        # `usd_reported`.
+        with io.open(c.ledger.path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "at": "2026-09-21T15:42:43Z", "call_class": "synthesis",
+                "tag": "clarkco", "model": "claude-opus-5", "usd": 1.0,
+                "seconds": 60.0, "stop_reason": "end_turn",
+                "input_tokens": 10, "output_tokens": 5,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0}) + "\n")
         c.message("claude-opus-5", "s", "u", 100, "synthesis")
         rows = c.ledger.rows()
-        self.assertTrue(all(r.get("ok", True) for r in rows))
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(r.ok for r in rows))
+        self.assertEqual(rows[0].provider, "anthropic")
+        self.assertEqual(rows[0].draw, 0)
 
     def test_a_success_is_marked_and_priced(self):
         c = self.client(_FakeMessage("hello", input_tokens=1000,
                                      output_tokens=200))
-        text, _usage, _meta = c.message("claude-opus-5", "s", "u", 100,
-                                      "synthesis")
-        self.assertEqual(text, "hello")
+        reply = c.message("claude-opus-5", "s", "u", 100, "synthesis")
+        self.assertEqual(reply.text, "hello")
         row = c.ledger.rows()[0]
-        self.assertIs(row["ok"], True)
-        self.assertGreater(row["usd"], 0)
-        self.assertEqual(row["input_tokens"], 1000)
+        self.assertIs(row.ok, True)
+        self.assertGreater(row.usd, 0)
+        self.assertEqual(row.input_tokens, 1000)
 
     def test_truncation_still_surfaces(self):
         """Kept from the deleted stream tests: a `max_tokens` stop is a
         silently short answer, and the caller has to be told."""
         c = self.client(_FakeMessage("cut", stop_reason="max_tokens",
                                      output_tokens=100))
-        _, _, meta = c.message("claude-opus-5", "s", "u", 100, "synthesis")
-        self.assertTrue(meta["truncated"])
+        reply = c.message("claude-opus-5", "s", "u", 100, "synthesis")
+        self.assertTrue(reply.truncated)
+
+
+class TestTheLedgerFormatIsUnchanged(unittest.TestCase):
+    """`LedgerRow` is a typed view of a file that predates it. Every row on
+    disk has to read, and every row in the current shape has to write back
+    byte for byte, or the typed layer has quietly changed the record of
+    account."""
+
+    def test_every_row_on_disk_reads_and_round_trips(self):
+        path = os.path.join(ROOT, "data", "infer", "ledger.jsonl")
+        if not os.path.exists(path):
+            self.skipTest("no ledger on this checkout")
+        with io.open(path, encoding="utf-8") as fh:
+            lines = [line.strip() for line in fh if line.strip()]
+        current = 0
+        for line in lines:
+            raw = json.loads(line)
+            row = infer.LedgerRow.from_dict(raw)
+            if {"ok", "provider", "draw"} <= set(raw):
+                current += 1
+                self.assertEqual(json.dumps(row.to_dict(), sort_keys=True),
+                                 json.dumps(raw, sort_keys=True))
+        self.assertGreater(current, 150)
+
+    def test_a_misspelled_field_raises(self):
+        """What `.get("field", 0) or 0` turned into a silent zero."""
+        with self.assertRaises(ValueError):
+            infer.LedgerRow.from_dict({
+                "at": "t", "call_class": "synthesis", "tag": "", "draw": 0,
+                "model": "claude-opus-5", "ok": True, "usd": 0.0,
+                "seconds": 0.0, "stop_reason": None, "output_tokns": 5})
 
 
 class TestTransportIsTheVendors(unittest.TestCase):

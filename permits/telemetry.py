@@ -27,7 +27,7 @@ SERVICE_NAME = "permits"
 _configured = False
 
 
-def setup(mode=None):
+def setup(mode: str | None = None) -> trace.Tracer:
     """Install a tracer provider. Idempotent; safe to call from any entry."""
     global _configured
     if _configured:
@@ -39,13 +39,13 @@ def setup(mode=None):
 
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 
     provider = TracerProvider(
         resource=Resource.create({"service.name": SERVICE_NAME}))
     if mode == "console":
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-        exporter = ConsoleSpanExporter()
+        exporter: SpanExporter = ConsoleSpanExporter()
     elif mode == "otlp":
         # Imported here so the base install does not need the extra.
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -59,6 +59,6 @@ def setup(mode=None):
     return trace.get_tracer(SERVICE_NAME)
 
 
-def tracer():
+def tracer() -> trace.Tracer:
     """The tracer, configuring on first use."""
     return setup()

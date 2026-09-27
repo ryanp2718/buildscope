@@ -47,7 +47,7 @@ sys.path.insert(0, ROOT)
 
 import openai                                                # noqa: E402
 
-from permits import infer                                    # noqa: E402
+from permits import infer, models                                 # noqa: E402
 from tests import requires_raw_store                         # noqa: E402
 
 
@@ -172,14 +172,15 @@ class TestTheAnthropicPathIsUnchanged(unittest.TestCase):
 # ------------------------------------------------------------- routing
 class TestProviderRouting(unittest.TestCase):
 
-    def test_a_slash_selects_openrouter(self):
-        for m in ("qwen/qwen3-coder", "openai/gpt-oss-120b:batch",
-                  "deepseek/deepseek-v4-pro"):
-            self.assertEqual(infer.provider_for(m), infer.OPENROUTER)
-
-    def test_a_first_party_id_selects_anthropic(self):
-        for m in infer.PRICES:
-            self.assertEqual(infer.provider_for(m), infer.ANTHROPIC)
+    def test_every_slashed_id_is_registered_to_openrouter(self):
+        """OpenRouter addresses models as `vendor/model` and no Anthropic
+        first-party id contains a slash. The provider is a registry field
+        now, so this checks the registry agrees with the addressing scheme."""
+        for m, s in models.REGISTRY.items():
+            self.assertEqual(s.provider,
+                             infer.OPENROUTER if "/" in m else infer.ANTHROPIC,
+                             m)
+            self.assertEqual(infer.provider_for(m), s.provider)
 
     def test_the_same_question_to_two_providers_is_two_cache_entries(self):
         """Otherwise the second provider reads the first one's answer.
@@ -194,10 +195,18 @@ class TestProviderRouting(unittest.TestCase):
         self.assertNotEqual(a, o)
 
     def test_short_model_is_filename_safe(self):
-        """It names files under `data/infer/synth`; a slash is a directory."""
-        for m in list(infer.OPENROUTER_PRICES) + list(infer.PRICES):
-            self.assertNotIn("/", infer.short_model(m))
-            self.assertTrue(infer.short_model(m))
+        """It names files under `data/infer/synth`. A slash is a directory,
+        and on NTFS a colon writes an alternate data stream of the file named
+        by whatever precedes it, so `gpt-oss-120b:batch` is not a file."""
+        for m in models.REGISTRY:
+            short = infer.short_model(m)
+            self.assertTrue(short, m)
+            self.assertFalse(set(short) & set('<>:"/\\|?*'), m)
+
+    def test_short_names_are_unique(self):
+        """Two models with one short name write to the same files."""
+        shorts = [s.short for s in models.REGISTRY.values()]
+        self.assertEqual(len(shorts), len(set(shorts)))
 
     def test_short_model_did_not_move_for_anthropic(self):
         """Artifacts already on disk are named by it; renaming orphans them."""
@@ -262,30 +271,28 @@ class TestWhatGetsBilled(ClientCase):
         """
         self.install(_FakeResponse(usage=_FakeUsage(
             prompt_tokens=1000, completion_tokens=1000, cost=0.25)))
-        _t, _u, meta = self.client.message(
+        reply = self.client.message(
             "qwen/qwen3-coder", "S", "U", 100, "synthesis")
-        self.assertAlmostEqual(meta["usd"], 0.25)
+        self.assertAlmostEqual(reply.usd, 0.25)
         row = self.rows()[-1]
-        self.assertAlmostEqual(row["usd"], 0.25)
-        self.assertTrue(row["usd_reported"])
+        self.assertAlmostEqual(row.usd, 0.25)
+        self.assertTrue(row.usd_reported)
 
     def test_without_a_reported_cost_the_table_is_used_and_said_so(self):
         """Falling back is fine. Falling back silently is not."""
         self.install(_FakeResponse(usage=_FakeUsage(
             prompt_tokens=1000, completion_tokens=1000)))
-        _t, _u, meta = self.client.message(
+        reply = self.client.message(
             "qwen/qwen3-coder", "S", "U", 100, "synthesis")
-        pin, pout = infer.OPENROUTER_PRICES["qwen/qwen3-coder"]
-        self.assertAlmostEqual(meta["usd"], (1000 * pin + 1000 * pout) / 1e6)
-        self.assertFalse(self.rows()[-1]["usd_reported"])
+        pin, pout = infer.price("qwen/qwen3-coder")
+        self.assertAlmostEqual(reply.usd, (1000 * pin + 1000 * pout) / 1e6)
+        self.assertFalse(self.rows()[-1].usd_reported)
 
-    def test_an_unpriced_model_is_refused_and_names_its_table(self):
-        with self.assertRaises(infer.Refused) as cm:
-            infer.price("nobody/nothing")
-        self.assertIn("OPENROUTER_PRICES", str(cm.exception))
-        with self.assertRaises(infer.Refused) as cm:
-            infer.price("claude-imaginary")
-        self.assertIn("PRICES", str(cm.exception))
+    def test_an_unregistered_model_is_refused_and_says_where_to_add_it(self):
+        for m in ("nobody/nothing", "claude-imaginary"):
+            with self.assertRaises(infer.Refused) as cm:
+                infer.price(m)
+            self.assertIn("permits/models.py", str(cm.exception))
 
     def test_the_budget_guard_uses_the_openrouter_table(self):
         """A ceiling that only knows Anthropic prices is not a ceiling."""
@@ -316,11 +323,6 @@ class TestOpenRouterRequestShape(unittest.TestCase):
         off = self.c.build_chat("qwen/qwen3-coder", "S", "U", 100,
                                 thinking=True)
         self.assertNotIn("reasoning_effort", off)
-
-    def test_every_reasoning_model_is_a_priced_model(self):
-        self.assertTrue(
-            set(infer.OPENROUTER_REASONING) <= set(infer.OPENROUTER_PRICES),
-            "a model can be asked to reason that cannot be priced")
 
     def test_temperature_is_not_refused_alongside_thinking(self):
         """`build` refuses that because the Anthropic API 400s on it. That is
@@ -413,7 +415,7 @@ class TestTheLedgerKnowsWhoWasCalled(ClientCase):
         self.install(_FakeResponse(usage=_FakeUsage(
             prompt_tokens=10, completion_tokens=10, cost=0.01)))
         self.client.message("qwen/qwen3-coder", "S", "U", 100, "synthesis")
-        self.assertEqual(self.rows()[-1]["provider"], "openrouter")
+        self.assertEqual(self.rows()[-1].provider, "openrouter")
 
     def test_a_failed_call_is_a_row_on_this_provider_too(self):
         """The hole ADR-0017 closed for one vendor, closed for the other."""
@@ -421,10 +423,10 @@ class TestTheLedgerKnowsWhoWasCalled(ClientCase):
         with self.assertRaises(infer.ApiError):
             self.client.message("qwen/qwen3-coder", "S", "U", 100, "synthesis")
         row = self.rows()[-1]
-        self.assertFalse(row["ok"])
-        self.assertEqual(row["provider"], "openrouter")
-        self.assertEqual(row["status_code"], 429)
-        self.assertEqual(row["usd"], 0.0)
+        self.assertFalse(row.ok)
+        self.assertEqual(row.provider, "openrouter")
+        self.assertEqual(row.status_code, 429)
+        self.assertEqual(row.usd, 0.0)
 
     def test_a_response_with_no_choices_is_an_error_not_empty_text(self):
         """Empty text reads downstream as an extractor that produced nothing,
@@ -437,47 +439,60 @@ class TestTheLedgerKnowsWhoWasCalled(ClientCase):
     def test_a_truncated_draw_is_flagged_through_the_whole_path(self):
         self.install(_FakeResponse(finish_reason="length", usage=_FakeUsage(
             prompt_tokens=10, completion_tokens=100, cost=0.01)))
-        _t, _u, meta = self.client.message(
+        reply = self.client.message(
             "qwen/qwen3-coder", "S", "U", 100, "synthesis")
-        self.assertTrue(meta["truncated"])
-        self.assertEqual(self.rows()[-1]["stop_reason"], "max_tokens")
+        self.assertTrue(reply.truncated)
+        self.assertEqual(self.rows()[-1].stop_reason, "max_tokens")
 
     def test_a_second_call_is_served_from_cache_and_bills_nothing(self):
         comp = self.install(_FakeResponse(text="hello", usage=_FakeUsage(
             prompt_tokens=10, completion_tokens=10, cost=0.01)))
         args = ("qwen/qwen3-coder", "S", "U", 100, "synthesis")
         self.client.message(*args)
-        text, _u, meta = self.client.message(*args)
+        reply = self.client.message(*args)
         self.assertEqual(len(comp.bodies), 1, "the cache did not hit")
-        self.assertEqual(text, "hello")
-        self.assertTrue(meta["cached"])
-        self.assertEqual(meta["usd"], 0.0)
+        self.assertEqual(reply.text, "hello")
+        self.assertTrue(reply.cached)
+        self.assertEqual(reply.usd, 0.0)
 
 
 # ------------------------------------------------------- the price table
 class TestThePriceTableIsUsable(unittest.TestCase):
 
     def test_every_entry_is_a_pair_of_rates(self):
-        for m, pair in infer.OPENROUTER_PRICES.items():
-            self.assertEqual(len(pair), 2, m)
-            self.assertTrue(all(float(x) >= 0 for x in pair), m)
+        for m, s in models.REGISTRY.items():
+            for pair in (s.price, s.list_price):
+                self.assertEqual(len(pair), 2, m)
+                self.assertTrue(all(float(x) >= 0 for x in pair), m)
 
     def test_a_zero_price_is_declared_free_not_merely_zero(self):
         """A dropped digit prices a paid model at nothing, the budget guard
         then admits it unconditionally, and the ledger reports a run that
         cost nothing. Free is a real category; it has to be said out loud."""
-        for m, (pin, pout) in infer.OPENROUTER_PRICES.items():
-            if pin == 0 or pout == 0:
-                self.assertIn(m, infer.OPENROUTER_FREE,
+        for m, s in models.REGISTRY.items():
+            if 0 in s.price:
+                self.assertIs(s.tier, models.Tier.FREE,
                               "%s is priced at zero but not declared free" % m)
 
     def test_a_free_endpoint_is_not_offered_as_a_measurement(self):
         """Free routing does not promise a fixed upstream or quantization, so
         draws from it are not samples of one condition."""
-        self.assertTrue(
-            set(infer.OPENROUTER_FREE) <= set(infer.OPENROUTER_PRICES))
-        self.assertFalse(set(infer.OPENROUTER_FREE)
-                         & set(infer.OPENROUTER_REASONING))
+        free = [s for s in models.REGISTRY.values()
+                if s.tier is models.Tier.FREE]
+        self.assertTrue(free)
+        for s in free:
+            self.assertNotIn(s, models.measured())
+            self.assertIs(s.reasoning, models.ReasoningControl.NONE)
+
+    def test_every_ceiling_is_at_or_above_list(self):
+        """Stale-high is safe; a ceiling below the published rate is not a
+        ceiling. For Anthropic the two are the same number."""
+        for m, s in models.REGISTRY.items():
+            with self.subTest(model=m):
+                self.assertGreaterEqual(s.price[0], s.list_price[0])
+                self.assertGreaterEqual(s.price[1], s.list_price[1])
+                if s.provider is models.Provider.ANTHROPIC:
+                    self.assertEqual(s.price, s.list_price)
 
     def test_the_table_is_dated(self):
         """A price that moved makes every dollar figure wrong while every
@@ -495,9 +510,10 @@ class TestThePriceTableIsUsable(unittest.TestCase):
             pin, pout = infer.price(m)
             return (syn_in * pin + syn_out * pout) / 1e6
 
-        dearest = max(draw(m) for m in infer.PRICES)
-        cheapest = min(draw(m) for m in infer.OPENROUTER_PRICES
-                       if m not in infer.OPENROUTER_FREE)
+        dearest = max(draw(s.id) for s in models.measured()
+                      if s.provider is models.Provider.ANTHROPIC)
+        cheapest = min(draw(s.id) for s in models.measured()
+                       if s.provider is models.Provider.OPENROUTER)
         self.assertGreater(dearest / cheapest, 50.0,
                            "the model axis is no wider than it was")
 
@@ -510,23 +526,23 @@ class TestTruncationIsDecidedOnFacts(unittest.TestCase):
 
     def test_the_label_is_believed_when_present(self):
         self.assertTrue(infer.truncated(
-            "max_tokens", {"output_tokens": 10}, 16000))
+            "max_tokens", infer.Usage(output_tokens=10), 16000))
 
     def test_a_null_label_does_not_hide_a_full_budget(self):
         self.assertTrue(infer.truncated(
-            None, {"output_tokens": 16000}, 16000))
+            None, infer.Usage(output_tokens=16000), 16000))
 
     def test_an_unmapped_label_does_not_hide_a_full_budget(self):
         self.assertTrue(infer.truncated(
-            "provider_specific_thing", {"output_tokens": 16000}, 16000))
+            "provider_specific_thing", infer.Usage(output_tokens=16000), 16000))
 
     def test_a_short_answer_is_not_truncated(self):
         self.assertFalse(infer.truncated(
-            "end_turn", {"output_tokens": 1319}, 16000))
+            "end_turn", infer.Usage(output_tokens=1319), 16000))
 
     def test_missing_usage_does_not_raise(self):
         self.assertFalse(infer.truncated("end_turn", None, 16000))
-        self.assertFalse(infer.truncated("end_turn", {}, 0))
+        self.assertFalse(infer.truncated("end_turn", infer.Usage(), 0))
 
 
 # --------------------------------------------- the ceiling is not the answer
@@ -547,7 +563,10 @@ class TestReasoningGetsRoomToThink(ClientCase):
                          16000 + infer.REASONING_HEADROOM)
 
     def test_every_reasoning_model_gets_it(self):
-        for m in infer.OPENROUTER_REASONING:
+        effort = [s.id for s in models.REGISTRY.values()
+                  if s.reasoning is models.ReasoningControl.EFFORT]
+        self.assertTrue(effort)
+        for m in effort:
             self.assertGreater(infer.ceiling_for(m, 8000), 8000, m)
 
     def test_a_non_reasoning_model_is_untouched(self):
@@ -606,9 +625,9 @@ class TestReasoningGetsRoomToThink(ClientCase):
         a complete answer once the answer budget is actually 16,000."""
         ceiling = infer.ceiling_for("z-ai/glm-5.2", 16000)
         self.assertFalse(infer.truncated(
-            "stop", {"output_tokens": 16000}, ceiling))
+            "stop", infer.Usage(output_tokens=16000), ceiling))
         self.assertTrue(infer.truncated(
-            "stop", {"output_tokens": ceiling}, ceiling))
+            "stop", infer.Usage(output_tokens=ceiling), ceiling))
 
 
 # ------------------------------------------ the table is a ceiling, not a bill
@@ -638,7 +657,7 @@ class TestTheEstimatorStaysAboveTheInvoice(unittest.TestCase):
                 r = json.loads(line)
                 if (r.get("provider") == infer.OPENROUTER
                         and r.get("usd_reported") and r.get("usd", 0) > 0
-                        and r.get("model") in infer.OPENROUTER_PRICES):
+                        and r.get("model") in models.REGISTRY):
                     out.append(r)
         return out
 
@@ -667,7 +686,7 @@ class TestTheEstimatorStaysAboveTheInvoice(unittest.TestCase):
                       "qwen/qwen3-coder": 1.000}
         for model, listed in above_list.items():
             with self.subTest(model=model):
-                self.assertGreater(infer.OPENROUTER_PRICES[model][1], listed)
+                self.assertGreater(infer.price(model)[1], listed)
         self.assertIn("reconciled", infer.OPENROUTER_PRICES_AS_OF)
 
 

@@ -48,13 +48,14 @@ def section(title):
 
 def reasoning_support(catalogue):
     """F2: which roster models OpenRouter says accept `reasoning`, against
-    the harness's own OPENROUTER_REASONING set."""
-    section("F2 reasoning support: catalogue vs OPENROUTER_REASONING")
+    the reasoning control the harness sends (OPENROUTER_REASONING until the
+    registry replaced it on 2026-09-26)."""
+    section("F2 reasoning support: catalogue vs harness")
     by = {m["id"]: m for m in catalogue}
     for mid in ROSTER_OR:
         sp = by[mid].get("supported_parameters") or []
         print("  %-32s catalogue=%-5s harness=%-5s max_completion=%s"
-              % (mid, "reasoning" in sp, mid in infer.OPENROUTER_REASONING,
+              % (mid, "reasoning" in sp, infer.spec(mid).reasoning == "effort",
                  (by[mid].get("top_provider") or {}).get("max_completion_tokens")))
 
 

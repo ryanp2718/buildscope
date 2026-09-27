@@ -15,6 +15,7 @@ otlp = ["opentelemetry-exporter-otlp-proto-http>=1.27"]
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.1",
     "pytest>=8.0",
     "ruff>=0.6",
 ]
@@ -68,3 +69,24 @@ ignore = [
 # benefit. Correctness rules (F, E7, E9) still apply here.
 "spikes/*.py" = ["E402", "I001", "RUF059", "B007", "B023", "F841", "E741",
                  "E731", "RUF005"]
+
+# Type-checked file by file, starting from the inference layer: step 1 of
+# docs/evidence/2026-09-26-model-comparison-fairness-audit.md. `files` is the
+# checked set. A file joins it once it passes under `strict`, and none leaves -
+# the same ratchet as the ruff rule set above.
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = [
+    "permits/cells.py",
+    "permits/infer.py",
+    "permits/models.py",
+    "permits/stats.py",
+    "permits/telemetry.py",
+]
+
+# The OTLP exporter is an optional extra (`uv sync --extra otlp`) and is not
+# installed in CI.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.exporter.*"]
+ignore_missing_imports = true

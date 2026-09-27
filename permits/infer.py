@@ -59,12 +59,21 @@ import io
 import json
 import os
 import time
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, fields
+from typing import Any
 
 import anthropic
 import openai
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from permits import telemetry
+from permits import models, telemetry
+from permits.models import ModelSpec, Provider, ReasoningControl
+
+# A request body as it goes on the wire and into the cache key. Left as a
+# plain JSON object on purpose: its bytes are the cache identity, and a typed
+# wrapper would be one more place for them to drift.
+Body = dict[str, Any]
 
 # Retry and timeout are the SDK's, stated explicitly rather than inherited:
 # the default is 2 retries and this project's calls are long, expensive and
@@ -72,190 +81,52 @@ from permits import telemetry
 MAX_RETRIES = 5
 TIMEOUT_S = 900.0
 
-# USD per million tokens, (input, output). Quoted from DESIGN.md section 6,
-# "Anthropic first-party, as of 2026-06-24 - re-verify before quoting". They
-# are re-stated here rather than parsed out of prose so a cost figure this
-# module prints has one auditable source, and they carry the same staleness
-# warning: a price that moved makes every dollar figure wrong while every
-# token figure stays right. Report tokens when in doubt.
-PRICES = {
-    "claude-opus-5": (5.0, 25.0),
-    "claude-sonnet-5": (2.0, 10.0),
-    "claude-haiku-4-5-20251001": (1.0, 5.0),
-}
-PRICES_AS_OF = "2026-06-24 (DESIGN.md section 6)"
-
-# OpenRouter reaches open-weight models behind an OpenAI-compatible endpoint.
-# Its model ids are all `vendor/model`; no Anthropic first-party id contains a
-# slash, so the slash is the provider discriminator. That is OpenRouter's own
-# addressing scheme rather than a convention invented here.
-ANTHROPIC = "anthropic"
-OPENROUTER = "openrouter"
+# Every per-model fact - provider, price, reasoning control, short name - is
+# in the registry in `permits/models.py`. These names are re-exported because
+# they are what the rest of the harness and the tests have always read.
+ANTHROPIC = Provider.ANTHROPIC
+OPENROUTER = Provider.OPENROUTER
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+PRICES_AS_OF = models.PRICES_AS_OF
+OPENROUTER_PRICES_AS_OF = models.OPENROUTER_PRICES_AS_OF
+REASONING_HEADROOM = models.REASONING_HEADROOM
 
 
-def provider_for(model):
-    return OPENROUTER if "/" in model else ANTHROPIC
+def spec(model: str) -> ModelSpec:
+    """The registry entry for `model`, or `Refused` if there is none."""
+    try:
+        return models.get(model)
+    except models.UnknownModel as e:
+        raise Refused(str(e)) from None
 
 
-def short_model(model):
-    """A filename- and column-safe short name for a model id.
-
-    Synthesis artifacts and variance labels are named by this. An Anthropic id
-    carries a date suffix that is noise in a column heading; an OpenRouter id
-    carries a vendor prefix and a slash, and a slash in a filename is a
-    directory that does not exist. The Anthropic branch is left exactly as the
-    three call sites in `scripts/conformance.py` spelled it, so no artifact
-    already on disk changes name.
-    """
-    if provider_for(model) == OPENROUTER:
-        return model.split("/")[-1]
-    return model.replace("claude-", "").split("-2")[0]
+def provider_for(model: str) -> Provider:
+    return spec(model).provider
 
 
-# USD per million tokens, (input, output), read from the live catalogue at
-# https://openrouter.ai/api/v1/models on the date below. Unlike PRICES these
-# are NOT the figure the ledger bills against: OpenRouter returns what it
-# actually charged in `usage.cost`, and that is what gets recorded. A table of
-# 459 models whose prices move weekly is precisely the hand-maintained vendor
-# capability table that ADR-0017 was written about, so this one is allowed to
-# be stale and is used for exactly one thing - the pre-call worst-case budget
-# check, where being stale-high stops a run early and stale-low is the only
-# dangerous direction. Refresh by re-reading the catalogue.
-#
-# The ladder spans 88x to 8x cheaper per synthesis draw than Opus 5, which is
-# the point: the existing model axis is a 5x band and cannot answer whether
-# the cost-per-success inversion survives a wider one.
-# Rates in USD per million tokens, input then output. Read this as a CEILING
-# TABLE, not a price list: several entries sit deliberately above the quoted
-# rate, and the quoted rate is in the comment beside them.
-#
-# Reconciled 2026-09-25 against all 132 paid OpenRouter calls on disk, pricing
-# the full prompt (`input_tokens + cache_read_input_tokens`, since a cached
-# read is discounted but still billed). Two separate reasons to diverge:
-#
-#   Under-reported reasoning. glm-5.2 billed 2.09x its list projection on 4 of
-#   4 calls and deepseek-v4-pro 1.26x on 3 of 3, because `completion_tokens`
-#   does not include every reasoning token those two are charged for.
-#   kimi-k2-thinking reconciles at exactly 1.00, which is how we know this is
-#   a per-model reporting difference and not a rule about reasoning models.
-#
-#   Routing variance. One OpenRouter model id is not one upstream, and the
-#   upstreams do not agree on price. gpt-oss-120b reconciles at a mean of 0.51
-#   but a max of 1.88, qwen3-coder at 0.57 mean and 1.33 max - the mean says
-#   the list rate is right and the tail says it is not a bound.
-#
-# The table has exactly one job, the pre-call worst case in `Budget.check`,
-# where stale-high is safe and stale-low is not a ceiling at all. The entries
-# therefore carry margin over the worst ratio observed rather than tracking
-# it: routing variance means the next call can be served by an upstream none
-# of these calls used, so a rate fitted to the observed maximum is a rate that
-# is already wrong. None of this touches the accounting - the ledger records
-# OpenRouter's reported `usage.cost` and flags it `usd_reported`, so what is
-# billed comes from the invoice and only what is *authorized* comes from
-# here.
-OPENROUTER_PRICES = {
-    "qwen/qwen3.5-flash-02-23": (0.065, 0.260),        # list; reconciles 1.00
-    "openai/gpt-oss-120b": (0.300, 1.200),             # 2x list 0.150/0.600
-    # OpenRouter exposes asynchronous variants under a `:batch` suffix at a
-    # steep discount - 80% here, not the 50% Anthropic's Batch API gives. The
-    # suffix is part of the model id, which is why `--cells` splits on the
-    # first and last colon rather than on every one.
-    "openai/gpt-oss-120b:batch": (0.0296, 0.136),
-    "qwen/qwen3-coder": (0.450, 1.500),                # 1.5x list 0.300/1.000
-    "moonshotai/kimi-k2-thinking": (0.600, 2.500),     # list; reconciles 1.00
-    "z-ai/glm-5.2": (0.650, 7.500),                    # list out 2.042
-    "deepseek/deepseek-v4-pro": (0.940, 5.000),        # list out 1.879
-    # Current-generation cheap tier, added 2026-09-25 and reconciled
-    # 2026-09-26 against their first paid calls. The two diverge from list
-    # for the two different reasons above. glm-5.3-flash under-reports
-    # reasoning like its larger sibling: 9 of 9 calls billed above list, mean
-    # 2.40x, max 3.38x. deepseek-v4-flash is routing: 12 of 15 calls
-    # reconcile at 1.00 and the other 3 - the slow ones, 15-24 tokens/s -
-    # billed 4.7-4.8x, which is a different upstream at a different price.
-    # Output rates are about 1.5x the rate that bounds the worst call.
-    "z-ai/glm-5.3-flash": (0.070, 2.300),              # list 0.045/0.140
-    "deepseek/deepseek-v4-flash": (0.075, 0.750),      # list 0.047/0.095
-    # Free tier, for verifying the path end to end before any money is added
-    # to the account. Deliberately NOT a measurement cell: a free endpoint
-    # does not promise which upstream, which quantization or which context
-    # window serves a given request, so draws from it are not samples of one
-    # condition and a variance number computed over them would describe the
-    # routing rather than the model. Use it to prove the wire works.
-    "nvidia/nemotron-3-ultra-550b-a55b:free": (0.0, 0.0),
-}
-OPENROUTER_PRICES_AS_OF = ("2026-09-23 (openrouter.ai/api/v1/models); reasoning output "
-                           "rates reconciled to invoice 2026-09-25")
-
-# Priced at zero on purpose, as opposed to zero because someone dropped a
-# digit. Anything here is excluded from the "every rate is positive" check and
-# from anything that reports a measurement.
-OPENROUTER_FREE = frozenset(["nvidia/nemotron-3-ultra-550b-a55b:free"])
-
-# Models that accept a reasoning parameter. OpenRouter takes `reasoning` as a
-# map and silently ignores it on models that cannot reason, but "silently
-# ignores" is how a run gets written up as controlled when it was not, so the
-# set is explicit and `build_chat` only sends the key when the model is in it.
-OPENROUTER_REASONING = frozenset([
-    "moonshotai/kimi-k2-thinking",
-    "deepseek/deepseek-v4-pro",
-    "z-ai/glm-5.2",
-    # Membership was probed, not assumed from the name. Both return a
-    # populated `reasoning` field and a non-zero `reasoning_tokens` count
-    # when sent no reasoning parameter, so both are billed for thinking out
-    # of the same allowance and both need the headroom.
-    "z-ai/glm-5.3-flash",
-    "deepseek/deepseek-v4-flash",
-])
-
-# Room to think, added on top of the answer budget rather than taken out of
-# it. OpenRouter counts reasoning tokens and output tokens against the same
-# `max_tokens`, so passing one ceiling to every model does not give every
-# model the same experiment: a model that thinks gets whatever is left after
-# thinking, and a model that does not gets all of it. Measured 2026-09-24 at a
-# 16,000 ceiling, that difference is the whole result - glm-5.2 spent 16,000
-# tokens reasoning on both clarkco draws and emitted no extractor either time,
-# kimi-k2-thinking and deepseek-v4-pro truncated once each. Scored as written,
-# that reads as "reasoning models cannot do this page". It is a fact about the
-# ceiling.
-#
-# 32,000 is twice the level observed to bind, chosen so it does not bind
-# again; it is a cap and bills only what is drawn against it. The answer
-# budget is then whatever the caller asked for, identical across the axis,
-# which is the property the comparison needs.
-REASONING_HEADROOM = 32000
+def short_model(model: str) -> str:
+    """A filename- and column-safe short name for a model id. See
+    `ModelSpec.short`."""
+    return spec(model).short
 
 
-def ceiling_for(model, max_tokens):
+def ceiling_for(model: str, max_tokens: int) -> int:
     """The `max_tokens` to put on the wire so `max_tokens` is the answer.
 
     Equal ceilings are not equal treatment when reasoning is billed from the
     same allowance, so the ceiling is a function of the model and the answer
-    budget is the thing held constant. Non-reasoning models are returned
-    unchanged, which keeps every Anthropic request byte-identical to the ones
-    already bought and cached.
+    budget is the thing held constant. Models not asked to reason through
+    OpenRouter are returned unchanged, which keeps every Anthropic request
+    byte-identical to the ones already bought and cached.
     """
-    if model in OPENROUTER_REASONING:
+    if spec(model).reasoning is ReasoningControl.EFFORT:
         return max_tokens + REASONING_HEADROOM
     return max_tokens
+
 
 # Cache reads bill at 0.1x input; 5-minute writes at 1.25x. Section 6 lever 3.
 CACHE_READ = 0.1
 CACHE_WRITE = 1.25
-
-# Extended thinking is configured differently by model generation, and there
-# is no form that works on both. Claude 4.6 and later take
-# `{"type": "adaptive"}` and reject `budget_tokens` with a 400; earlier models
-# take `budget_tokens` and reject `adaptive` with a 400. So the shape is a
-# property of the model, not a preference, and asking for "thinking" has to be
-# resolved against the model rather than passed through.
-#
-# Found the hard way: the first conformance run died on
-# `adaptive thinking is not supported on this model` against Haiku 4.5. It
-# cost nothing - the request was rejected before billing - but it is exactly
-# the kind of per-model capability that a hand-rolled client has to carry
-# itself, which is the standing cost of not using the SDK.
-ADAPTIVE_THINKING = frozenset(["claude-opus-5", "claude-sonnet-5"])
 
 # Above this `max_tokens`, stream. A non-streaming request whose ceiling is
 # large enough to run past the server's request timeout is refused outright,
@@ -276,41 +147,140 @@ class ApiError(Exception):
     pass
 
 
-def price(model):
-    """(input, output) $/MTok, from whichever table owns this model."""
-    table = OPENROUTER_PRICES if provider_for(model) == OPENROUTER else PRICES
-    if model not in table:
-        raise Refused(
-            "no price on file for %r. Add it to %s with a source before "
-            "spending - an unpriced call cannot be logged against the "
-            "section 6 tripwire, which is the only reason the ledger exists."
-            % (model, "OPENROUTER_PRICES" if provider_for(model) == OPENROUTER
-               else "PRICES"))
-    return table[model]
+# ------------------------------------------------------------ records
+# Frozen dataclasses rather than dicts. Before 2026-09-26 every one of these
+# was a dict read back with `.get("field", 0) or 0`, so a misspelled field
+# read as zero instead of raising - the silent-wrong-number failure this
+# project exists to catch. The on-disk formats (cache entries, ledger lines)
+# are unchanged; these are the typed view of them.
 
 
-def cost(model, usage):
-    """Dollars for one response's `usage` block.
+@dataclass(frozen=True)
+class Usage:
+    """Token counts for one response, in Anthropic's field names whatever the
+    provider was. `input_tokens` excludes cached tokens on both providers; see
+    `_usage_from_chat` for why that needs a subtraction on OpenRouter."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
 
-    Cache fields are read with `.get` and default to zero: a deployment may
-    omit them entirely, and a missing field must not be billed as a full-price
-    input token.
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any] | None) -> "Usage":
+        """From a stored or SDK-dumped usage block.
+
+        A missing or null field is zero: a deployment may omit the cache
+        fields entirely, and a missing field must not be billed as a
+        full-price input token. Fields this type does not name (Anthropic's
+        `service_tier`, `output_tokens_details`) stay in the cache entry and
+        are not read here.
+        """
+        d = d or {}
+        return cls(**{f.name: int(d.get(f.name) or 0) for f in fields(cls)})
+
+    def to_dict(self) -> dict[str, int]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class Completion:
+    """What `Client.message` returns: the text and everything a caller needs
+    to price, flag and record it."""
+    text: str
+    usage: Usage
+    model: str
+    provider: Provider
+    # True when replayed from the cache, in which case `usd` is 0.0: this
+    # call cost nothing, whatever the original purchase cost.
+    cached: bool
+    usd: float
+    stop_reason: str | None
+    # A truncated response is a silent wrong answer, which is the failure
+    # family this project keeps meeting. It is surfaced as a flag the caller
+    # has to look at rather than a short list that looks fine.
+    truncated: bool
+
+
+@dataclass(frozen=True)
+class LedgerRow:
+    """One line of `data/infer/ledger.jsonl`: one call that reached the API.
+
+    Success rows carry `usd_reported`; failure rows carry `error_type` and
+    `status_code` instead. `to_dict` reproduces exactly that shape, so rows
+    written through this type are byte-compatible with the 266 written before
+    it existed.
     """
+    at: str
+    call_class: str
+    tag: str
+    model: str
+    provider: str
+    draw: int
+    ok: bool
+    usd: float
+    seconds: float
+    stop_reason: str | None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    # True when `usd` came from the provider's reported charge rather than
+    # from the registry price. A sum over the ledger that mixes the two is
+    # still correct; one that needs to know how it was derived can ask.
+    usd_reported: bool | None = None
+    error_type: str | None = None
+    status_code: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        drop = ("error_type", "status_code") if self.ok else ("usd_reported",)
+        for k in drop:
+            del d[k]
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> "LedgerRow":
+        """Read a ledger line, including the older shapes.
+
+        Rows written before 2026-09-22 have no `ok` field and are successes:
+        the old client could not write anything else. Rows written before
+        2026-09-23 have no `provider`, and were all Anthropic calls, which
+        the registry resolves. Twelve early rows have no `draw`; a missing
+        draw hashed as draw 0. A field this type does not name raises,
+        because a misspelled field is exactly what the dict version hid.
+        """
+        known = {f.name for f in fields(cls)}
+        extra = sorted(set(d) - known)
+        if extra:
+            raise ValueError("unknown ledger field(s) %s" % ", ".join(extra))
+        row = dict(d)
+        row.setdefault("ok", True)
+        row.setdefault("draw", 0)
+        if "provider" not in row:
+            row["provider"] = str(provider_for(row["model"]))
+        return cls(**row)
+
+
+def price(model: str) -> tuple[float, float]:
+    """(input, output) $/MTok that `Budget` and `cost` use for this model."""
+    return spec(model).price
+
+
+def cost(model: str, usage: Usage) -> float:
+    """Dollars for one response's usage, priced from the registry."""
     pin, pout = price(model)
-    plain = usage.get("input_tokens", 0) or 0
-    cread = usage.get("cache_read_input_tokens", 0) or 0
-    cwrite = usage.get("cache_creation_input_tokens", 0) or 0
-    out = usage.get("output_tokens", 0) or 0
-    return ((plain + cread * CACHE_READ + cwrite * CACHE_WRITE) * pin
-            + out * pout) / 1e6
+    return ((usage.input_tokens
+             + usage.cache_read_input_tokens * CACHE_READ
+             + usage.cache_creation_input_tokens * CACHE_WRITE) * pin
+            + usage.output_tokens * pout) / 1e6
 
 
-def estimate(model, in_tokens, out_tokens):
+def estimate(model: str, in_tokens: int, out_tokens: int) -> float:
     pin, pout = price(model)
     return (in_tokens * pin + out_tokens * pout) / 1e6
 
 
-def tokens(text):
+def tokens(text: str) -> int:
     """Token count without a tokenizer, for projections only.
 
     `scripts/measure_tokens.py` established the bracket on this project's own
@@ -322,7 +292,7 @@ def tokens(text):
     return int(len(text) / 3.0)
 
 
-class Budget(object):
+class Budget:
     """A ceiling in dollars, checked before each call against its worst case.
 
     Worst case, not expected case: `max_tokens` is what the request authorizes
@@ -330,12 +300,12 @@ class Budget(object):
     that admits calls on the basis of what usually happens is not a guard.
     """
 
-    def __init__(self, ceiling_usd):
+    def __init__(self, ceiling_usd: float) -> None:
         self.ceiling = float(ceiling_usd)
         self.spent = 0.0
         self.calls = 0
 
-    def check(self, model, in_tokens, max_tokens):
+    def check(self, model: str, in_tokens: int, max_tokens: int) -> None:
         worst = estimate(model, in_tokens, max_tokens)
         if self.spent + worst > self.ceiling:
             raise Refused(
@@ -344,46 +314,43 @@ class Budget(object):
                 "deliberately or cut the run."
                 % (self.ceiling, self.spent, worst))
 
-    def record(self, usd):
+    def record(self, usd: float) -> None:
         self.spent += usd
         self.calls += 1
 
 
-class Ledger(object):
+class Ledger:
     """Append-only JSONL. One row per call that reached the API."""
 
-    def __init__(self, path):
+    def __init__(self, path: str) -> None:
         self.path = path
         d = os.path.dirname(path)
         if d and not os.path.isdir(d):
             os.makedirs(d)
 
-    def write(self, row):
+    def write(self, row: LedgerRow) -> None:
         with io.open(self.path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row, sort_keys=True) + "\n")
+            fh.write(json.dumps(row.to_dict(), sort_keys=True) + "\n")
 
-    def rows(self):
+    def rows(self) -> list[LedgerRow]:
         if not os.path.exists(self.path):
             return []
-        out = []
-        for line in io.open(self.path, encoding="utf-8"):
-            line = line.strip()
-            if line:
-                out.append(json.loads(line))
-        return out
+        with io.open(self.path, encoding="utf-8") as fh:
+            return [LedgerRow.from_dict(json.loads(line))
+                    for line in fh if line.strip()]
 
-    def by_class(self):
+    def by_class(self) -> dict[str, dict[str, float]]:
         """Spend per call class - the section 6 tripwire, made readable."""
-        out = {}
+        out: dict[str, dict[str, float]] = {}
         for r in self.rows():
-            a = out.setdefault(r.get("call_class", "?"),
+            a = out.setdefault(r.call_class,
                                {"calls": 0, "usd": 0.0, "in": 0, "out": 0,
                                 "cache_read": 0})
             a["calls"] += 1
-            a["usd"] += r.get("usd", 0.0)
-            a["in"] += r.get("input_tokens", 0)
-            a["out"] += r.get("output_tokens", 0)
-            a["cache_read"] += r.get("cache_read_input_tokens", 0)
+            a["usd"] += r.usd
+            a["in"] += r.input_tokens
+            a["out"] += r.output_tokens
+            a["cache_read"] += r.cache_read_input_tokens
         return out
 
 
@@ -404,7 +371,7 @@ OPENROUTER_KEY_FILE = os.path.join(os.path.expanduser("~"), ".openrouter_key")
 BOM = "﻿"
 
 
-def _read_credential(env_name, path):
+def _read_credential(env_name: str, path: str | None) -> str:
     """Read a credential from the environment, falling back to a file.
 
     Decoded as `utf-8-sig`, not `utf-8`, because a key file saved by Notepad
@@ -418,16 +385,17 @@ def _read_credential(env_name, path):
     if env:
         return env.strip().lstrip(BOM)
     if path and os.path.exists(path):
-        return io.open(path, encoding="utf-8-sig").read().strip()
+        with io.open(path, encoding="utf-8-sig") as fh:
+            return fh.read().strip()
     return ""
 
 
-def read_key(path=None):
+def read_key(path: str | None = None) -> str:
     """Key from the environment, else from a file holding nothing else."""
     return _read_credential("ANTHROPIC_API_KEY", path or KEY_FILE)
 
 
-def read_openrouter_key(path=None):
+def read_openrouter_key(path: str | None = None) -> str:
     return _read_credential("OPENROUTER_API_KEY", path or OPENROUTER_KEY_FILE)
 
 
@@ -445,7 +413,8 @@ FINISH_REASONS = {
 }
 
 
-def truncated(stop_reason, usage, max_tokens):
+def truncated(stop_reason: str | None, usage: Usage | None,
+              max_tokens: int) -> bool:
     """Whether the answer was cut off, decided on facts and not on a label.
 
     `stop_reason == "max_tokens"` is the provider's own account of why it
@@ -463,11 +432,11 @@ def truncated(stop_reason, usage, max_tokens):
     """
     if stop_reason == "max_tokens":
         return True
-    out = (usage or {}).get("output_tokens") or 0
+    out = usage.output_tokens if usage is not None else 0
     return bool(max_tokens) and out >= max_tokens
 
 
-def _error_detail(resp):
+def _error_detail(resp: Any) -> str:
     """Whatever OpenRouter put in the body to explain an empty response.
 
     Defensive about the shape because this runs only when something has
@@ -492,7 +461,7 @@ def _error_detail(resp):
         d.get("provider"), d.get("choices"))
 
 
-def _usage_from_chat(u):
+def _usage_from_chat(u: Any) -> tuple[dict[str, int], float | None]:
     """OpenAI usage in Anthropic field names, plus what was actually billed.
 
     Two traps here, both of the silent-wrong-number kind that
@@ -507,7 +476,7 @@ def _usage_from_chat(u):
     same thing.
 
     **`cost` is authoritative and the local price table is not.** OpenRouter
-    returns what it actually charged. `OPENROUTER_PRICES` exists only to give
+    returns what it actually charged. The registry ceiling exists only to give
     `Budget` a worst case before the call, where being stale-high is safe. So
     the billed figure is returned separately and preferred by the caller. It
     can be absent, in which case the caller falls back to the table and is
@@ -533,12 +502,14 @@ def _usage_from_chat(u):
     return usage, (float(billed) if billed is not None else None)
 
 
-class Client(object):
+class Client:
     """One process's worth of model access: key, cache, ledger, ceiling."""
 
-    def __init__(self, root, ceiling_usd, api_key=None, dry_run=False,
-                 key_file=None, openrouter_key=None,
-                 openrouter_key_file=None):
+    def __init__(self, root: str, ceiling_usd: float,
+                 api_key: str | None = None, dry_run: bool = False,
+                 key_file: str | None = None,
+                 openrouter_key: str | None = None,
+                 openrouter_key_file: str | None = None) -> None:
         self.root = root
         self.dir = os.path.join(root, "data", "infer")
         self.cache_dir = os.path.join(self.dir, "cache")
@@ -554,12 +525,12 @@ class Client(object):
         self.key = read_key(key_file) if api_key is None else api_key
         self.or_key = (read_openrouter_key(openrouter_key_file)
                        if openrouter_key is None else openrouter_key)
-        self._sdk = None
-        self._oai = None
+        self._sdk: anthropic.Anthropic | None = None
+        self._oai: openai.OpenAI | None = None
         if not os.path.isdir(self.cache_dir):
             os.makedirs(self.cache_dir)
 
-    def key_for(self, model):
+    def key_for(self, model: str) -> str:
         """The credential this model's provider needs, or empty string.
 
         Callers check this rather than `.key` so that having one of the two
@@ -567,7 +538,7 @@ class Client(object):
         """
         return self.or_key if provider_for(model) == OPENROUTER else self.key
 
-    def sdk(self):
+    def sdk(self) -> anthropic.Anthropic:
         """The vendor client, built on first use.
 
         Lazy because `Client(root, ceiling, dry_run=True)` is how every
@@ -580,7 +551,7 @@ class Client(object):
                 timeout=TIMEOUT_S)
         return self._sdk
 
-    def oai(self):
+    def oai(self) -> openai.OpenAI:
         """The OpenAI-compatible client, pointed at OpenRouter.
 
         Lazy for the same reason as `sdk`. Retry and timeout are set to the
@@ -595,7 +566,7 @@ class Client(object):
         return self._oai
 
     # -------------------------------------------------------------- cache
-    def _key_for(self, body, draw=0):
+    def _key_for(self, body: Body, draw: int = 0) -> str:
         """Hash the request exactly as it goes on the wire.
 
         Keys are sorted so a dict reordering is not a cache miss, and the
@@ -618,13 +589,15 @@ class Client(object):
             raw += ("#draw=%d" % draw).encode("ascii")
         return hashlib.sha256(raw).hexdigest()[:24]
 
-    def cached(self, key):
+    def cached(self, key: str) -> dict[str, Any] | None:
         p = os.path.join(self.cache_dir, key + ".json")
         if os.path.exists(p):
-            return json.load(io.open(p, encoding="utf-8"))
+            with io.open(p, encoding="utf-8") as fh:
+                entry: dict[str, Any] = json.load(fh)
+            return entry
         return None
 
-    def _store(self, key, resp):
+    def _store(self, key: str, resp: dict[str, Any]) -> None:
         """Stored under the key the LOOKUP computes, not the key the final
         request body would hash to.
 
@@ -641,11 +614,11 @@ class Client(object):
         with io.open(p, "w", encoding="utf-8") as fh:
             fh.write(json.dumps(resp, sort_keys=True, indent=1))
 
-    def build(self, model, system, user, max_tokens, thinking=False,
-              temperature=None):
+    def build(self, model: str, system: str, user: str, max_tokens: int,
+              thinking: bool = False, temperature: float | None = None) -> Body:
         """The request body, separated out so a dry run can price the exact
         bytes that would be sent rather than an approximation of them."""
-        body = {
+        body: Body = {
             "model": model,
             "max_tokens": max_tokens,
             "system": [{"type": "text", "text": system,
@@ -655,15 +628,19 @@ class Client(object):
         if thinking:
             # Synthesis is the call class where reasoning earns its price - an
             # error there propagates to every page the template touches. Which
-            # form to ask for is decided by the model, see ADAPTIVE_THINKING.
-            if model in ADAPTIVE_THINKING:
+            # form to ask for is decided by the model, see ReasoningControl.
+            control = spec(model).reasoning
+            if control is ReasoningControl.ADAPTIVE:
                 body["thinking"] = {"type": "adaptive"}
-            else:
+            elif control is ReasoningControl.BUDGET:
                 # `budget_tokens` must leave room for the answer, so it takes
                 # half the ceiling. 1024 is the documented floor.
                 body["thinking"] = {"type": "enabled",
                                     "budget_tokens": max(1024,
                                                          max_tokens // 2)}
+            else:
+                raise Refused("%s has no Anthropic thinking control (%s). "
+                              "Nothing was sent." % (model, control))
         if temperature is not None:
             if thinking:
                 # Measured 2026-09-21 against the live API:
@@ -686,8 +663,9 @@ class Client(object):
                 body["temperature"] = temperature
         return body
 
-    def build_chat(self, model, system, user, max_tokens, thinking=False,
-                   temperature=None):
+    def build_chat(self, model: str, system: str, user: str, max_tokens: int,
+                   thinking: bool = False,
+                   temperature: float | None = None) -> Body:
         """The same question in OpenAI Chat Completions shape.
 
         Three deliberate differences from `build`, each of which is why there
@@ -708,7 +686,7 @@ class Client(object):
           is a fact about one vendor, not a house rule, and asserting it here
           would be inventing a constraint the endpoint does not have.
         """
-        body = {
+        body: Body = {
             "model": model,
             # `max_tokens`, not `max_completion_tokens`: the newer name is
             # for OpenAI's own models and this client only ever points at
@@ -717,20 +695,21 @@ class Client(object):
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
         }
-        if thinking and model in OPENROUTER_REASONING:
+        if thinking and spec(model).reasoning is ReasoningControl.EFFORT:
             body["reasoning_effort"] = "medium"
         if temperature is not None:
             body["temperature"] = temperature
         return body
 
     # --------------------------------------------------------------- call
-    def message(self, model, system, user, max_tokens, call_class,
-                thinking=False, tag="", temperature=None, draw=0):
+    def message(self, model: str, system: str, user: str, max_tokens: int,
+                call_class: str, thinking: bool = False, tag: str = "",
+                temperature: float | None = None, draw: int = 0) -> Completion:
         """One model call, on whichever provider owns `model`.
 
-        Returns (text, usage, meta). `usage` is in Anthropic field names
-        whatever the provider was - see `_usage_from_chat` for why the
-        translation happens here rather than at every reader.
+        `Completion.usage` is in Anthropic field names whatever the provider
+        was - see `_usage_from_chat` for why the translation happens here
+        rather than at every reader.
 
         On Anthropic, `system` carries the cache breakpoint. Section 6 lever 3:
         synthesis resends a large stable prefix against a small variable
@@ -786,12 +765,12 @@ class Client(object):
             hit = self.cached(key)
             span.set_attribute("permits.cache_hit", hit is not None)
             if hit is not None:
-                return (hit["text"], hit["usage"],
-                        {"cached": True, "usd": 0.0, "model": model,
-                         "stop_reason": hit.get("stop_reason"),
-                         "truncated": truncated(hit.get("stop_reason"),
-                                                hit.get("usage"),
-                                                max_tokens)})
+                usage = Usage.from_dict(hit["usage"])
+                return Completion(
+                    text=hit["text"], usage=usage, model=model, provider=prov,
+                    cached=True, usd=0.0, stop_reason=hit.get("stop_reason"),
+                    truncated=truncated(hit.get("stop_reason"), usage,
+                                        max_tokens))
 
             est_in = tokens(system) + tokens(user)
             self.budget.check(model, est_in, max_tokens)
@@ -814,10 +793,10 @@ class Client(object):
             t0 = time.time()
             try:
                 if prov == OPENROUTER:
-                    (text, usage, stop_reason, resp_model,
+                    (text, raw_usage, stop_reason, resp_model,
                      billed) = self._send_chat(body)
                 else:
-                    (text, usage, stop_reason, resp_model,
+                    (text, raw_usage, stop_reason, resp_model,
                      billed) = self._send_messages(body, max_tokens)
             except (anthropic.APIError, openai.APIError) as e:
                 elapsed = time.time() - t0
@@ -839,61 +818,52 @@ class Client(object):
                                   "" if status is None else " %s" % status,
                                   str(e)[:400])) from e
             elapsed = time.time() - t0
+            usage = Usage.from_dict(raw_usage)
 
             # What the provider says it charged beats what the local table
             # thinks it costs. Anthropic reports no such figure, so that path
-            # prices from PRICES exactly as it always has.
+            # prices from the registry exactly as it always has.
             usd = cost(model, usage) if billed is None else billed
 
             span.set_attribute("gen_ai.response.model", resp_model or model)
             span.set_attribute("gen_ai.response.finish_reasons",
                                [stop_reason or "unknown"])
-            span.set_attribute("gen_ai.usage.input_tokens",
-                               usage.get("input_tokens", 0) or 0)
+            span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens)
             span.set_attribute("gen_ai.usage.output_tokens",
-                               usage.get("output_tokens", 0) or 0)
+                               usage.output_tokens)
             span.set_attribute("permits.usd", usd)
             span.set_attribute("permits.seconds", round(elapsed, 1))
 
             self.budget.record(usd)
-            self.ledger.write({
-                "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "call_class": call_class, "tag": tag, "model": model,
-                "provider": prov,
-                "draw": draw,
-                "ok": True,
-                # True when this row's dollars came from the provider rather
-                # than from the local price table. A sum over the ledger that
-                # mixes the two is still correct; one that needs to know how
-                # it was derived can ask.
-                "usd_reported": billed is not None,
-                "usd": round(usd, 6), "seconds": round(elapsed, 1),
-                "stop_reason": stop_reason,
-                "input_tokens": usage.get("input_tokens", 0) or 0,
-                "output_tokens": usage.get("output_tokens", 0) or 0,
-                "cache_read_input_tokens": usage.get(
-                    "cache_read_input_tokens", 0) or 0,
-                "cache_creation_input_tokens": usage.get(
-                    "cache_creation_input_tokens", 0) or 0,
-            })
-            self._store(key, {"text": text, "usage": usage,
+            self.ledger.write(LedgerRow(
+                at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                call_class=call_class, tag=tag, model=model, provider=prov,
+                draw=draw, ok=True, usd_reported=billed is not None,
+                usd=round(usd, 6), seconds=round(elapsed, 1),
+                stop_reason=stop_reason,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_input_tokens=usage.cache_read_input_tokens,
+                cache_creation_input_tokens=usage.cache_creation_input_tokens))
+            # The raw usage block, not the typed view: it keeps fields such
+            # as Anthropic's `output_tokens_details` that `Usage` does not
+            # read yet.
+            self._store(key, {"text": text, "usage": raw_usage,
                               "stop_reason": stop_reason})
-            # A truncated response is a silent wrong answer, which is the
-            # failure family this project keeps meeting. It is surfaced as a
-            # flag the caller has to look at rather than a short list that
-            # looks fine.
-            return text, usage, {"cached": False, "usd": usd, "model": model,
-                                 "provider": prov,
-                                 "stop_reason": stop_reason,
-                                 "truncated": truncated(stop_reason, usage,
-                                                        max_tokens)}
+            return Completion(
+                text=text, usage=usage, model=model, provider=prov,
+                cached=False, usd=usd, stop_reason=stop_reason,
+                truncated=truncated(stop_reason, usage, max_tokens))
 
-    def _send_messages(self, body, max_tokens):
+    def _send_messages(
+            self, body: Body, max_tokens: int,
+    ) -> tuple[str, dict[str, Any], str | None, str, float | None]:
         """Anthropic transport. Returns the five things `message` needs.
 
         `billed` is None because Anthropic does not report a charge on the
-        response; that path prices from PRICES, as it always has.
+        response; that path prices from the registry, as it always has.
         """
+        msg: anthropic.types.Message
         if max_tokens > STREAM_ABOVE:
             # Streaming is a method here, not a flag on the request, so it
             # cannot change the request's identity.
@@ -903,10 +873,12 @@ class Client(object):
             msg = self.sdk().messages.create(**body)
         usage = msg.usage.model_dump(mode="json")
         text = "".join(b.text for b in msg.content
-                       if getattr(b, "type", None) == "text")
+                       if isinstance(b, anthropic.types.TextBlock))
         return text, usage, msg.stop_reason, msg.model, None
 
-    def _send_chat(self, body):
+    def _send_chat(
+            self, body: Body,
+    ) -> tuple[str, dict[str, Any], str | None, str, float | None]:
         """OpenRouter transport, same five things.
 
         No streaming branch. STREAM_ABOVE exists because a long Anthropic
@@ -933,11 +905,13 @@ class Client(object):
         choice = resp.choices[0]
         text = choice.message.content or ""
         usage, billed = _usage_from_chat(resp.usage)
-        stop = FINISH_REASONS.get(choice.finish_reason, choice.finish_reason)
+        finish: str | None = choice.finish_reason
+        stop = FINISH_REASONS.get(finish, finish) if finish else finish
         return text, usage, stop, resp.model, billed
 
-    def _log_failure(self, model, call_class, tag, draw, elapsed,
-                     error_type, status):
+    def _log_failure(self, model: str, call_class: str, tag: str, draw: int,
+                     elapsed: float, error_type: str,
+                     status: int | None) -> None:
         """A ledger row for a call that reached the API and failed.
 
         `usd` is zero because a rejected request is not billed, but the row
@@ -946,17 +920,9 @@ class Client(object):
         have no `ok` field and are read as successes, which they are: the old
         client could not write anything else.
         """
-        self.ledger.write({
-            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "call_class": call_class, "tag": tag, "model": model,
-            "provider": provider_for(model),
-            "draw": draw,
-            "ok": False,
-            "error_type": error_type,
-            "status_code": status,
-            "usd": 0.0, "seconds": round(elapsed, 1),
-            "stop_reason": None,
-            "input_tokens": 0, "output_tokens": 0,
-            "cache_read_input_tokens": 0,
-            "cache_creation_input_tokens": 0,
-        })
+        self.ledger.write(LedgerRow(
+            at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            call_class=call_class, tag=tag, model=model,
+            provider=provider_for(model), draw=draw, ok=False,
+            error_type=error_type, status_code=status,
+            usd=0.0, seconds=round(elapsed, 1), stop_reason=None))
