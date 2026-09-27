@@ -225,6 +225,7 @@ class _FakeUsage(object):
 
 class _FakeMessage(object):
     def __init__(self, text, stop_reason="end_turn", **usage):
+        self.id = "msg_1"
         self.model = "claude-opus-5"
         self.stop_reason = stop_reason
         self.usage = _FakeUsage(**usage)
@@ -232,8 +233,9 @@ class _FakeMessage(object):
 
 
 class _Event(object):
-    def __init__(self, type_):
+    def __init__(self, type_, message=None):
         self.type = type_
+        self.message = message
 
 
 class _FakeStream(object):
@@ -243,7 +245,8 @@ class _FakeStream(object):
 
     def __init__(self, message, events=("content_block_delta",), fail=None):
         self.message = message
-        self.events = [_Event(t) for t in events]
+        self.events = [e if isinstance(e, _Event) else _Event(e)
+                       for e in events]
         self.fail = fail
 
     def __enter__(self):

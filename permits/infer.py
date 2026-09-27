@@ -182,21 +182,29 @@ def settings_sent(body: Body, protocol: Protocol) -> dict[str, Any]:
     records what went on the wire. Temperature is 1.0 on a Claude thinking
     call, which the API fixes and the body does not carry; None elsewhere
     means nothing was sent and the API or host chose.
+
+    `reasoning_level` is the lab's name for the level an effort reaches
+    (`models.lab_level`), recorded because OpenRouter's name and the lab's
+    differ. None where no effort is sent, and under v1, where what `medium`
+    reached depended on the serving endpoint.
     """
     thinking = body.get("thinking")
     reasoning: str | None = None
+    level: str | None = None
     if thinking:
         reasoning = ("adaptive" if thinking["type"] == "adaptive"
                      else "budget=%d" % thinking["budget_tokens"])
     elif "reasoning" in body:
         r = body["reasoning"]
         reasoning = "effort=%s" % r["effort"] if "effort" in r else "enabled"
+        if "effort" in r:
+            level = models.lab_level(spec(str(body["model"])), r["effort"])
     elif "reasoning_effort" in body:
         reasoning = "effort=%s" % body["reasoning_effort"]
     temperature = body.get("temperature", 1.0 if thinking else None)
     return {"protocol": str(protocol), "max_tokens": int(body["max_tokens"]),
-            "reasoning": reasoning, "temperature": temperature,
-            "top_p": body.get("top_p")}
+            "reasoning": reasoning, "reasoning_level": level,
+            "temperature": temperature, "top_p": body.get("top_p")}
 
 
 # Cache reads bill at 0.1x input; 5-minute writes at 1.25x. Section 6 lever 3.
@@ -255,15 +263,23 @@ def is_transient(e: BaseException) -> bool:
 
 @dataclass
 class _Clock:
-    """The wall time of one attempt, and when its first token arrived.
+    """The wall time of one attempt, when its first token arrived, and the
+    id the provider gave the response.
 
     Monotonic, and on Windows it keeps counting while the machine sleeps, so
     a suspended client now trips the wall-clock limit instead of being
     recorded as a 65,000-second call.
+
+    The id is kept here rather than on the reply because a failed attempt
+    has no reply, and the failure row needs it most: it is what the
+    provider's own record of the call is looked up by (OpenRouter's
+    `GET /generation?id=`, which carries the serving host, native token
+    counts and cost).
     """
     limit_s: float
     start: float = field(default_factory=time.monotonic)
     first: float | None = None
+    response_id: str | None = None
 
     def token(self) -> None:
         if self.first is None:
@@ -348,10 +364,14 @@ class Completion:
     # The OpenRouter upstream that served it, or "anthropic". None for a
     # response cached before hosts were recorded.
     host: str | None = None
+    # OpenRouter's generation id or Anthropic's message id. None for a
+    # response cached before ids were recorded.
+    response_id: str | None = None
 
 
-_WHEN_KNOWN = ("ttft_s", "protocol", "max_tokens", "reasoning", "temperature",
-               "top_p", "host", "reasoning_tokens")
+_WHEN_KNOWN = ("ttft_s", "protocol", "max_tokens", "reasoning",
+               "reasoning_level", "temperature", "top_p", "host",
+               "reasoning_tokens", "response_id")
 
 
 @dataclass(frozen=True)
@@ -395,10 +415,14 @@ class LedgerRow:
     protocol: str | None = None
     max_tokens: int | None = None
     reasoning: str | None = None
+    reasoning_level: str | None = None
     temperature: float | None = None
     top_p: float | None = None
     host: str | None = None
     reasoning_tokens: int | None = None
+    # The provider's id for the response, so the row can be reconciled with
+    # the provider's record of it. Absent on rows written before 2026-09-27.
+    response_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -880,10 +904,11 @@ class Client:
           13,535-token request, so the ceiling on prefix caching for this
           workload is about 6% of input spend.
         - **Reasoning is an effort level or a switch, not a token budget.**
-          Under v2 it is `reasoning: {"effort": ...}` at the catalogue's
-          default, or `{"enabled": true}` where no levels are listed, and a
-          cell may name another listed effort. v1 sent a top-level
-          `reasoning_effort: "medium"` to the models in `V1_EFFORT`.
+          Under v2 it is `reasoning: {"effort": ...}` at the value that
+          reaches the lab's default level, or `{"enabled": true}` where no
+          levels are listed, and a cell may name another listed effort. v1
+          sent a top-level `reasoning_effort: "medium"` to the models in
+          `V1_EFFORT`.
         - **Temperature is not refused alongside thinking.** That refusal in
           `build` exists because the Anthropic API returns a 400 for it. It
           is a fact about one vendor, not a house rule, and asserting it here
@@ -926,12 +951,16 @@ class Client:
             body["temperature"] = t
         if s.top_p is not None:
             body["top_p"] = s.top_p
-        # `require_parameters` drops hosts that would ignore any of the
+        # `require_parameters` drops hosts that do not list a parameter
         # above; `quantizations` drops hosts below the lab's own precision
-        # (finding F4).
+        # (finding F4); `ignore` drops hosts measured accepting the effort
+        # parameter and then not acting on it, which `require_parameters`
+        # cannot see.
         route: dict[str, Any] = {"require_parameters": True}
         if s.quantizations is not None:
             route["quantizations"] = list(s.quantizations)
+        if s.ignore:
+            route["ignore"] = list(s.ignore)
         body["provider"] = route
         return body
 
@@ -1032,7 +1061,7 @@ class Client:
                     cached=True, usd=0.0, stop_reason=hit.get("stop_reason"),
                     truncated=truncated(hit.get("stop_reason"), usage,
                                         max_tokens),
-                    host=hit.get("host"))
+                    host=hit.get("host"), response_id=hit.get("response_id"))
 
             est_in = tokens(system) + tokens(user)
             self.budget.check(model, est_in, max_tokens)
@@ -1137,16 +1166,18 @@ class Client:
                 cache_read_input_tokens=usage.cache_read_input_tokens,
                 cache_creation_input_tokens=usage.cache_creation_input_tokens,
                 ttft_s=clock.ttft(), host=host,
-                reasoning_tokens=usage.reasoning_tokens, **sent))
+                reasoning_tokens=usage.reasoning_tokens,
+                response_id=clock.response_id, **sent))
             # The raw usage block, not the typed view, so fields `Usage`
             # does not read stay available to a later reader.
             self._store(key, {"text": text, "usage": raw_usage,
-                              "stop_reason": stop_reason, "host": host})
+                              "stop_reason": stop_reason, "host": host,
+                              "response_id": clock.response_id})
             return Completion(
                 text=text, usage=usage, model=model, provider=prov,
                 cached=False, usd=usd, stop_reason=stop_reason,
                 truncated=truncated(stop_reason, usage, max_tokens),
-                host=host)
+                host=host, response_id=clock.response_id)
 
     def _send_messages(self, body: Body, clock: _Clock) -> "_Reply":
         """Anthropic transport.
@@ -1163,9 +1194,13 @@ class Client:
         with self.sdk().messages.stream(**body) as stream:
             for event in stream:
                 clock.check()
-                if event.type == "content_block_delta":
+                if event.type == "message_start":
+                    clock.response_id = getattr(
+                        getattr(event, "message", None), "id", None)
+                elif event.type == "content_block_delta":
                     clock.token()
             msg = stream.get_final_message()
+        clock.response_id = getattr(msg, "id", None) or clock.response_id
         usage = msg.usage.model_dump(mode="json")
         text = "".join(b.text for b in msg.content
                        if isinstance(b, anthropic.types.TextBlock))
@@ -1210,6 +1245,8 @@ class Client:
             for chunk in stream:
                 clock.check()
                 last = chunk
+                clock.response_id = (clock.response_id
+                                     or getattr(chunk, "id", None))
                 resp_model = chunk.model or resp_model
                 host = getattr(chunk, "provider", None) or host
                 if chunk.usage is not None:
@@ -1257,4 +1294,4 @@ class Client:
             provider=provider_for(model), draw=draw, ok=False,
             error_type=error_type, status_code=status,
             usd=0.0, seconds=clock.elapsed(), stop_reason=None,
-            ttft_s=clock.ttft(), **sent))
+            ttft_s=clock.ttft(), response_id=clock.response_id, **sent))

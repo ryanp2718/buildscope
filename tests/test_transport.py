@@ -26,8 +26,8 @@ import model_stats                                           # noqa: E402
 from permits import infer                                    # noqa: E402
 from permits.cells import DrawRecord, Outcome                # noqa: E402
 from permits.stats import failure_mode                       # noqa: E402
-from tests.test_infer import (_Err, _FakeMessage, _FakeSDK,  # noqa: E402
-                              _FakeStream)
+from tests.test_infer import (_Err, _Event, _FakeMessage,    # noqa: E402
+                              _FakeSDK, _FakeStream)
 from tests.test_providers import (_FakeChoice, _FakeOAI,     # noqa: E402
                                   _FakeResponse, _FakeUsage)
 
@@ -169,6 +169,36 @@ class TestTimeouts(unittest.TestCase):
         c = _client(_FakeStream(_ok(), events=("message_start",)))
         c.message(OPUS, "s", "u", 100, "synthesis")
         self.assertIsNone(c.ledger.rows()[0].ttft_s)
+
+
+class TestResponseIds(unittest.TestCase):
+    """Every row carries the provider's id for the response, so it can be
+    reconciled with the provider's own record of the call later - a failed
+    call most of all, since the ledger cannot say what that one cost."""
+
+    def test_a_success_records_the_message_id(self):
+        c = _client(_ok())
+        reply = c.message(OPUS, "s", "u", 100, "synthesis")
+        self.assertEqual((c.ledger.rows()[0].response_id, reply.response_id),
+                         ("msg_1", "msg_1"))
+
+    def test_a_failure_after_the_message_started_records_its_id(self):
+        start = _Event("message_start", message=_FakeMessage("x"))
+        cut = _FakeStream(_ok(), events=(start, "content_block_delta"),
+                          fail=httpx2.ReadTimeout("gap"))
+        c = _client(cut)
+        with self.assertRaises(infer.TransientError):
+            c.message(OPUS, "s", "u", 100, "synthesis")
+        self.assertEqual([r.response_id for r in c.ledger.rows()],
+                         ["msg_1", "msg_1"])
+
+    def test_an_openrouter_failure_records_the_generation_id(self):
+        c = _client(_ok())
+        c._oai = _FakeOAI(_FakeResponse(finish_reason="error"))
+        with self.assertRaises(infer.TransientError):
+            c.message("z-ai/glm-5.2", "s", "u", 100, "synthesis")
+        self.assertEqual([r.response_id for r in c.ledger.rows()],
+                         ["gen-1", "gen-1"])
 
 
 class TestOpenRouterStreams(unittest.TestCase):

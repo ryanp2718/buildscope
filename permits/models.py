@@ -56,8 +56,10 @@ class Protocol(StrEnum):
       five OpenRouter models sent `reasoning_effort: "medium"`, no sampling
       or routing parameters.
     - `V2`: step 3 of `docs/evidence/2026-09-26-model-comparison-fairness-audit.md`.
-      One output cap for every model, reasoning at the vendor default,
-      sampling from the model card, host precision filtered.
+      One output cap for every model, reasoning at the lab's default level,
+      sampling from the model card, host precision filtered, and hosts that
+      ignore the effort setting excluded
+      (`docs/evidence/2026-09-27-openrouter-reasoning-effort.md`).
     """
     V1 = "v1"
     V2 = "v2"
@@ -75,8 +77,8 @@ class ReasoningControl(StrEnum):
       Earlier Claude models take this and reject `adaptive` with a 400. Found
       the hard way: the first conformance run died on "adaptive thinking is
       not supported on this model" against Haiku 4.5.
-    - `EFFORT`: OpenRouter `reasoning: {"effort": ...}`, at the catalogue's
-      default effort unless a cell names another.
+    - `EFFORT`: OpenRouter `reasoning: {"effort": ...}`, at the lab's
+      default level unless a cell names another.
     - `SWITCH`: OpenRouter `reasoning: {"enabled": true}`, for a model whose
       catalogue entry lists no effort levels.
     - `NONE`: nothing is sent. OpenRouter silently ignores a reasoning
@@ -104,8 +106,12 @@ class ModelSpec:
     list is caught (`tests/test_providers.py`).
 
     `supports_reasoning` is what the catalogue says the model can do.
-    `reasoning` is how protocol v2 asks it to, `effort` the catalogue's
-    default effort and `efforts` every effort the catalogue lists.
+    `reasoning` is how protocol v2 asks it to. `efforts` are the OpenRouter
+    effort values the catalogue lists, and `effort` is the one that reaches
+    the lab's own default level, which is not always the catalogue's default:
+    for glm-5.2 the catalogue says `high` and Z.ai says `max`. `levels` maps
+    an OpenRouter value to the lab level it reaches where the names differ
+    (OpenRouter's `xhigh` is GLM-5.2's and DeepSeek V4's `max`).
     `tests/test_models.py` fails if a model that reasons is sent nothing.
 
     `max_output` is the catalogue's `max_completion_tokens`; the cap sent is
@@ -116,7 +122,9 @@ class ModelSpec:
 
     `quantizations` are the host precisions OpenRouter may route to: the
     lowest precision the lab itself released, and anything higher. None means
-    no filter, for a model with a single, lab-run host.
+    no filter, for a model with a single, lab-run host. `ignore` names
+    OpenRouter endpoints (base provider slugs) excluded because they were
+    measured rendering the same prompt whatever effort is sent.
 
     `released` is the catalogue's `created` date from
     `openrouter.ai/api/v1/models`, read 2026-09-25, for Claude too, so every
@@ -140,7 +148,14 @@ class ModelSpec:
     max_output: int = 0
     effort: str | None = None
     efforts: tuple[str, ...] = ()
+    levels: tuple[tuple[str, str], ...] = ()
     quantizations: tuple[str, ...] | None = None
+    ignore: tuple[str, ...] = ()
+
+
+def lab_level(spec: "ModelSpec", effort: str) -> str:
+    """The lab's name for the level an OpenRouter effort value reaches."""
+    return dict(spec.levels).get(effort, effort)
 
 
 # Protocol v2's output cap: the whole allowance, reasoning included, for every
@@ -270,19 +285,28 @@ _SPECS = [
               temperature=1.0, top_p=1.0, max_output=98304,
               quantizations=FROM_INT4),
     # Zhipu released bf16 and an fp8 checkpoint. Sampling from the catalogue's
-    # `default_parameters`, which is also the card's reasoning setting.
+    # `default_parameters`, which is also the card's reasoning setting. Z.ai's
+    # default level is `max`, and it asks benchmarks to keep it; the catalogue
+    # lists `xhigh` and `high` with `high` as default. `xhigh` reaches max both
+    # on Z.ai's API (which maps it so) and on an endpoint running the open
+    # template (which turns anything but `high` into max).
     ModelSpec("z-ai/glm-5.2", OR, "z-ai", Tier.MID, "glm-5.2",
               date(2026, 6, 16), (0.650, 7.500), (0.650, 2.042),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=0.95, max_output=131072,
-              effort="high", efforts=("high", "xhigh"),
+              effort="xhigh", efforts=("high", "xhigh"),
+              levels=(("xhigh", "max"),),
               quantizations=FROM_FP8),
+    # DeepSeek's default level is `high`. OpenRouter's `xhigh` renders Think
+    # Max on all 30 V4 endpoints probed 2026-09-27. Novita serves Pro at Think
+    # Max and Parasail at high whatever effort is sent, so both are excluded.
     ModelSpec("deepseek/deepseek-v4-pro", OR, "deepseek", Tier.MID, "deepseek-v4-pro",
               date(2026, 4, 24), (0.940, 5.000), (0.940, 1.879),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=1.0, max_output=384000,
               effort="high", efforts=("high", "xhigh"),
-              quantizations=FROM_FP8),
+              levels=(("xhigh", "max"),),
+              quantizations=FROM_FP8, ignore=("novita", "parasail")),
     # Current-generation cheap tier, added 2026-09-25. Reasoning was probed,
     # not assumed from the name: both return a populated `reasoning` field and
     # non-zero `reasoning_tokens` when sent no reasoning parameter. Both were
@@ -293,12 +317,15 @@ _SPECS = [
               temperature=1.0, top_p=0.95, max_output=128000,
               effort="max", efforts=("low", "high", "max"),
               quantizations=FROM_FP8),
+    # As Pro. GMICloud, SiliconFlow and Parasail render one prompt for every
+    # effort sent, so they are excluded.
     ModelSpec("deepseek/deepseek-v4-flash", OR, "deepseek", Tier.CHEAP, "deepseek-v4-flash",
               date(2026, 4, 24), (0.075, 0.750), (0.047, 0.095),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=1.0, max_output=384000,
               effort="high", efforts=("high", "xhigh"),
-              quantizations=FROM_FP8),
+              levels=(("xhigh", "max"),),
+              quantizations=FROM_FP8, ignore=("gmicloud", "siliconflow", "parasail")),
     # For verifying the path end to end before any money is added to the
     # account. See `Tier.FREE`. Never a measurement, so no reasoning setting.
     ModelSpec("nvidia/nemotron-3-ultra-550b-a55b:free", OR, "nvidia", Tier.FREE,

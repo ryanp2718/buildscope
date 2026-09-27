@@ -72,7 +72,8 @@ class _FakeChoice(object):
 
 
 class _FakeChunk(object):
-    def __init__(self, model, choices, usage, provider=None):
+    def __init__(self, model, choices, usage, provider=None, id="gen-1"):
+        self.id = id
         self.model = model
         self.choices = choices
         self.usage = usage
@@ -377,10 +378,12 @@ class TestOpenRouterRequestShape(unittest.TestCase):
                                       protocol=Protocol.V1)),
                 {"model", "max_tokens", "messages"}, m)
 
-    def test_v2_asks_for_the_catalogue_default_effort(self):
+    def test_v2_asks_for_the_labs_default_level(self):
         """Four of v1's five were sent "medium", which their catalogue
-        entries do not list."""
+        entries do not list. glm-5.2's catalogue default is `high`; Z.ai's
+        is `max`, which `xhigh` reaches."""
         want = {"deepseek/deepseek-v4-pro": {"effort": "high"},
+                "z-ai/glm-5.2": {"effort": "xhigh"},
                 "z-ai/glm-5.3-flash": {"effort": "max"},
                 "openai/gpt-oss-120b": {"effort": "medium"},
                 "moonshotai/kimi-k2-thinking": {"enabled": True},
@@ -407,6 +410,10 @@ class TestOpenRouterRequestShape(unittest.TestCase):
         self.assertEqual(body["provider"], {
             "require_parameters": True,
             "quantizations": ["fp8", "fp16", "bf16"]})
+        # Endpoints measured ignoring the effort setting.
+        ds = self.c.build_chat("deepseek/deepseek-v4-pro", "S", "U", 100,
+                               thinking=True)
+        self.assertEqual(ds["provider"]["ignore"], ["novita", "parasail"])
         # One lab-run host that reports no precision, so `unknown` is admitted
         # beside the fp8 the lab released; without it the model has no host.
         only = self.c.build_chat("qwen/qwen3.5-flash-02-23", "S", "U", 100)
@@ -758,7 +765,7 @@ class TestProtocolV2(ClientCase):
         self.client.message("z-ai/glm-5.2", "S", "U", 64000, "synthesis",
                             thinking=True)
         self.assertEqual(comps.extras[-1], ["provider", "reasoning"])
-        self.assertEqual(comps.bodies[-1]["reasoning"], {"effort": "high"})
+        self.assertEqual(comps.bodies[-1]["reasoning"], {"effort": "xhigh"})
 
     def test_the_row_records_what_was_asked_and_who_answered(self):
         self.install(_FakeResponse(host="Novita", usage=_FakeUsage(
@@ -768,18 +775,29 @@ class TestProtocolV2(ClientCase):
                                     "synthesis", thinking=True)
         row = self.rows()[-1]
         self.assertEqual(
-            (row.protocol, row.max_tokens, row.reasoning, row.temperature,
-             row.top_p, row.host, row.reasoning_tokens),
-            ("v2", 64000, "effort=high", 1.0, 0.95, "Novita", 700))
-        self.assertEqual((reply.host, reply.usage.reasoning_tokens),
-                         ("Novita", 700))
+            (row.protocol, row.max_tokens, row.reasoning, row.reasoning_level,
+             row.temperature, row.top_p, row.host, row.reasoning_tokens,
+             row.response_id),
+            ("v2", 64000, "effort=xhigh", "max", 1.0, 0.95, "Novita", 700,
+             "gen-1"))
+        self.assertEqual((reply.host, reply.usage.reasoning_tokens,
+                          reply.response_id), ("Novita", 700, "gen-1"))
+
+    def test_v1_records_no_level_for_its_medium(self):
+        """What v1's `medium` reached depended on the serving endpoint."""
+        body = self.client.request("z-ai/glm-5.2", "S", "U", 16000,
+                                   thinking=True, protocol=V1)
+        sent = infer.settings_sent(body, V1)
+        self.assertEqual((sent["reasoning"], sent["reasoning_level"]),
+                         ("effort=medium", None))
 
     def test_a_replay_keeps_the_host(self):
         self.install(_FakeResponse(host="Novita", usage=_FakeUsage(
             prompt_tokens=10, completion_tokens=10, cost=0.01)))
         args = ("z-ai/glm-5.2", "S", "U", 64000, "synthesis")
         self.client.message(*args)
-        self.assertEqual(self.client.message(*args).host, "Novita")
+        again = self.client.message(*args)
+        self.assertEqual((again.host, again.response_id), ("Novita", "gen-1"))
 
     def test_the_two_protocols_are_different_requests(self):
         """So a v2 draw can never be answered from a v1 cache entry."""

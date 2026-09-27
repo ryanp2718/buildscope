@@ -359,7 +359,7 @@ Anthropic.
 |---|---|---|
 | 1 | (Done 2026-09-26: `ModelSpec` registry in `permits/models.py` replacing the seven tables; frozen `Usage`, `Completion`, `LedgerRow`, `DrawRecord`, `CellSpec`, `RunConfig`; `Outcome` as a `StrEnum`; mypy strict in CI on five `permits/` files. Every cached request hashes as before, and a replay of four cells re-scores every draw identically.) | no |
 | 2 | (Done 2026-09-26: every call streams on both providers; read timeout 120 s between chunks; wall-clock limit 300 s + ceiling at 10 tok/s; `FatalError` stops the run, `TransientError` is retried once under the same draw then recorded as `infra_error`, outside the pass rate; `ttft_s` in the ledger; infra-error rate, median TTFT and tokens per second in `model_stats.json`. See "Step 2 as built" below.) | no |
-| 3 | (Done 2026-09-26: protocol v2 in the registry and request builders; v1 frozen and still replaying; settings sent, serving host and reasoning tokens on every ledger row. See "Step 3 as built" below.) | no |
+| 3 | (Done 2026-09-26: protocol v2 in the registry and request builders; v1 frozen and still replaying; settings sent, serving host and reasoning tokens on every ledger row. Amended 2026-09-27: reasoning at the lab's default level, endpoints that ignore effort excluded, the provider's response id on every row. See "Step 3 as built" below.) | no, and $0.08 for the effort probe |
 | 4 | Atomic cache writes; a lock on `variance.json`; closed file handles. (`short_model` and the `cached()` / `Ledger.rows()` handles: done with step 1.) | no |
 | 5 | (Done 2026-09-26: R1 corrected in the report, the code comment and the test docstring; the report's cells pinned in `tests/test_model_stats.py`.) | no |
 | 6 | Pre-register roster, prompt hash, development/test split, n per cell and success criteria; dry-run the cost projection; then run | yes |
@@ -480,6 +480,27 @@ three v1 cells replayed at `--max-spend 0` re-score identically and write no led
 `model_stats.json` differs only by `draws_truncated` and `reasoning_tokens_p50`. Replaying a v1
 Haiku cell now records its thinking tokens, which Anthropic's cached usage carried all along. The
 v1 OpenRouter cache entries did not keep reasoning tokens, so those stay unknown.
+
+**Amended 2026-09-27**, after
+[2026-09-27-openrouter-reasoning-effort.md](2026-09-27-openrouter-reasoning-effort.md) measured what
+each effort value reaches:
+
+- "The vendor default" is now the lab's default level, not the catalogue's. They differ for glm-5.2:
+  the catalogue's default is `high`, Z.ai's is `max`. glm-5.2 is sent `xhigh`, which reaches max on
+  Z.ai's API and on the open template alike. The registry records the lab's name for the level
+  (`levels`), and every row carries it as `reasoning_level`.
+- Endpoints measured rendering one prompt whatever effort is sent are excluded with
+  `provider.ignore`: Novita and Parasail for deepseek-v4-pro, GMICloud, SiliconFlow and Parasail for
+  deepseek-v4-flash.
+- Every ledger row, failures included, carries the provider's id for the response (`response_id`:
+  OpenRouter's generation id, Anthropic's message id), so a row can be reconciled with the
+  provider's record later. Cache entries carry it too.
+- The F3 finding above is answered for DeepSeek: v1's `medium` ran at high on most endpoints and at
+  Think Max on one, so each v1 DeepSeek cell is a mixture, mostly high. For GLM it is high on Z.ai
+  and max on open-template endpoints, in unknown proportion.
+
+These change v2 request bodies only. Every v1 draw still hashes to its cached response (240 replay,
+the same 5 known misses), and no v2 cell had been bought.
 
 A v2 cell's worst case is larger because the cap is: a 20-draw Opus 5 Clark cell projects to
 $32.90 at 64,000 tokens, against about $6 at 12,000. Spend is billed on tokens used, and the

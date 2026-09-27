@@ -71,13 +71,13 @@ the build if one is missing.
 ```
 permits/      the library — capture, strip, identity, vocabulary, adapters,
               emit, inference, model registry, telemetry, statistics.
-              16 modules, 4,951 lines.
+              16 modules, 5,020 lines.
 scripts/      six maintained tools.  conformance.py is the experiment harness;
               model_stats.py rolls every measurement into one tidy table;
               three check_*.py validate the docs, the identities and the notes.
 spikes/       the lab notebook.  49 scripts, unmaintained, kept because the
               published numbers came out of them.  See spikes/README.md.
-tests/        373 tests, replay over stored pages.  No network, no spend.
+tests/        380 tests, replay over stored pages.  No network, no spend.
 docs/         adr/ why a rule exists · design/ how it works · evidence/ what
               was measured, dated and reproducible.
 DESIGN.md     the narrative: thesis, open questions, sequencing, risk register.

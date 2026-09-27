@@ -91,7 +91,25 @@ class TestReasoningControlFitsTheProvider(unittest.TestCase):
             else:
                 self.assertIsNone(s.effort, m)
 
-    def test_the_effort_defaults_match_the_catalogue(self):
+    def test_the_default_effort_reaches_the_labs_default_level(self):
+        """Protocol v2 asks for the lab's default, not the catalogue's
+        (docs/evidence/2026-09-27-openrouter-reasoning-effort.md). The two
+        differ for glm-5.2: the catalogue says `high`, Z.ai says `max`."""
+        lab = {"z-ai/glm-5.2": "max", "z-ai/glm-5.3-flash": "max",
+               "deepseek/deepseek-v4-pro": "high",
+               "deepseek/deepseek-v4-flash": "high",
+               "openai/gpt-oss-120b": "medium",
+               "openai/gpt-oss-120b:batch": "medium"}
+        effort = {s.id: models.lab_level(s, s.effort) for s in R.values()
+                  if s.effort is not None}
+        self.assertEqual(effort, lab)
+
+    def test_every_level_name_is_for_a_listed_effort(self):
+        for m, s in R.items():
+            for sent, _ in s.levels:
+                self.assertIn(sent, s.efforts, m)
+
+    def test_the_listed_efforts_and_caps_match_the_catalogue(self):
         path = os.path.join(ROOT, "data", "audit",
                             "2026-09-25-openrouter-models.json")
         if not os.path.exists(path):
@@ -105,7 +123,6 @@ class TestReasoningControlFitsTheProvider(unittest.TestCase):
                 continue
             with self.subTest(model=s.id):
                 r = by[s.id].get("reasoning") or {}
-                self.assertEqual(s.effort, r.get("default_effort"))
                 self.assertEqual(set(s.efforts),
                                  set(r.get("supported_efforts") or ()))
                 self.assertEqual(
@@ -141,6 +158,14 @@ class TestSamplingAndRouting(unittest.TestCase):
                 else:
                     self.assertNotIn("unknown", s.quantizations)
 
+    def test_hosts_that_ignore_effort_are_excluded(self):
+        """Measured 2026-09-27: these endpoints render one prompt whatever
+        effort is sent, so a cell routed there is not at the level asked."""
+        self.assertEqual(R["deepseek/deepseek-v4-pro"].ignore,
+                         ("novita", "parasail"))
+        self.assertEqual(R["deepseek/deepseek-v4-flash"].ignore,
+                         ("gmicloud", "siliconflow", "parasail"))
+
     def test_every_filtered_model_keeps_a_host(self):
         """A filter that matches no endpoint routes the model nowhere."""
         path = os.path.join(ROOT, "data", "audit",
@@ -154,7 +179,8 @@ class TestSamplingAndRouting(unittest.TestCase):
                 continue
             with self.subTest(model=s.id):
                 hosts = [e for e in eps[s.id]["data"]["endpoints"]
-                         if e.get("quantization") in s.quantizations]
+                         if e.get("quantization") in s.quantizations
+                         and e["tag"].split("/")[0] not in s.ignore]
                 self.assertTrue(hosts)
 
 
