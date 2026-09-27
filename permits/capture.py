@@ -35,10 +35,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import urllib.robotparser
 from http.cookiejar import CookieJar
 
 from permits import aspnet
 from permits import fingerprint as fp
+from permits.crawler_identity import NAME as CRAWLER_NAME
 from permits.crawler_identity import user_agent
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -187,47 +189,55 @@ def _opener():
     return op
 
 
-def robots_ok(url, op):
-    """Read robots.txt once per host. Recorded per page, never silently."""
+def _host_key(url):
     host = urllib.parse.urlsplit(url)[:2]
-    key = urllib.parse.urlunsplit((*host, "", "", ""))
+    return urllib.parse.urlunsplit((*host, "", "", ""))
+
+
+def robots_for(url, op):
+    """Read robots.txt once per host. Recorded per page, never silently.
+
+    Parsed by the standard library so that group matching follows RFC 9309: a
+    group naming `PermitsResearchBot` replaces the `*` group rather than being
+    ignored. The hand-rolled parser this replaced read only `*`, which meant
+    the opt-out published in `site/index.html` did not work.
+    """
+    key = _host_key(url)
     if key in _robots:
         return _robots[key]
+    rp = urllib.robotparser.RobotFileParser()
     try:
         _spent[0] += 1
         r = op.open(key + "/robots.txt", timeout=TIMEOUT)
-        body = r.read(200000).decode("utf-8", "replace")
-        dis = []
-        agent_all = False
-        for line in body.splitlines():
-            line = line.split("#")[0].strip()
-            if not line:
-                continue
-            k, _, v = line.partition(":")
-            k, v = k.strip().lower(), v.strip()
-            if k == "user-agent":
-                agent_all = (v == "*")
-            elif k == "disallow" and agent_all and v:
-                dis.append(v)
-        _robots[key] = dis
+        rp.parse(r.read(200000).decode("utf-8", "replace").splitlines())
     except Exception:
-        _robots[key] = []
-    return _robots[key]
+        rp.parse([])
+    _robots[key] = rp
+    return rp
 
 
 def allowed(url, op):
-    path = urllib.parse.urlsplit(url).path or "/"
-    for d in robots_ok(url, op):
-        if d == "/" or path.startswith(d):
-            return False
-    return True
+    return robots_for(url, op).can_fetch(CRAWLER_NAME, url)
+
+
+def pause_for(url):
+    """PAUSE, or the host's Crawl-delay where that is longer. Never shorter:
+    Crawl-delay is a request to slow down, not permission to speed up.
+
+    The standard parser reads whole seconds only; a fractional Crawl-delay is
+    ignored and PAUSE applies.
+    """
+    rp = _robots.get(_host_key(url))
+    delay = rp.crawl_delay(CRAWLER_NAME) if rp else None
+    return max(PAUSE, float(delay or 0))
 
 
 def _polite(url):
     host = urllib.parse.urlsplit(url).netloc
+    pause = pause_for(url)
     gap = time.time() - _last.get(host, 0)
-    if gap < PAUSE:
-        time.sleep(PAUSE - gap)
+    if gap < pause:
+        time.sleep(pause - gap)
     _last[host] = time.time()
 
 

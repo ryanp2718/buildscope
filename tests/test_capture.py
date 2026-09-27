@@ -27,6 +27,7 @@ was actually pointed at it.
 import csv
 import io
 import os
+import re
 import shutil
 import socket
 import sys
@@ -291,10 +292,47 @@ class TestRobots(CaptureCase):
 
     def test_an_unreachable_robots_does_not_block_the_fetch(self):
         """A host with no robots.txt is not a host that forbids everything.
-        The failure is swallowed deliberately and the empty disallow list is
+        The failure is swallowed deliberately and an empty rule set is
         cached, so the decision is made once."""
         ROUTES.pop("/robots.txt")
         self.assertTrue(capture.allowed(self.url("/index"), self.opener()))
+
+    def test_a_group_naming_this_crawler_is_obeyed(self):
+        """The opt-out `site/index.html` tells operators to use. It used to be
+        ignored: only `User-agent: *` groups were read, so an operator who
+        followed the published instructions was still crawled."""
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: PermitsResearchBot\n"
+                                 "Disallow: /\n")
+        self.assertFalse(capture.allowed(self.url("/index"), self.opener()))
+
+    def test_the_named_group_replaces_the_wildcard_group(self):
+        """RFC 9309 section 2.2.1: a crawler obeys the group that names it,
+        and only that group."""
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: *\nDisallow: /\n\n"
+                                 "User-agent: PermitsResearchBot\n"
+                                 "Disallow: /admin\n")
+        op = self.opener()
+        self.assertTrue(capture.allowed(self.url("/index"), op))
+        self.assertFalse(capture.allowed(self.url("/admin/index"), op))
+
+    def test_another_crawlers_group_is_not_ours(self):
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: Googlebot\nDisallow: /\n")
+        self.assertTrue(capture.allowed(self.url("/index"), self.opener()))
+
+    def test_the_published_opt_out_stops_the_crawler(self):
+        """The robots.txt block on the crawler's public page, verbatim. If the
+        page and the parser ever disagree, this fails rather than an operator
+        finding out from their logs."""
+        page = os.path.join(ROOT, "site", "index.html")
+        with io.open(page, encoding="utf-8") as f:
+            block = re.search(r'<pre id="opt-out">(.*?)</pre>', f.read(),
+                              re.S)
+        self.assertIsNotNone(block, "no opt-out block on the crawler page")
+        ROUTES["/robots.txt"] = (200, "text/plain", block.group(1))
+        self.assertFalse(capture.allowed(self.url("/index"), self.opener()))
 
 
 class TestTransportFailure(CaptureCase):
@@ -362,6 +400,26 @@ class TestPoliteness(CaptureCase):
         start = time.time()
         capture._polite("http://a.example/2")
         self.assertGreater(time.time() - start, 0.25)
+
+    def test_a_longer_crawl_delay_replaces_the_pause(self):
+        """Crawl-delay is how an operator asks for slower rather than none."""
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: PermitsResearchBot\n"
+                                 "Crawl-delay: 1\n")
+        op = self.opener()
+        capture.fetch(op, self.url("/index"), "one", "TEST", "accela",
+                      "T-INDEX")
+        start = time.time()
+        capture.fetch(op, self.url("/other"), "two", "TEST", "accela",
+                      "T-INDEX")
+        self.assertGreater(time.time() - start, 0.9)
+
+    def test_a_shorter_crawl_delay_does_not_speed_the_crawler_up(self):
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: *\nCrawl-delay: 1\n")
+        capture.PAUSE = 3.0
+        capture.allowed(self.url("/index"), self.opener())
+        self.assertEqual(capture.pause_for(self.url("/index")), 3.0)
 
 
 class TestSchemaMigration(CaptureCase):
