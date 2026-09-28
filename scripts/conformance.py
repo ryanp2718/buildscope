@@ -693,11 +693,15 @@ def stripped_corpus(target, pages):
     return out
 
 
-def run_synth(src_path, page_paths, timeout=300, runner_name="_runner.py"):
+def run_synth(src_path, page_paths, timeout=300, runner_name="_runner.py",
+              runner_dir=None):
     # Named so two harnesses can run at once. They would otherwise both write
     # one path and collide, which on Windows is a sharing violation that
-    # would kill whichever run is currently spending money.
-    runner = os.path.join(SYNTH, runner_name)
+    # would kill whichever run is currently spending money. The directory is
+    # created here because a fresh clone has no data/ tree.
+    runner_dir = runner_dir or SYNTH
+    os.makedirs(runner_dir, exist_ok=True)
+    runner = os.path.join(runner_dir, runner_name)
     with io.open(runner, "w", encoding="utf-8") as fh:
         fh.write(RUNNER)
     cmd = [sys.executable, runner, src_path, *list(page_paths)]

@@ -263,7 +263,7 @@ class TestTheHarnessDoesNotDecideTheAnswer(unittest.TestCase):
                      "    return [{'native_id': 'A1'}]\n"
                      "print('demo:', extract(''))\n")
         res, err = self.C.run_synth(src, [page],
-                                    runner_name="_test_runner.py")
+                                    runner_name="_test_runner.py", runner_dir=d)
         self.assertIsNone(err)
         self.assertTrue(res[0]["ok"])
         self.assertEqual(res[0]["rows"], [{"native_id": "A1"}])
@@ -283,7 +283,7 @@ class TestTheHarnessDoesNotDecideTheAnswer(unittest.TestCase):
             with io.open(src, "w", encoding="utf-8") as fh:
                 fh.write("def extract(html):\n" + body)
             res, err = self.C.run_synth(src, [page],
-                                        runner_name="_test_runner.py")
+                                        runner_name="_test_runner.py", runner_dir=d)
             self.assertIsNone(err)
             self.assertFalse(res[0]["ok"])
             self.assertIn(name, res[0]["error"])
