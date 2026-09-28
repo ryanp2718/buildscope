@@ -185,6 +185,87 @@ class TestMutationsPreserveRecords(unittest.TestCase):
         self.assertIn("ctl99_", out)
 
 
+class TestTwoStageCell(unittest.TestCase):
+    """`_run_variance` end to end, with the model call, the runner and the
+    scorer replaced: each draw passes or fails as scripted, and what the
+    loop buys and saves is checked. The rule itself is tested in
+    `test_cells.TestCurtail`."""
+
+    def run_cell(self, passes, draws=20, stage1=10, model="claude-opus-5-5",
+                 protocol=None):
+        import json
+        import tempfile
+        from types import SimpleNamespace
+        from unittest import mock
+        import conformance as C
+        from permits.cells import RunConfig
+        from permits.models import Protocol
+
+        sent = []
+
+        class Client(object):
+            request = infer.Client.request
+            build = infer.Client.build
+            build_chat = infer.Client.build_chat
+
+            def message(self, *a, **kw):
+                sent.append(kw)
+                return SimpleNamespace(
+                    text="", usd=0.01, cached=False, truncated=False,
+                    host=None, usage=SimpleNamespace(output_tokens=10,
+                                                     reasoning_tokens=0))
+
+        scores = iter(passes)
+        cfg = RunConfig(model, model, 16000, 24000, False, 2, draws,
+                        protocol or Protocol.V2, None, stage1)
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.multiple(
+                    C, OUT=d, SYNTH=d,
+                    read=lambda p: GRID,
+                    window=lambda html, budget: (html, 1.0, 0),
+                    stripped_corpus=lambda t, p: [("p.html", "p.html")],
+                    extract_block=lambda *a: "def extract(html):\n    []\n",
+                    audit=lambda src: ([], []),
+                    run_synth=lambda sp, pages: (
+                        [{"ok": True, "page": "p.html", "rows": []}], None),
+                    score=lambda t, ref, rows: {
+                        "recall": 1.0 if next(scores) else 0.0,
+                        "precision": 1.0}):
+            out, _usd = C._run_variance(Client(), SimpleNamespace(
+                key="clarkco"), [("p.html", "p.html")], {"p.html": []}, cfg)
+            with open(os.path.join(d, "variance.json")) as fh:
+                cell = next(iter(json.load(fh)["cells"].values()))
+        return out, sent, cell
+
+    def test_a_unanimous_stage1_buys_ten_draws(self):
+        for verdict in (True, False):
+            out, sent, cell = self.run_cell([verdict] * 20)
+            self.assertEqual((len(out), len(sent)), (10, 10))
+            self.assertEqual(cell["two_stage"], {"stage1": 10,
+                                                 "max_draws": 20,
+                                                 "curtailed": True})
+
+    def test_a_split_stage1_buys_twenty(self):
+        out, _sent, cell = self.run_cell([True] * 9 + [False] * 11)
+        self.assertEqual(len(out), 20)
+        self.assertEqual(cell["perfect"], 9)
+        self.assertFalse(cell["two_stage"]["curtailed"])
+
+    def test_a_fixed_cell_is_not_curtailed(self):
+        out, _sent, cell = self.run_cell([True] * 20, stage1=None)
+        self.assertEqual(len(out), 20)
+        self.assertNotIn("two_stage", cell)
+
+    def test_v2_draws_ask_for_the_user_breakpoint_and_v1_draws_do_not(self):
+        from permits.models import Protocol
+        _out, sent, _cell = self.run_cell([True] * 10)
+        self.assertTrue(all(kw["cache_user"] for kw in sent))
+        _out, sent, _cell = self.run_cell([True] * 3, draws=3, stage1=None,
+                                          model="claude-opus-5",
+                                          protocol=Protocol.V1)
+        self.assertFalse(any(kw["cache_user"] for kw in sent))
+
+
 class TestDriftHarnessIsolation(unittest.TestCase):
 
     def test_drift_uses_its_own_runner_file(self):

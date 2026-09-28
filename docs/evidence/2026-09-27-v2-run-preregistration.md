@@ -203,9 +203,12 @@ the adapter on every record of every page of the target's corpus. Anything less 
 
 **Before any spend**, the code the plan depends on must exist and be tested:
 
-- The two-stage rule in `run_variance`.
-- An Anthropic cache breakpoint on the user message, under v2 only, so a cell's identical window is
-  billed at full price once and at a tenth after (a twentieth on Opus 5.5).
+- Done 2026-09-27: the two-stage rule in `run_variance` (`--cells target:model:10+10`,
+  `permits.cells.curtail`), with tests.
+- Done 2026-09-27: an Anthropic cache breakpoint on the user message, under v2 only, so a cell's
+  identical window is billed at full price once and at a tenth after (a twentieth on Opus 5.5).
+  The first draw's write bills at 1.25x, as the projection below assumes. Whether each draw after
+  the first reads it is checked on the smoke draws, from `cache_read_input_tokens` in the ledger.
 - Done 2026-09-27: the development/test split in `TARGETS`, the held-out targets, and the window
   fallback, with tests.
 - Done 2026-09-27: registry entries for the 16 roster models not in it, set from sources snapshotted

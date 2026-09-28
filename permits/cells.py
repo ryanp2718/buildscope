@@ -31,18 +31,30 @@ class Outcome(StrEnum):
 
 @dataclass(frozen=True)
 class CellSpec:
-    """One `--cells` entry: `target:model[@effort]:draws`."""
+    """One `--cells` entry: `target:model[@effort]:draws`, where `draws` is a
+    count or, for a two-stage cell, `first+more` (see `curtail`).
+
+    `draws` is the most the cell can buy, so a worst case priced from it is
+    the worst case of either design. `stage1` is set on a two-stage cell."""
     target: str
     model: str
     draws: int
     hint: bool = False
     protocol: Protocol = Protocol.V2
     effort: str | None = None
+    stage1: int | None = None
 
     @property
     def label(self) -> str:
         """The model as the cell names it: `model`, or `model@effort`."""
         return "%s@%s" % (self.model, self.effort) if self.effort else self.model
+
+    @property
+    def draws_label(self) -> str:
+        """The draw count as it was written: `20`, or `10+10`."""
+        if self.stage1 is None:
+            return str(self.draws)
+        return "%d+%d" % (self.stage1, self.draws - self.stage1)
 
     @property
     def key(self) -> str:
@@ -67,7 +79,8 @@ class CellSpec:
         """Split off the target at the first colon and the draw count at the
         last, rather than splitting on every colon: an OpenRouter model id may
         contain one itself, as in `openai/gpt-oss-120b:batch`. An effort is
-        written after the model id with `@`, which no id contains."""
+        written after the model id with `@`, which no id contains. A
+        two-stage cell writes its draws as `10+10`."""
         entry = entry.strip()
         if entry.count(":") < 2:
             raise ValueError("bad --cells entry %r, want target:model:draws"
@@ -75,17 +88,21 @@ class CellSpec:
         target, rest = entry.split(":", 1)
         model, draws = rest.rsplit(":", 1)
         try:
-            n = int(draws)
+            parts = [int(p) for p in draws.split("+")]
         except ValueError:
             raise ValueError("bad draw count %r in --cells entry %r"
                              % (draws, entry)) from None
+        if len(parts) > 2 or min(parts) < 1:
+            raise ValueError("bad draw count %r in --cells entry %r, want n "
+                             "or first+more" % (draws, entry))
+        stage1 = parts[0] if len(parts) == 2 else None
         effort = None
         if "@" in model:
             model, effort = model.split("@", 1)
             if protocol is Protocol.V1:
                 raise ValueError("%r names an effort, which protocol v1 does "
                                  "not have" % entry)
-        return cls(target, model, n, hint, protocol, effort)
+        return cls(target, model, sum(parts), hint, protocol, effort, stage1)
 
 
 @dataclass(frozen=True)
@@ -101,6 +118,7 @@ class RunConfig:
     draws: int
     protocol: Protocol = Protocol.V2
     effort: str | None = None
+    stage1: int | None = None
 
     @classmethod
     def from_args(cls, args: Any) -> "RunConfig":
@@ -110,7 +128,7 @@ class RunConfig:
     def for_cell(self, cell: CellSpec) -> "RunConfig":
         return replace(self, synth_model=cell.model, draws=cell.draws,
                        synth_hint=cell.hint, protocol=cell.protocol,
-                       effort=cell.effort)
+                       effort=cell.effort, stage1=cell.stage1)
 
 
 @dataclass(frozen=True)
@@ -183,3 +201,24 @@ class DrawRecord:
 def draws_of(cell: Mapping[str, Any]) -> list[DrawRecord]:
     """The typed draws of one `variance.json` cell."""
     return [DrawRecord.from_dict(d) for d in cell.get("detail", [])]
+
+
+def curtail(draws: list[DrawRecord], stage1: int) -> bool:
+    """Whether a two-stage cell stops after its first `stage1` draws: it does
+    when they are unanimous, all passing or all failing. This is a curtailed
+    design, fixed in the step 6 pre-registration: 0/10 already has a Wilson
+    interval of [0.00, 0.28] and 10/10 one of [0.72, 1.00], and ten more
+    draws would narrow neither to a different conclusion. The rule depends
+    only on the pass count, so the interval is computed as for a fixed n.
+
+    Only scored draws count, as in the rate. An infrastructure error in stage
+    1 leaves it deciding on fewer draws, and the re-run that retries that
+    draw decides again. That can only turn a stop into a continue, never
+    the reverse: a stage 1 that is already split stays split whatever the
+    retried draw does. So stage 2 is never bought on data the complete stage
+    1 would have stopped on. A stage 1 with no scored draw stops: there is
+    nothing to decide on.
+    """
+    scored = [r for r in draws if r.draw < stage1 and r.scored()]
+    passed = sum(1 for r in scored if r.outcome is Outcome.PERFECT)
+    return passed in (0, len(scored))

@@ -50,6 +50,15 @@ The policy is therefore versioned (`models.Protocol`) rather than edited in plac
     cap. `models.routed` computes the hosts a request can reach, which the tests check.
   - **Transport**: every call streamed; 120 s read timeout between chunks; a wall-clock limit of
     300 s plus the cap at 10 tokens per second. A host failure is retried once under the same draw.
+  - **Prompt caching** on Anthropic: a variance cell sends one prompt for every draw, so its user
+    message carries a cache breakpoint as well as the system prompt (`cache_user`). The first draw
+    writes the cache at 1.25x input and later draws read it at the model's `cache_read`, within the
+    5-minute lifetime; v1 Anthropic draws took at most 2 minutes. Other callers send a page once and
+    do not set it. OpenRouter has no equivalent to ask for.
+- **Two-stage cells**: `--cells clarkco:model:10+10` buys 10 draws and stops if they are unanimous,
+  otherwise continues to 20 (`cells.curtail`). The worst case is priced at 20. Only scored draws
+  decide; a stage 1 with an infra error decides on the rest, and the re-run that retries it decides
+  again, which can turn a stop into a continue but never the reverse.
 
 ### Per-model settings under protocol v2
 
@@ -116,7 +125,8 @@ each cell is a mixture in unknown proportion.
   message id. The id is what OpenRouter's `GET /api/v1/generation?id=` takes, whose record carries
   the host's native token counts and cost; there is no endpoint that lists past generations.
 - **Draw records** (`variance.json`): outcome, scores, host, reasoning tokens. A v2 cell also records
-  the settings every draw was sent with.
+  the settings every draw was sent with, and a two-stage cell its `stage1`, `max_draws` and whether
+  it stopped after stage 1.
 - **Cache** (`data/infer/cache/`): the response text, usage, stop reason, host and response id.
 
 ## File guarantees
@@ -184,4 +194,6 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   price ceiling raised to bound the hosts a request can reach (four v1 input ceilings and one output
   ceiling were below); Opus 5.5 cache reads billed at 0.05x. Amendment 1 to the pre-registration: two
   top-tier picks were speed variants of the same weights (glm-5.3-prime, qwen3.8-max-prime), so the
-  roster is 19 models with glm-5.3 and qwen3.8-max-0902 at the top; $35 typical.
+  roster is 19 models with glm-5.3 and qwen3.8-max-0902 at the top; $35 typical. The last two
+  pre-spend gates built: the two-stage rule in `run_variance`, and the Anthropic breakpoint on a
+  variance cell's user message under v2.

@@ -102,7 +102,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from permits import fileio, infer, models
-from permits.cells import CellSpec, DrawRecord, Outcome, RunConfig, draws_of
+from permits.cells import (CellSpec, DrawRecord, Outcome, RunConfig,
+                           curtail, draws_of)
 from permits.models import Protocol
 from permits.stats import ORDER, failure_mode, wilson
 from permits import strip as _strip                          # noqa: E402
@@ -918,7 +919,9 @@ def main():
                     help="variance allocation as target:model:draws, "
                          "comma separated. Every cell runs inside one "
                          "session so --max-spend caps the whole "
-                         "experiment rather than each cell separately.")
+                         "experiment rather than each cell separately. "
+                         "draws may be first+more, e.g. 10+10: the cell "
+                         "stops after the first stage if it is unanimous.")
     ap.add_argument("--draws", type=int, default=1,
                     help="synthesis draws per cell. >1 runs the "
                          "variance experiment: arm S only, results to "
@@ -1116,11 +1119,16 @@ def _run_variance(client, target, pages, refs, cfg):
     prompt = ("Portal page excerpt (one page of the result grid, stripped of "
               "scripts, styles and non-structural attributes):\n\n" + win)
     budget = synth_budget(cfg)
+    # Every draw of a cell sends the same window, so under v2 the user
+    # message carries an Anthropic cache breakpoint too: the first draw
+    # writes it and the rest read it at the model's `cache_read` rate. v1
+    # cells are sent as they were bought, so their replays still hit.
+    cache_user = cfg.protocol is not Protocol.V1
     # What every draw of this cell asks for, recorded on the cell. Built by
     # the same method `message` builds with, so it is what goes on the wire.
     body = client.request(cfg.synth_model, synth_system(cfg), prompt, budget,
                           thinking=True, protocol=cfg.protocol,
-                          effort=cfg.effort)
+                          effort=cfg.effort, cache_user=cache_user)
     settings = dict(infer.settings_sent(body, cfg.protocol),
                     routing=body.get("provider"))
     vdir = os.path.join(SYNTH, "variance")
@@ -1130,6 +1138,10 @@ def _run_variance(client, target, pages, refs, cfg):
 
     draws, usd = [], 0.0
     for d in range(cfg.draws):
+        if d == cfg.stage1 and curtail(draws, cfg.stage1):
+            print("      stage 1 unanimous: stopping at %d of %d draws"
+                  % (d, cfg.draws))
+            break
         rec = {"draw": d, "model": cfg.synth_model, "target": target.key}
         # Assembled as keyword arguments and frozen into a `DrawRecord` at
         # the end of the draw, so a misspelled field is a TypeError here
@@ -1139,7 +1151,7 @@ def _run_variance(client, target, pages, refs, cfg):
                 cfg.synth_model, synth_system(cfg), prompt, budget,
                 "synthesis", thinking=True,
                 tag="%s/var" % target.key, draw=d, protocol=cfg.protocol,
-                effort=cfg.effort)
+                effort=cfg.effort, cache_user=cache_user)
         except infer.TransientError as e:
             # The host failed twice under this draw number. That says
             # nothing about the model, so the draw is recorded, left out of
@@ -1266,6 +1278,11 @@ def save_variance(target, cfg, draws, usd, settings=None):
         cell["settings"] = settings
         if cfg.effort:
             cell["effort"] = cfg.effort
+    if cfg.stage1 is not None:
+        cell["two_stage"] = {
+            "stage1": cfg.stage1, "max_draws": cfg.draws,
+            "curtailed": (len(draws) == cfg.stage1
+                          and curtail(draws, cfg.stage1))}
 
     def merge(prior):
         cells = prior.get("cells", {})
@@ -1326,8 +1343,8 @@ def run_cells(client, args, cfg):
             # traceback buries the one sentence that says how to fix it.
             raise SystemExit("%s Nothing has been sent." % e) from None
         total_worst += worst
-        print("  %-9s %-26s %2d draws   <= $%.2f worst case"
-              % (tkey, cell.label, cell.draws, worst))
+        print("  %-9s %-26s %5s draws   <= $%.2f worst case"
+              % (tkey, cell.label, cell.draws_label, worst))
     print("  %-37s %s   <= $%.2f worst case, ceiling $%.2f"
           % ("TOTAL", sum(c.draws for c in spec), total_worst,
              args.max_spend))
@@ -1337,8 +1354,8 @@ def run_cells(client, args, cfg):
 
     for cell in spec:
         target, pages, refs = loaded[cell.target]
-        print("\n=== %s x %s, %d draws, protocol %s"
-              % (cell.target, cell.label, cell.draws, cell.protocol))
+        print("\n=== %s x %s, %s draws, protocol %s"
+              % (cell.target, cell.label, cell.draws_label, cell.protocol))
         run_variance(client, target, pages, refs, cfg.for_cell(cell))
 
     rows = client.ledger.rows()

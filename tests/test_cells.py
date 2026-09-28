@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from permits.cells import (CellSpec, DrawRecord, Outcome,     # noqa: E402
-                           RunConfig, draws_of)
+                           RunConfig, curtail, draws_of)
 from permits.models import Protocol                          # noqa: E402
 
 
@@ -67,6 +67,68 @@ class TestCellSpec(unittest.TestCase):
         with self.assertRaises(ValueError):
             CellSpec.parse("clarkco:z-ai/glm-5.3-flash@low:10",
                            protocol=Protocol.V1)
+
+    def test_a_two_stage_cell_is_priced_at_its_most_draws(self):
+        c = CellSpec.parse("clarkco:z-ai/glm-5.3:10+10")
+        self.assertEqual((c.draws, c.stage1, c.draws_label), (20, 10, "10+10"))
+        self.assertEqual(c.key, "clarkco|z-ai/glm-5.3|v2",
+                         "the stopping rule is not a condition")
+        c = CellSpec.parse("stjohns:openai/gpt-oss-120b:batch:10")
+        self.assertEqual((c.draws, c.stage1, c.draws_label), (10, None, "10"))
+
+    def test_bad_two_stage_counts_raise(self):
+        for bad in ("clarkco:m:10+", "clarkco:m:+10", "clarkco:m:0+10",
+                    "clarkco:m:10+0", "clarkco:m:5+5+5", "clarkco:m:-3"):
+            with self.assertRaises(ValueError, msg=bad):
+                CellSpec.parse(bad)
+
+    def test_a_cell_carries_its_stage1_into_the_config(self):
+        cfg = _cfg().for_cell(CellSpec.parse("clarkco:z-ai/glm-5.3:10+10"))
+        self.assertEqual((cfg.draws, cfg.stage1), (20, 10))
+        cfg = _cfg(stage1=10).for_cell(CellSpec.parse("clarkco:m:5"))
+        self.assertIsNone(cfg.stage1, "a fixed cell after a two-stage one")
+
+
+def _draws(outcomes):
+    return [DrawRecord(d, "m", "clarkco", o) for d, o in enumerate(outcomes)]
+
+
+P, F, X = Outcome.PERFECT, Outcome.IMPERFECT, Outcome.INFRA_ERROR
+
+
+class TestCurtail(unittest.TestCase):
+    """The step 6 pre-registration's two-stage rule: stop after 10 draws at
+    0/10 or 10/10, otherwise continue to 20."""
+
+    def test_a_unanimous_stage1_stops(self):
+        self.assertTrue(curtail(_draws([P] * 10), 10))
+        self.assertTrue(curtail(_draws([F] * 10), 10))
+        self.assertTrue(curtail(_draws([Outcome.NO_CODE, Outcome.RAISED,
+                                         Outcome.REFUSED] + [F] * 7), 10),
+                        "every way of failing is a failure")
+
+    def test_a_split_stage1_continues(self):
+        self.assertFalse(curtail(_draws([P] * 9 + [F]), 10))
+        self.assertFalse(curtail(_draws([F] * 9 + [P]), 10))
+
+    def test_only_stage1_draws_decide(self):
+        self.assertTrue(curtail(_draws([P] * 10 + [F] * 5), 10))
+
+    def test_an_infra_error_is_left_out(self):
+        self.assertTrue(curtail(_draws([P] * 9 + [X]), 10))
+        self.assertFalse(curtail(_draws([P] * 8 + [X, F]), 10))
+
+    def test_no_scored_draw_stops(self):
+        self.assertTrue(curtail(_draws([X] * 10), 10))
+
+    def test_a_retry_can_only_turn_a_stop_into_a_continue(self):
+        """The property that makes deciding on a stage 1 with an infra error
+        safe: whatever the retried draw does, a split stage 1 stays split."""
+        for retried in (P, F):
+            before = [P, F] + [P] * 7 + [X]
+            after = [*before[:-1], retried]
+            self.assertFalse(curtail(_draws(before), 10))
+            self.assertFalse(curtail(_draws(after), 10))
 
 
 class TestRunConfig(unittest.TestCase):

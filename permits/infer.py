@@ -842,19 +842,33 @@ class Client:
 
     def build(self, model: str, system: str, user: str, max_tokens: int,
               thinking: bool = False, temperature: float | None = None,
-              protocol: Protocol = Protocol.V2) -> Body:
+              protocol: Protocol = Protocol.V2,
+              cache_user: bool = False) -> Body:
         """The request body, separated out so a dry run can price the exact
         bytes that would be sent rather than an approximation of them.
 
         The two protocols differ only in Haiku's thinking budget: half the
         ceiling under v1, the ceiling less `ANSWER_RESERVE` under v2. Claude
-        with thinking takes no sampling parameter in either."""
+        with thinking takes no sampling parameter in either.
+
+        `cache_user` adds a second breakpoint, at the end of the user
+        message, so the whole prompt is the cached prefix. It is for a
+        caller that sends one prompt many times, as a variance cell does:
+        the first call writes the cache at `CACHE_WRITE` and each resend
+        within the 5-minute lifetime reads it at the model's `cache_read`.
+        On a prompt sent once the write premium buys nothing, so it is off
+        by default. Off, the body is byte for byte what it was before the
+        flag existed, so every stored response still replays."""
+        content: str | list[dict[str, Any]] = user
+        if cache_user:
+            content = [{"type": "text", "text": user,
+                        "cache_control": {"type": "ephemeral"}}]
         body: Body = {
             "model": model,
             "max_tokens": max_tokens,
             "system": [{"type": "text", "text": system,
                         "cache_control": {"type": "ephemeral"}}],
-            "messages": [{"role": "user", "content": user}],
+            "messages": [{"role": "user", "content": content}],
         }
         if thinking:
             # Synthesis is the call class where reasoning earns its price - an
@@ -976,11 +990,13 @@ class Client:
     def request(self, model: str, system: str, user: str, max_tokens: int,
                 thinking: bool = False, temperature: float | None = None,
                 protocol: Protocol = Protocol.V2,
-                effort: str | None = None) -> Body:
+                effort: str | None = None,
+                cache_user: bool = False) -> Body:
         """The body `message` sends for these arguments, ceiling applied.
 
         Public so a caller can record the settings a cell runs under from
         the same bytes the calls carry, rather than restating them.
+        `cache_user` has no OpenRouter form: see `build_chat`.
         """
         max_tokens = ceiling_for(model, max_tokens, protocol)
         if provider_for(model) == OPENROUTER:
@@ -992,14 +1008,15 @@ class Client:
             raise Refused("effort settings are not wired for Anthropic "
                           "models. Nothing was sent.")
         return self.build(model, system, user, max_tokens, thinking,
-                          temperature, protocol)
+                          temperature, protocol, cache_user)
 
     # --------------------------------------------------------------- call
     def message(self, model: str, system: str, user: str, max_tokens: int,
                 call_class: str, thinking: bool = False, tag: str = "",
                 temperature: float | None = None, draw: int = 0,
                 protocol: Protocol = Protocol.V2,
-                effort: str | None = None) -> Completion:
+                effort: str | None = None,
+                cache_user: bool = False) -> Completion:
         """One model call, on whichever provider owns `model`.
 
         `Completion.usage` is in Anthropic field names whatever the provider
@@ -1013,11 +1030,13 @@ class Client:
         rather than by reading the code, so the ledger records that field and
         the harness prints it. Measured 2026-09-23 over 67 calls, that lever
         is worth about 2% of total spend on this workload, because the prefix
-        it caches is 6.6% of the request.
+        it caches is 6.6% of the request. `cache_user` moves the breakpoint
+        to the end of the user message, for a caller that resends the whole
+        request (see `build`).
         """
         prov = provider_for(model)
         body = self.request(model, system, user, max_tokens, thinking,
-                            temperature, protocol, effort)
+                            temperature, protocol, effort, cache_user)
         # Resolved once, in `request`, so the ceiling that goes on the wire
         # is the same one the budget is checked against, the span records,
         # and `truncated` compares output against. Computing it at any one of

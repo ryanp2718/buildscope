@@ -185,6 +185,28 @@ class TestTheAnthropicPathIsUnchanged(unittest.TestCase):
              "messages": [{"role": "user", "content": "USER"}],
              "thinking": {"type": "adaptive"}})
 
+    def test_the_user_breakpoint_is_opt_in(self):
+        """A variance cell resends one prompt, so it caches the whole of it.
+        Every other caller, and every response bought before the flag, gets
+        the body above unchanged."""
+        body = self.c.build("claude-opus-5-5", "SYS", "USER", 8000, True, None,
+                            cache_user=True)
+        self.assertEqual(body["messages"],
+                         [{"role": "user",
+                           "content": [{"type": "text", "text": "USER",
+                                        "cache_control":
+                                            {"type": "ephemeral"}}]}])
+        self.assertEqual(body["system"][0]["cache_control"],
+                         {"type": "ephemeral"})
+        self.assertEqual(
+            self.c.request("claude-opus-5-5", "SYS", "USER", 8000, True),
+            dict(body, messages=[{"role": "user", "content": "USER"}]))
+
+    def test_openrouter_has_no_user_breakpoint(self):
+        body = self.c.request("qwen/qwen3-coder", "S", "U", 100,
+                              cache_user=True)
+        self.assertNotIn("cache_control", repr(body))
+
     def test_a_known_key_still_hashes_the_same(self):
         body = self.c.build("claude-opus-5", "SYS", "USER", 8000, True, None)
         self.assertEqual(self.c._key_for(body, 0), "a06bc393976057fe82f3d860")

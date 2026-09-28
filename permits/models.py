@@ -23,6 +23,7 @@ on disk are all named by ids that have to keep resolving.
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
+from typing import Any
 
 
 class Provider(StrEnum):
@@ -173,7 +174,8 @@ class ModelSpec:
 SERVICE_TIERS = frozenset({"fast", "flex", "priority"})
 
 
-def routed(spec: "ModelSpec", endpoints: list[dict]) -> list[dict]:
+def routed(spec: "ModelSpec",
+           endpoints: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The endpoints of an OpenRouter listing (`/models/{id}/endpoints`)
     that a protocol v2 request for `spec` can be served by.
 
