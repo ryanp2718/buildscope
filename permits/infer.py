@@ -175,6 +175,11 @@ def output_cap(model: str) -> int:
     return models.output_cap(spec(model))
 
 
+def redraw_cap(model: str) -> int:
+    """The cap a truncated v2 draw is re-drawn at: see `models.REDRAW_CAP`."""
+    return models.redraw_cap(spec(model))
+
+
 def settings_sent(body: Body, protocol: Protocol) -> dict[str, Any]:
     """The experimental settings a request body carries, for the ledger.
 
@@ -626,16 +631,28 @@ def truncated(stop_reason: str | None, usage: Usage | None,
     that used every token it was authorized is truncated whatever the
     response called it, so the token count is checked too.
 
-    A model that stops naturally on the last authorized token would be
-    flagged here as truncated. That is the safe direction: a false positive
-    is a visible flag on a good answer, and a false negative is a short list
-    of records that looks complete - which is the failure this project exists
-    to measure.
+    A missing or unrecognised label with the whole budget used is flagged.
+    That is the safe direction: a false positive is a visible flag on a good
+    answer, and a false negative is a short list of records that looks
+    complete - which is the failure this project exists to measure.
+
+    A natural stop is believed over the count. xAI billed grok-4.7 66,437
+    output tokens against a `max_tokens` of 64,000 on 2026-09-28 and stopped
+    on `end_turn` with a complete answer: the host let it run past the cap,
+    and the answer was not cut off. Flagging that as truncated would re-draw
+    a finished answer (step 6 pre-registration, deviation 1 and amendment 2).
     """
     if stop_reason == "max_tokens":
         return True
+    if stop_reason in NATURAL_STOPS:
+        return False
     out = usage.output_tokens if usage is not None else 0
     return bool(max_tokens) and out >= max_tokens
+
+
+# Stop reasons that say the model finished on its own, in Anthropic's
+# spelling, which `FINISH_REASONS` maps OpenRouter's onto.
+NATURAL_STOPS = frozenset({"end_turn", "stop_sequence", "tool_use", "refusal"})
 
 
 def _error_detail(resp: Any) -> str:

@@ -163,6 +163,12 @@ class DrawRecord:
     # where known. Absent on draws recorded before 2026-09-26.
     host: str | None = None
     reasoning_tokens: int | None = None
+    # Set on a draw re-drawn after its first attempt was cut off at the cap:
+    # the cap the scored attempt ran at, and the cut-off attempt's output
+    # tokens, which is what joins it to its ledger row. The fields above
+    # describe the scored attempt, except `usd`, which is both attempts.
+    redraw_max_tokens: int | None = None
+    truncated_output_tokens: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}

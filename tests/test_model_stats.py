@@ -110,6 +110,28 @@ class TestCellsAreConditions(unittest.TestCase):
         self.assertIsNone(agg["clarkco|m/x"]["usd_per_success"])
         self.assertEqual(agg["clarkco|m/x|hint"]["usd_total"], 0.01)
 
+    def test_a_redrawn_draw_costs_both_attempts(self):
+        """The cut-off attempt was paid for, so it is part of the cell's
+        cost, and it is not left over as an unclaimed purchase."""
+        d = dict(_draw(0, 900, True, usd=0.03), redraw_max_tokens=128000,
+                 truncated_output_tokens=640)
+        ledger = [_buy(0, 640, usd=0.02), _buy(0, 900, usd=0.03)]
+        ms, agg = self.run_stats({"clarkco|m/x": self.cell([d])}, ledger)
+        e = agg["clarkco|m/x"]
+        self.assertEqual((e["usd_total"], e["draws_redrawn"],
+                          e["draws_unpriced"]), (0.05, 1, 0))
+        self.assertEqual(ms.unclaimed({"cells": {"clarkco|m/x":
+                                                 self.cell([d])}}, ledger),
+                         [])
+
+    def test_a_redrawn_draw_missing_its_first_purchase_is_unpriced(self):
+        d = dict(_draw(0, 900, True), redraw_max_tokens=128000,
+                 truncated_output_tokens=640)
+        _, agg = self.run_stats({"clarkco|m/x": self.cell([d])},
+                                [_buy(0, 900)])
+        self.assertEqual(agg["clarkco|m/x"]["draws_unpriced"], 1)
+        self.assertIsNone(agg["clarkco|m/x"]["usd_per_success"])
+
     def test_a_replayed_draw_is_priced_at_what_it_cost_to_buy(self):
         _, agg = self.run_stats(
             {"clarkco|m/x": self.cell([_draw(0, 100, True, cached=True)])},
@@ -167,8 +189,11 @@ class TestPublishedCellStatistics(unittest.TestCase):
         by provider keeps the guardrail pointed at what it was written to
         guard - a change in the Claude numbers still fails here - and the
         open-weight run gets its own pinned figures when it is published.
+        The same holds for protocol v2 cells of the Claude models, which the
+        step 6 run adds, so the report's cells are also the baseline ones.
         """
-        return {k: e for k, e in self.cells.items() if "/" not in e["model"]}
+        return {k: e for k, e in self.cells.items()
+                if "/" not in e["model"] and e["condition"] == "baseline"}
 
     def test_success_rates_match_the_variance_experiment(self):
         expected = {

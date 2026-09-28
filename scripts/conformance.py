@@ -1135,6 +1135,10 @@ def _run_variance(client, target, pages, refs, cfg):
     if not os.path.isdir(vdir):
         os.makedirs(vdir)
     corpus_pages = [q for _, q in stripped_corpus(target, pages)]
+    # v1 cells replay as they were bought, so only v2 re-draws. A model whose
+    # catalogue limit is the cap has nothing larger to re-draw at.
+    redraw = (infer.redraw_cap(cfg.synth_model)
+              if cfg.protocol is not Protocol.V1 else 0)
 
     draws, usd = [], 0.0
     for d in range(cfg.draws):
@@ -1146,12 +1150,27 @@ def _run_variance(client, target, pages, refs, cfg):
         # Assembled as keyword arguments and frozen into a `DrawRecord` at
         # the end of the draw, so a misspelled field is a TypeError here
         # rather than a key nothing ever reads.
+        cut = None
         try:
             reply = client.message(
                 cfg.synth_model, synth_system(cfg), prompt, budget,
                 "synthesis", thinking=True,
                 tag="%s/var" % target.key, draw=d, protocol=cfg.protocol,
                 effort=cfg.effort, cache_user=cache_user)
+            if reply.truncated and redraw > budget:
+                # Cut off at the cap: a harness failure, not an answer.
+                # Re-drawn once under the same draw number at the model's
+                # catalogue limit; the larger `max_tokens` is a different
+                # request, so this is a new call and not a cache replay. A
+                # re-draw that is cut off again is scored as it stands.
+                cut = reply
+                print("      draw %2d  truncated at %d tokens, re-drawing at "
+                      "%d" % (d, cut.usage.output_tokens, redraw))
+                reply = client.message(
+                    cfg.synth_model, synth_system(cfg), prompt, redraw,
+                    "synthesis", thinking=True,
+                    tag="%s/var" % target.key, draw=d, protocol=cfg.protocol,
+                    effort=cfg.effort, cache_user=cache_user)
         except infer.TransientError as e:
             # The host failed twice under this draw number. That says
             # nothing about the model, so the draw is recorded, left out of
@@ -1159,6 +1178,7 @@ def _run_variance(client, target, pages, refs, cfg):
             # cell retries it: the draw has no cached response to replay.
             rec["outcome"] = Outcome.INFRA_ERROR
             rec["why"] = str(e)[:200]
+            usd += _cut_attempt(rec, cut, redraw)
             draws.append(DrawRecord(**rec))
             print("      draw %2d  INFRA ERROR: %s" % (d, str(e)[:84]))
             save_variance(target, cfg, draws, usd, settings)
@@ -1169,12 +1189,14 @@ def _run_variance(client, target, pages, refs, cfg):
             # run stops here, keeping every draw already paid for.
             rec["outcome"] = Outcome.NOT_ATTEMPTED
             rec["why"] = str(e)[:200]
+            usd += _cut_attempt(rec, cut, redraw)
             draws.append(DrawRecord(**rec))
             print("      draw %2d  STOPPED: %s" % (d, str(e)[:88]))
             save_variance(target, cfg, draws, usd, settings)
             raise
-        usd += reply.usd
-        rec.update({"usd": reply.usd, "cached": reply.cached,
+        usd += reply.usd + _cut_attempt(rec, cut, redraw)
+        rec.update({"usd": reply.usd + rec.get("usd", 0.0),
+                    "cached": reply.cached,
                     "truncated": reply.truncated,
                     "output_tokens": reply.usage.output_tokens,
                     "host": reply.host,
@@ -1229,7 +1251,9 @@ def _run_variance(client, target, pages, refs, cfg):
         print("      draw %2d  %-12s %5d bytes  out=%-6s $%.4f%s"
               % (d, drawn.outcome, drawn.bytes or 0,
                  drawn.output_tokens, drawn.spend(),
-                 "  (replayed)" if drawn.cached else ""))
+                 ("  (replayed)" if drawn.cached else "")
+                 + ("  (re-drawn at %d)" % drawn.redraw_max_tokens
+                    if drawn.redraw_max_tokens else "")))
         # Saved after every draw: a key that dies at draw 14 of 20 must leave
         # 14 measurements behind, not nothing.
         save_variance(target, cfg, draws, usd, settings)
@@ -1241,6 +1265,19 @@ def _run_variance(client, target, pages, refs, cfg):
           "   $%.4f" % (target.key, tier, ok, n,
                         (float(ok) / n) if n else 0.0, lo, hi, usd))
     return draws, usd
+
+
+def _cut_attempt(rec, cut, redraw):
+    """Record a cut-off first attempt on the draw and return what it cost.
+
+    Its cost is part of the draw's cost, and its output token count is what
+    `model_stats` joins its ledger row by."""
+    if cut is None:
+        return 0.0
+    rec["usd"] = cut.usd
+    rec["redraw_max_tokens"] = redraw
+    rec["truncated_output_tokens"] = cut.usage.output_tokens
+    return cut.usd
 
 
 def save_variance(target, cfg, draws, usd, settings=None):

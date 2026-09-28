@@ -59,6 +59,12 @@ The policy is therefore versioned (`models.Protocol`) rather than edited in plac
   otherwise continues to 20 (`cells.curtail`). The worst case is priced at 20. Only scored draws
   decide; a stage 1 with an infra error decides on the rest, and the re-run that retries it decides
   again, which can turn a stop into a continue but never the reverse.
+- **Truncation and the re-draw** (v2): a draw is truncated when the provider stops on `max_tokens`,
+  or gives no or an unrecognised stop reason with the whole cap used; a natural stop past the cap
+  is not (xAI lets grok-4.7 run over it). A truncated draw is re-drawn once under the same draw
+  number at the model's catalogue limit up to 128,000 (`models.redraw_cap`); a second cut-off is
+  scored as it stands. Both attempts are the draw's cost. Haiku 4.5's catalogue limit is the cap,
+  so it has no re-draw.
 
 ### Per-model settings under protocol v2
 
@@ -126,7 +132,8 @@ each cell is a mixture in unknown proportion.
   the host's native token counts and cost; there is no endpoint that lists past generations.
 - **Draw records** (`variance.json`): outcome, scores, host, reasoning tokens. A v2 cell also records
   the settings every draw was sent with, and a two-stage cell its `stage1`, `max_draws` and whether
-  it stopped after stage 1.
+  it stopped after stage 1. A re-drawn draw records the cap it was re-drawn at and the cut-off
+  attempt's output tokens, which `model_stats` joins its ledger row by; `usd` covers both attempts.
 - **Cache** (`data/infer/cache/`): the response text, usage, stop reason, host and response id.
 
 ## File guarantees
@@ -197,3 +204,9 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   roster is 19 models with glm-5.3 and qwen3.8-max-0902 at the top; $35 typical. The last two
   pre-spend gates built: the two-stage rule in `run_variance`, and the Anthropic breakpoint on a
   variance cell's user message under v2.
+- **2026-09-28**: Smoke draws, one Clark draw per roster model, about $1.51. 18 of 19 passed their
+  entry gates; qwen3.8-flash was cut off at the cap. xAI let grok-4.7 run to 66,437 tokens against
+  64,000 and stop naturally (deviation 1). Amendment 2: truncation is decided on the stop reason
+  first, and a truncated v2 draw is re-drawn once at the catalogue limit, up to 128,000, with both
+  attempts costed. The Anthropic cache writes were confirmed; reads come with the second draw of a
+  cell.

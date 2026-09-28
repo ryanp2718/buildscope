@@ -222,6 +222,16 @@ def output_cap(spec: "ModelSpec") -> int:
     return min(spec.max_output, OUTPUT_CAP)
 
 
+# A draw cut off at the cap is a harness failure, not an answer, and is
+# re-drawn once at the model's catalogue output limit up to this (step 6
+# pre-registration, amendment 2).
+REDRAW_CAP = 128000
+
+
+def redraw_cap(spec: "ModelSpec") -> int:
+    return min(spec.max_output, REDRAW_CAP)
+
+
 PRICES_AS_OF = "2026-06-24 (DESIGN.md section 6)"
 OPENROUTER_PRICES_AS_OF = ("2026-09-23 (openrouter.ai/api/v1/models); reasoning output "
                            "rates reconciled to invoice 2026-09-25; raised to "

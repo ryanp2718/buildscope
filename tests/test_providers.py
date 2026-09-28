@@ -665,6 +665,14 @@ class TestTruncationIsDecidedOnFacts(unittest.TestCase):
         self.assertTrue(infer.truncated(
             "provider_specific_thing", infer.Usage(output_tokens=16000), 16000))
 
+    def test_a_natural_stop_past_the_cap_is_not_truncated(self):
+        """xAI let grok-4.7 run to 66,437 tokens against 64,000 and it
+        stopped on `end_turn` with a complete answer (2026-09-28)."""
+        self.assertFalse(infer.truncated(
+            "end_turn", infer.Usage(output_tokens=66437), 64000))
+        self.assertTrue(infer.truncated(
+            "max_tokens", infer.Usage(output_tokens=64000), 64000))
+
     def test_a_short_answer_is_not_truncated(self):
         self.assertFalse(infer.truncated(
             "end_turn", infer.Usage(output_tokens=1319), 16000))

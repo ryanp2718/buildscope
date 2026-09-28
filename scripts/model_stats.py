@@ -131,6 +131,17 @@ def purchases(v, ledger):
                 out[(key, d.draw)] = hits[-1]
             else:
                 out[(key, d.draw)] = None
+            # A re-drawn draw was bought twice: the cut-off attempt is part
+            # of its cost, keyed apart so the scored attempt's row is still
+            # the one latency is read from.
+            if d.truncated_output_tokens is not None:
+                cut = [i for i in index.get((cell["model"], cell["target"],
+                                             d.draw,
+                                             d.truncated_output_tokens), [])
+                       if i not in claimed]
+                if cut:
+                    claimed.add(cut[-1])
+                out[(key, d.draw, "cut")] = cut[-1] if cut else None
     return out
 
 
@@ -183,14 +194,18 @@ def rows_from_variance(v, ledger=()):
                     ("output_tokens", d.output_tokens),
                     ("source_bytes", d.bytes),
                     ("truncated", 1 if d.truncated else 0),
+                    ("redrawn", 1 if d.redraw_max_tokens else 0),
                     ("reasoning_tokens", d.reasoning_tokens),
                 ]
                 i = bought.get((key, d.draw))
-                if i is None:
+                redrawn = d.truncated_output_tokens is not None
+                cut = bought.get((key, d.draw, "cut"))
+                if i is None or (redrawn and cut is None):
                     metrics.append(("purchase_unknown", 1))
                 else:
                     row = ledger[i]
-                    metrics.append(("usd_purchase", row.usd))
+                    metrics.append(("usd_purchase", row.usd
+                                    + (ledger[cut].usd if redrawn else 0.0)))
                     metrics.append(("seconds", row.seconds))
                     if row.ttft_s is not None:
                         metrics.append(("ttft_s", row.ttft_s))
@@ -285,10 +300,12 @@ def aggregate(rows):
         fails = n - k
         n_silent = sum(silent)
         infra = sum(var("infra_error"))
-        # A truncated draw is a harness failure, not a model failure; the
-        # policy is that this is zero, and a cell where it is not is rerun
-        # at a higher cap.
+        # A draw cut off at the cap is a harness failure and a v2 draw is
+        # re-drawn once at the catalogue limit, so `redrawn` counts those and
+        # `truncated` the scored attempts still cut off: after a re-draw, or
+        # on a v1 cell, which is not re-drawn.
         truncated = sum(var("truncated"))
+        redrawn = sum(var("redrawn"))
         lat = var("seconds")
         # Call errors are a property of the provider, not the prompt, and a
         # failed call has no draw to join to, so this one figure is pooled
@@ -334,6 +351,7 @@ def aggregate(rows):
             # Draws the host failed twice, as a share of draws sent. Beside
             # the success rate, never inside it.
             "draws_truncated": truncated,
+            "draws_redrawn": redrawn,
             "reasoning_tokens_p50": pctile(var("reasoning_tokens"), 0.50),
             "draws_infra_error": infra,
             "infra_error_rate": (float(infra) / (n + infra)

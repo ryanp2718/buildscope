@@ -192,7 +192,10 @@ class TestTwoStageCell(unittest.TestCase):
     `test_cells.TestCurtail`."""
 
     def run_cell(self, passes, draws=20, stage1=10, model="claude-opus-5-5",
-                 protocol=None):
+                 protocol=None, cuts=(), fail_on=()):
+        """`cuts` and `fail_on` are indices of calls, not draws: the calls
+        that come back cut off at their `max_tokens`, and the calls whose
+        host fails."""
         import json
         import tempfile
         from types import SimpleNamespace
@@ -209,11 +212,16 @@ class TestTwoStageCell(unittest.TestCase):
             build_chat = infer.Client.build_chat
 
             def message(self, *a, **kw):
-                sent.append(kw)
+                sent.append(dict(kw, max_tokens=a[3]))
+                n = len(sent) - 1
+                if n in fail_on:
+                    raise infer.TransientError("host failed twice")
+                cut = n in cuts
                 return SimpleNamespace(
-                    text="", usd=0.01, cached=False, truncated=False,
-                    host=None, usage=SimpleNamespace(output_tokens=10,
-                                                     reasoning_tokens=0))
+                    text="", usd=0.01, cached=False, truncated=cut,
+                    host=None, usage=SimpleNamespace(
+                        output_tokens=a[3] if cut else 10,
+                        reasoning_tokens=0))
 
         scores = iter(passes)
         cfg = RunConfig(model, model, 16000, 24000, False, 2, draws,
@@ -264,6 +272,57 @@ class TestTwoStageCell(unittest.TestCase):
                                           model="claude-opus-5",
                                           protocol=Protocol.V1)
         self.assertFalse(any(kw["cache_user"] for kw in sent))
+
+
+class TestTruncatedDrawIsRedrawn(unittest.TestCase):
+    """Amendment 2 to the step 6 pre-registration: a draw cut off at the cap
+    is re-drawn once, under the same draw number, at the model's catalogue
+    limit up to 128,000."""
+
+    run_cell = TestTwoStageCell.run_cell
+
+    def test_a_cut_off_draw_is_redrawn_at_the_catalogue_limit(self):
+        out, sent, cell = self.run_cell([True] * 3, draws=3, stage1=None,
+                                        cuts=(1,))
+        self.assertEqual([kw["max_tokens"] for kw in sent],
+                         [64000, 64000, 128000, 64000])
+        self.assertEqual([kw["draw"] for kw in sent], [0, 1, 1, 2])
+        d = out[1]
+        self.assertEqual((d.redraw_max_tokens, d.truncated_output_tokens,
+                          d.truncated, d.output_tokens), (128000, 64000,
+                                                          False, 10))
+        self.assertAlmostEqual(d.usd, 0.02, msg="both attempts were paid for")
+        self.assertAlmostEqual(cell["usd"], 0.04)
+        self.assertEqual(cell["perfect"], 3)
+
+    def test_a_second_cut_is_scored_as_it_stands(self):
+        out, sent, _cell = self.run_cell([False], draws=1, stage1=None,
+                                         cuts=(0, 1))
+        self.assertEqual(len(sent), 2, "re-drawn once, not again")
+        self.assertTrue(out[0].truncated)
+        self.assertTrue(out[0].scored())
+
+    def test_no_redraw_where_the_catalogue_limit_is_the_cap(self):
+        _out, sent, _cell = self.run_cell([False], draws=1, stage1=None,
+                                          model="claude-haiku-4-5-20251001",
+                                          cuts=(0,))
+        self.assertEqual(len(sent), 1)
+
+    def test_no_redraw_under_v1(self):
+        from permits.models import Protocol
+        _out, sent, _cell = self.run_cell([False], draws=1, stage1=None,
+                                          model="claude-opus-5",
+                                          protocol=Protocol.V1, cuts=(0,))
+        self.assertEqual(len(sent), 1)
+
+    def test_a_host_failure_on_the_redraw_keeps_the_first_attempts_cost(self):
+        from permits.cells import Outcome
+        out, _sent, cell = self.run_cell([], draws=1, stage1=None,
+                                         cuts=(0,), fail_on=(1,))
+        self.assertIs(out[0].outcome, Outcome.INFRA_ERROR)
+        self.assertAlmostEqual(out[0].usd, 0.01)
+        self.assertAlmostEqual(cell["usd"], 0.01)
+        self.assertEqual(out[0].truncated_output_tokens, 64000)
 
 
 class TestDriftHarnessIsolation(unittest.TestCase):

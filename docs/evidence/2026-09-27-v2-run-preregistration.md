@@ -12,9 +12,9 @@ Inputs:    `data/audit/2026-09-27-openrouter-models.json`, `data/audit/2026-09-2
            `data/step1/heldout_review/*.csv` (the human review of the held-out references)
 Outputs:   none yet. The run will write `data/infer/variance.json` cells keyed `|v2`, and a results
            report that cites this one.
-Status:    Pre-registered, amended once before any draw (see "Amendments"). The plan below was
-           fixed before the data existed; any change is reported in the results as a deviation,
-           with its reason.
+Status:    Pre-registered; amended once before any draw and once after the smoke draws (see
+           "Amendments"); smoke draws bought 2026-09-28. The plan below was fixed before the data
+           existed; any change is reported in the results as a deviation, with its reason.
 
 Step 6 of the order of work in the
 [2026-09-26 fairness audit](2026-09-26-model-comparison-fairness-audit.md). The audit's decisions are
@@ -354,3 +354,50 @@ the second "a higher-throughput variant of Qwen3.8 Max". The rule already exclud
   ($6.10 to $6.03).
 
 Nothing else in the plan changed. No draw had been bought, and no model output was involved.
+
+**2. 2026-09-28, after the smoke draws and before any other draw: how a cut-off draw is handled.**
+"Draws that do not count" says a truncated draw is re-drawn at the model's catalogue output limit,
+at most 128,000. The code for that did not exist and was not on the list of gates before spend, so
+the smoke draws ran without it. Two smoke draws then showed the rule was underspecified: qwen3.8-flash
+stopped on `max_tokens` at exactly 64,000 tokens with its code cut off, and grok-4.7 ran to 66,437
+tokens and stopped on `end_turn` with a complete answer (deviation 1). This amendment was written
+after seeing those outputs. It changes how cut-off draws are handled, not what is scored or how. Added:
+
+- **What counts as truncated.** The provider's stop reason is `max_tokens`, or it gave no stop reason
+  or an unrecognised one and the output used the whole cap. A natural stop (`end_turn`, a stop
+  sequence, a refusal) is not truncation, whatever the token count. Before this, any draw at or over
+  the cap was flagged, which is how grok-4.7's draw came to be.
+- **The re-draw.** Once, under the same draw number, at the model's catalogue limit up to 128,000
+  (`models.REDRAW_CAP`), in the same run. For Haiku 4.5 the catalogue limit is the cap, so there is
+  nothing larger and a cut-off draw is scored as it stands; for the two Gemini models it is 65,536.
+- **A re-draw cut off again** is scored as it stands, which in practice is a failure: the model did
+  not finish within its own catalogue limit.
+- **Cost.** Both attempts count toward the draw's cost, and so toward cost per success. The cut-off
+  attempt's ledger row is joined to its draw (`truncated_output_tokens`), not left unclaimed.
+- **Reported per model:** draws re-drawn, and draws still cut off after the re-draw. A re-drawn draw
+  had up to twice the reasoning budget of the others, so a model with many re-draws had more budget
+  than the one cap the protocol sets, and that is stated beside its rate.
+- **Spend.** The per-cell worst case is still priced at the 64,000 cap. A re-draw is outside it and is
+  checked against `--max-spend` before it is sent, like every call.
+
+The one smoke draw this re-draws is qwen3.8-flash's, at 128,000. grok-4.7's draw is kept as scored.
+
+## Deviations during the run
+
+Departures from the plan made after draws began, each with the reason, decided before the affected
+cell's result was used.
+
+**1. 2026-09-28, smoke draws: a truncation flag not acted on.** `x-ai/grok-4.7`'s smoke draw billed
+66,437 output tokens (62,866 of them reasoning) against a `max_tokens` of 64,000, so xAI does not
+hold the model to the cap. The harness marks any draw at or over the cap as truncated whatever the
+provider's stop reason, and the plan re-draws a truncated draw at the catalogue limit. This draw
+stopped on `end_turn` and its extractor agreed with the adapter on every page, so the flag is a
+false positive from the overrun, not a cut-off answer. The draw is kept and scored. Reported: the
+count of grok-4.7 draws over the cap and by how much, since a model allowed past the cap has had
+more reasoning budget than the rest. Amendment 2 changes the harness so a natural stop past the cap
+is not flagged, which makes this the rule rather than an exception.
+
+**Operational, not a deviation.** The first smoke run was stopped by the host for low memory during
+`qwen/qwen3.8-max-0902`'s draw, after 11 of 19 models. The re-run replayed those 11 from the cache
+at no cost. OpenRouter's usage rose $0.04 more than the ledger records, which is the interrupted
+generation: it has no ledger row or response id, so it is not reconcilable.
