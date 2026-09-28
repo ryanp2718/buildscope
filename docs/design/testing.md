@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 386 tests, ~18s, no network
+python scripts/run_tests.py           # everything: 392 tests, ~18s, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
