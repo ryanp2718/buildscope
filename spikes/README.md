@@ -37,6 +37,9 @@ a notebook and would not be acceptable anywhere else in this repo.
 | `step1_*` | 15 | Can two real jurisdictions be pulled end to end and reconciled against an oracle? | [step1-stjohns-reconciliation](../docs/evidence/2026-09-20-step1-stjohns-reconciliation.md), [bucket4-resolution](../docs/evidence/2026-09-21-bucket4-resolution.md) |
 | `open_weight_axis_tables` | 1 | Which records does each failing Clark extractor miss, and how do the cells compare? | [open-weight-model-axis](../docs/evidence/2026-09-25-open-weight-model-axis.md) |
 | `audit_model_fairness` | 1 | Is the cross-vendor model comparison a fair test? | [model-comparison-fairness-audit](../docs/evidence/2026-09-26-model-comparison-fairness-audit.md) |
+| `preregister_v2_run` | 1 | What does the step 6 plan cost, and does the roster follow its rule? | [v2-run-preregistration](../docs/evidence/2026-09-27-v2-run-preregistration.md) |
+| `fetch_roster_sources` | 1 | What do the step 6 roster's endpoint listings, Hugging Face configs, cards and chat templates say, for setting its registry entries? | [v2-run-preregistration](../docs/evidence/2026-09-27-v2-run-preregistration.md), `permits/models.py` |
+| `heldout_fetch`, `heldout_review` | 2 | Held-out targets for the step 6 comparison: fetch one closed window per tenancy, and hand-check the adapter's reference on it. | [v2-run-preregistration](../docs/evidence/2026-09-27-v2-run-preregistration.md) |
 | `backfill_fingerprints`, `fix_portal_identity` | 2 | — | One-shot data migrations, run once against the private store. |
 
 The inference experiments — variance, drift, conformance — are **not** here.

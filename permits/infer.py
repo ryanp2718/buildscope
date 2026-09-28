@@ -208,6 +208,8 @@ def settings_sent(body: Body, protocol: Protocol) -> dict[str, Any]:
 
 
 # Cache reads bill at 0.1x input; 5-minute writes at 1.25x. Section 6 lever 3.
+# A model whose reads bill otherwise (Opus 5.5, 0.05x) says so in its
+# registry entry's `cache_read`, which `cost` uses.
 CACHE_READ = 0.1
 CACHE_WRITE = 1.25
 
@@ -466,7 +468,7 @@ def cost(model: str, usage: Usage) -> float:
     """Dollars for one response's usage, priced from the registry."""
     pin, pout = price(model)
     return ((usage.input_tokens
-             + usage.cache_read_input_tokens * CACHE_READ
+             + usage.cache_read_input_tokens * spec(model).cache_read
              + usage.cache_creation_input_tokens * CACHE_WRITE) * pin
             + usage.output_tokens * pout) / 1e6
 

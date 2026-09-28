@@ -410,10 +410,20 @@ class TestOpenRouterRequestShape(unittest.TestCase):
         self.assertEqual(body["provider"], {
             "require_parameters": True,
             "quantizations": ["fp8", "fp16", "bf16"]})
-        # Endpoints measured ignoring the effort setting.
+        # Endpoints measured ignoring the effort setting, then one whose
+        # output limit is below the cap, named by its tag alone.
         ds = self.c.build_chat("deepseek/deepseek-v4-pro", "S", "U", 100,
                                thinking=True)
-        self.assertEqual(ds["provider"]["ignore"], ["novita", "parasail"])
+        self.assertEqual(ds["provider"]["ignore"],
+                         ["novita", "parasail", "deepinfra/fp8"])
+        # Closed weights with no published sampling, on endpoints that take
+        # none: nothing is sent and no precision filter applies.
+        sol = self.c.build_chat("openai/gpt-6-sol", "S", "U", 100,
+                                thinking=True)
+        self.assertNotIn("temperature", sol)
+        self.assertNotIn("top_p", sol)
+        self.assertEqual(sol["provider"], {"require_parameters": True})
+        self.assertEqual(sol["reasoning"], {"effort": "medium"})
         # One lab-run host that reports no precision, so `unknown` is admitted
         # beside the fp8 the lab released; without it the model has no host.
         only = self.c.build_chat("qwen/qwen3.5-flash-02-23", "S", "U", 100)

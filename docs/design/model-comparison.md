@@ -21,6 +21,14 @@ with an adapter, not accuracy.
 - Run: `python scripts/conformance.py --run --cells clarkco:z-ai/glm-5.2:10` (dry run without
   `--run`, which prints the worst case the budget will authorize).
 
+**Development and test targets.** Every target has a `split` in `TARGETS`. `stjohns` and `clarkco` are
+development targets: the prompt and the hint were written while reading their pages and model output
+on them. `santabarbara`, `polkco` and `oregon` are held out: Accela tenancies whose column set,
+column order or template differ from Clark's, on which no prompt was written. A held-out target's
+corpus is one closed date window, walked by `spikes/heldout_fetch.py` and selected by file prefix. Its
+adapter reference counts only once a person has checked it row by row against the rendered page
+(`spikes/heldout_review.py`).
+
 ## Request policy
 
 The cache key is the SHA-256 of the request body, so any change to what is sent is a new request.
@@ -34,10 +42,12 @@ The policy is therefore versioned (`models.Protocol`) rather than edited in plac
   - **Reasoning at the lab's default level**, sent explicitly. Where OpenRouter's name for a level
     differs from the lab's, the registry records both (`ModelSpec.levels`).
   - **Sampling** from the model card, else the catalogue's `default_parameters`, else 1.0 / 1.0.
-    Claude with thinking runs at the 1.0 the API fixes.
+    Claude with thinking runs at the 1.0 the API fixes. A closed-weight model with no published
+    sampling is sent none and runs at its lab's default (GPT-6's endpoints accept none).
   - **Routing** on OpenRouter: `require_parameters`, host precision at or above the lowest
-    precision the lab released (`quantizations`), and endpoints measured ignoring the effort setting
-    excluded (`ignore`).
+    precision the lab released (`quantizations`; none for closed weights), and endpoints excluded
+    (`ignore`) when measured ignoring the effort setting or when their output limit is below the
+    cap. `models.routed` computes the hosts a request can reach, which the tests check.
   - **Transport**: every call streamed; 120 s read timeout between chunks; a wall-clock limit of
     300 s plus the cap at 10 tokens per second. A host failure is retried once under the same draw.
 
@@ -48,13 +58,31 @@ The policy is therefore versioned (`models.Protocol`) rather than edited in plac
 | claude-opus-5, claude-sonnet-5 | adaptive thinking | API default | 1.0 (fixed) | Anthropic | – |
 | claude-haiku-4-5 | thinking, budget 48,000 | – | 1.0 (fixed) | Anthropic | – |
 | qwen3.5-flash | `enabled` (no levels) | – | 0.6 / 0.95 | fp8+, and `unknown` (Alibaba is the only host) | – |
-| gpt-oss-120b (and `:batch`) | `effort: medium` | medium | 1.0 / 1.0 | fp4+ | – |
+| gpt-oss-120b (and `:batch`) | `effort: medium` | medium | 1.0 / 1.0 | fp4+ | 4 endpoints below the cap |
 | qwen3-coder | none; does not reason | – | 0.7 / 0.8 | fp8+ | – |
 | kimi-k2-thinking | `enabled` (no levels; always reasons) | – | 1.0 / 1.0 | int4+ | – |
 | glm-5.2 | `effort: xhigh` | max | 1.0 / 0.95 | fp8+ | – |
 | glm-5.3-flash | `effort: max` | max | 1.0 / 0.95 | fp8+ | – |
-| deepseek-v4-pro | `effort: high` | high | 1.0 / 1.0 | fp8+ | novita, parasail |
+| deepseek-v4-pro | `effort: high` | high | 1.0 / 1.0 | fp8+ | novita, parasail; deepinfra/fp8 |
 | deepseek-v4-flash | `effort: high` | high | 1.0 / 1.0 | fp8+ | gmicloud, siliconflow, parasail |
+| claude-opus-5-5 | adaptive thinking | medium (API default) | 1.0 (fixed) | Anthropic | – |
+| gpt-6-sol, gpt-6-luna | `effort: medium` | medium | not sent | closed | – |
+| gemini-3.8-flash | `effort: medium` | medium | not sent | closed | – |
+| gemini-3.5-flash-lite | `effort: minimal` | minimal | not sent | closed | – |
+| grok-4.7 | `effort: high` | high | 0.7 / 0.95 | closed | – |
+| kimi-k3 | `effort: max` | max | 1.0 / 0.95 | mxfp4+ | deepinfra/bf16 |
+| glm-5.3 | `effort: max` | max | 1.0 / 0.95 | fp8+ | – |
+| qwen3.8-max-0902 | `effort: xhigh` | xhigh | not sent | closed | – |
+| qwen3.8-flash | `enabled` (no levels) | – | 1.0 / 0.95 | Alibaba only | – |
+| deepseek-v4-pro-0813 | `effort: high` | high | 1.0 / 1.0 | fp8+ | novita, parasail; deepinfra/fp8 |
+| deepseek-v4.1-flash | `effort: high` | high | 1.0 / 1.0 | fp4+ | gmicloud, siliconflow, parasail; baseten/fp8 |
+| mimo-v2.6-pro, -flash | `enabled` (no levels) | – | 1.0 / 0.95 | fp8+ | – |
+| minimax-m3 | `enabled`; the lab default is adaptive | – | 1.0 / 0.95 | fp8+ | – |
+| hy3 | `effort: high`; the lab default is none | high | 0.9 / 1.0 | fp8+ | – |
+
+The step 6 roster's entries were set on 2026-09-27 from sources `spikes/fetch_roster_sources.py`
+snapshots; the two departures from the lab's default (MiniMax-M3, Hy3) are explained in the
+[pre-registration](../evidence/2026-09-27-v2-run-preregistration.md).
 
 Every value carries its source in a comment in `permits/models.py`, and `tests/test_models.py`
 checks the efforts, caps and host filters against the saved catalogue and endpoint snapshots.
@@ -116,11 +144,18 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   whether each endpoint honours the effort is not measured. Planned as behavioural smoke draws in
   step 6 of the audit's order of work.
 - **Unverified on a live stream**, also for step 6: that OpenRouter accepts every `quantizations`
-  value sent, routes a 64,000-token request only to endpoints that allow it, and reports usage and
-  cost in the last chunk for every upstream.
+  value sent and reports usage and cost in the last chunk for every upstream. Whether it routes a
+  64,000-token request around a host with a lower output limit is undocumented, so those hosts are
+  excluded rather than trusted.
 - **Reconciling failed calls** with OpenRouter's records: possible from 2026-09-27, when ids began to
   be recorded; not built. Earlier rows carry no id and cannot be reconciled.
 - **Generated code is not sandboxed** (audit step 7, deferred).
+- **Held-out references: checked 2026-09-27.** 13 pages, 130 records. A second, independent parse
+  (`heldout_review.py --check`) agrees with the adapter on all 650 scored fields and every row count.
+  A person then checked the column chosen for each field on each portal and that every record row is
+  counted, and spot-checked 29 rows against the rendered page: two per page drawn at random with a fixed
+  seed, plus Santa Barbara's 3 rows with no detail link. No disagreement was found. Santa Barbara's form has
+  no date filter, so its corpus is the most recent Residential Alteration records, dated 2020 to 2024.
 
 ## Log
 
@@ -137,4 +172,16 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   OpenRouter's effort names are not the labs', its catalogue default for glm-5.2 is not Z.ai's, and
   some DeepSeek endpoints ignore the effort sent. Protocol v2 now sends each lab's default level,
   excludes those endpoints, and records the lab level and the provider's response id on every row.
-  Step 4 done: atomic writes, locked merges, one run per cell.
+  Step 4 done: atomic writes, locked merges, one run per cell. For step 6, targets gain a
+  development/test split, and three held-out Accela targets are registered (Santa Barbara city,
+  Polk County, Oregon statewide), with a fetch producer and a review sheet for their references.
+  The synthesis window gains a fallback to the grid's header, after it showed Santa Barbara's search
+  form and none of its records; no development page's window changed.
+  [Step 6 pre-registered](../evidence/2026-09-27-v2-run-preregistration.md): 20-model roster plus
+  seven v1 models, Clark two-stage, St. Johns at 10, the hint below the top tier, Santa Barbara held
+  out at 5; $42 typical, $45 cap, funded by stage. Then, before any draw: registry entries for the
+  roster; OpenRouter endpoints whose output limit is below the cap excluded from routing, and every
+  price ceiling raised to bound the hosts a request can reach (four v1 input ceilings and one output
+  ceiling were below); Opus 5.5 cache reads billed at 0.05x. Amendment 1 to the pre-registration: two
+  top-tier picks were speed variants of the same weights (glm-5.3-prime, qwen3.8-max-prime), so the
+  roster is 19 models with glm-5.3 and qwen3.8-max-0902 at the top; $35 typical.

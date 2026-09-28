@@ -99,7 +99,18 @@ class TestReasoningControlFitsTheProvider(unittest.TestCase):
                "deepseek/deepseek-v4-pro": "high",
                "deepseek/deepseek-v4-flash": "high",
                "openai/gpt-oss-120b": "medium",
-               "openai/gpt-oss-120b:batch": "medium"}
+               "openai/gpt-oss-120b:batch": "medium",
+               # The step 6 roster, from the labs' docs and cards, 2026-09-27.
+               "openai/gpt-6-sol": "medium", "openai/gpt-6-luna": "medium",
+               "google/gemini-3.8-flash": "medium",
+               "google/gemini-3.5-flash-lite": "minimal",
+               "x-ai/grok-4.7": "high", "moonshotai/kimi-k3": "max",
+               "z-ai/glm-5.3": "max", "qwen/qwen3.8-max-0902": "xhigh",
+               "deepseek/deepseek-v4-pro-0813": "high",
+               "deepseek/deepseek-v4.1-flash": "high",
+               # Not the lab default (`no_think`): the card's setting for
+               # coding, decided 2026-09-27 and disclosed in the entry.
+               "tencent/hy3": "high"}
         effort = {s.id: models.lab_level(s, s.effort) for s in R.values()
                   if s.effort is not None}
         self.assertEqual(effort, lab)
@@ -111,7 +122,7 @@ class TestReasoningControlFitsTheProvider(unittest.TestCase):
 
     def test_the_listed_efforts_and_caps_match_the_catalogue(self):
         path = os.path.join(ROOT, "data", "audit",
-                            "2026-09-25-openrouter-models.json")
+                            "2026-09-27-openrouter-models.json")
         if not os.path.exists(path):
             self.skipTest("no catalogue snapshot on this checkout")
         with io.open(path, encoding="utf-8") as fh:
@@ -130,13 +141,30 @@ class TestReasoningControlFitsTheProvider(unittest.TestCase):
                     by[s.id]["top_provider"]["max_completion_tokens"])
 
 
+def _snapshot(name):
+    path = os.path.join(ROOT, "data", "audit", name)
+    if not os.path.exists(path):
+        return None
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+# One day's endpoint listing for every OpenRouter model the registry measures
+# (`spikes/fetch_roster_sources.py`).
+ENDPOINTS = "2026-09-27-roster-endpoints.json"
+
+
 class TestSamplingAndRouting(unittest.TestCase):
     """Protocol v2 sends these on every OpenRouter request, so a missing
     value would leave the serving host's default in charge (finding F6)."""
 
-    def test_every_open_model_has_explicit_sampling(self):
+    def test_every_model_with_third_party_hosts_has_explicit_sampling(self):
+        """A closed-weight model with no published sampling sends none, and
+        runs at its lab's own default. Anything a third party may host
+        carries the values explicitly."""
         for s in models.measured():
-            if s.provider is models.Provider.OPENROUTER:
+            if (s.provider is models.Provider.OPENROUTER
+                    and s.quantizations is not None):
                 self.assertIsNotNone(s.temperature, s.id)
                 self.assertIsNotNone(s.top_p, s.id)
 
@@ -147,47 +175,142 @@ class TestSamplingAndRouting(unittest.TestCase):
 
     def test_routing_admits_unknown_precision_only_for_a_lab_run_host(self):
         """`unknown` includes hosts that may serve anything. qwen3.5-flash is
-        the exception because its single host is Alibaba's own."""
+        the exception because its single host is Alibaba's own. No filter at
+        all is for a model whose every endpoint reports `unknown`: closed
+        weights, served only by the lab or its licensed clouds."""
+        eps = _snapshot(ENDPOINTS)
         for s in models.measured():
             if s.provider is not models.Provider.OPENROUTER:
                 continue
             with self.subTest(model=s.id):
-                self.assertIsNotNone(s.quantizations)
-                if s.id == "qwen/qwen3.5-flash-02-23":
+                if s.quantizations is None:
+                    if eps is None:
+                        continue
+                    self.assertEqual(
+                        {e.get("quantization")
+                         for e in eps[s.id]["data"]["endpoints"]},
+                        {"unknown"})
+                elif s.id == "qwen/qwen3.5-flash-02-23":
                     self.assertIn("unknown", s.quantizations)
                 else:
                     self.assertNotIn("unknown", s.quantizations)
 
     def test_hosts_that_ignore_effort_are_excluded(self):
         """Measured 2026-09-27: these endpoints render one prompt whatever
-        effort is sent, so a cell routed there is not at the level asked."""
-        self.assertEqual(R["deepseek/deepseek-v4-pro"].ignore,
-                         ("novita", "parasail"))
-        self.assertEqual(R["deepseek/deepseek-v4-flash"].ignore,
-                         ("gmicloud", "siliconflow", "parasail"))
+        effort is sent, so a cell routed there is not at the level asked.
+        Carried over to the later V4 ids, which were not re-measured."""
+        pro = {"novita", "parasail"}
+        flash = {"gmicloud", "siliconflow", "parasail"}
+        for m, hosts in (("deepseek/deepseek-v4-pro", pro),
+                         ("deepseek/deepseek-v4-pro-0813", pro),
+                         ("deepseek/deepseek-v4-flash", flash),
+                         ("deepseek/deepseek-v4.1-flash", flash)):
+            self.assertLessEqual(hosts, set(R[m].ignore), m)
 
-    def test_every_filtered_model_keeps_a_host(self):
-        """A filter that matches no endpoint routes the model nowhere."""
-        path = os.path.join(ROOT, "data", "audit",
-                            "2026-09-26-openrouter-endpoints.json")
-        if not os.path.exists(path):
+    def _routed(self):
+        eps = _snapshot(ENDPOINTS)
+        if eps is None:
             self.skipTest("no endpoint snapshot on this checkout")
-        with io.open(path, encoding="utf-8") as fh:
-            eps = json.load(fh)
         for s in models.measured():
-            if s.quantizations is None or s.id not in eps:
-                continue
+            if s.provider is models.Provider.OPENROUTER and s.id in eps:
+                yield s, models.routed(s, eps[s.id]["data"]["endpoints"])
+
+    def test_the_snapshot_covers_every_openrouter_model(self):
+        eps = _snapshot(ENDPOINTS)
+        if eps is None:
+            self.skipTest("no endpoint snapshot on this checkout")
+        missing = {s.id for s in models.measured()
+                   if s.provider is models.Provider.OPENROUTER} - set(eps)
+        # :batch is an asynchronous variant with no endpoint listing of its own.
+        self.assertEqual(missing, {"openai/gpt-oss-120b:batch"})
+
+    def test_every_model_keeps_a_host(self):
+        """A filter that matches no endpoint routes the model nowhere."""
+        for s, hosts in self._routed():
             with self.subTest(model=s.id):
-                hosts = [e for e in eps[s.id]["data"]["endpoints"]
-                         if e.get("quantization") in s.quantizations
-                         and e["tag"].split("/")[0] not in s.ignore]
                 self.assertTrue(hosts)
+
+    def test_every_routed_host_can_emit_the_cap(self):
+        """One output cap for every model is finding F1's fix. A host whose
+        `max_completion_tokens` is lower would cut a draw short at its own
+        limit, and OpenRouter does not document routing around it."""
+        for s, hosts in self._routed():
+            for e in hosts:
+                with self.subTest(model=s.id, host=e["tag"]):
+                    self.assertGreaterEqual(
+                        e.get("max_completion_tokens") or models.OUTPUT_CAP,
+                        models.output_cap(s))
+
+    def test_every_ceiling_bounds_the_routed_hosts(self):
+        """`price` is what `Budget` authorizes against. Below any host a
+        request can land on, it is not a ceiling."""
+        for s, hosts in self._routed():
+            for e in hosts:
+                with self.subTest(model=s.id, host=e["tag"]):
+                    self.assertGreaterEqual(
+                        s.price[0], float(e["pricing"]["prompt"]) * 1e6 - 1e-9)
+                    self.assertGreaterEqual(
+                        s.price[1],
+                        float(e["pricing"]["completion"]) * 1e6 - 1e-9)
+
+
+class TestRouted(unittest.TestCase):
+    """`models.routed` mirrors the `provider` object `build_chat` sends."""
+
+    SPEC = models.ModelSpec(
+        "x/y", models.Provider.OPENROUTER, "x", models.Tier.CHEAP, "y",
+        date(2026, 1, 1), (1.0, 1.0), (1.0, 1.0),
+        models.ReasoningControl.EFFORT, supports_reasoning=True,
+        temperature=1.0, top_p=None, effort="high", efforts=("high",),
+        quantizations=("fp8",), ignore=("bad", "mixed/fp8"))
+    ALL = ["reasoning", "temperature", "top_p"]
+
+    def ep(self, tag, q="fp8", params=None):
+        return {"tag": tag, "quantization": q,
+                "supported_parameters": self.ALL if params is None else params}
+
+    def tags(self, *eps):
+        return [e["tag"] for e in models.routed(self.SPEC, list(eps))]
+
+    def test_filters(self):
+        self.assertEqual(self.tags(
+            self.ep("ok/fp8"),
+            self.ep("low/fp4", q="fp4"),              # below the precision
+            self.ep("bad/fp8"),                       # base slug ignored
+            self.ep("mixed/fp8"),                     # one endpoint ignored
+            self.ep("mixed/bf16", q="bf16"),          # ...not its sibling
+            self.ep("ok/fast"),                       # a service tier
+            self.ep("google-vertex/global/flex"),     # a service tier
+            self.ep("notemp/fp8", params=["reasoning", "top_p"]),
+            self.ep("notop/fp8", params=["reasoning", "temperature"]),
+            self.ep("noreason/fp8", params=["temperature"])),
+            ["ok/fp8", "notop/fp8"])
+
+    def test_a_filter_of_none_admits_every_precision(self):
+        spec = models.ModelSpec(
+            "x/z", models.Provider.OPENROUTER, "x", models.Tier.CHEAP, "z",
+            date(2026, 1, 1), (1.0, 1.0), (1.0, 1.0))
+        self.assertEqual(
+            len(models.routed(spec, [self.ep("a", q="unknown"),
+                                     self.ep("b", q="fp4")])), 2)
+
+
+class TestCacheReadPrice(unittest.TestCase):
+
+    def test_opus_5_5_reads_bill_at_five_percent(self):
+        """Every other Claude model bills a cache hit at 0.1x input."""
+        from permits import infer
+        usage = infer.Usage(input_tokens=0, output_tokens=0,
+                            cache_read_input_tokens=1_000_000)
+        self.assertAlmostEqual(infer.cost("claude-opus-5-5", usage), 0.20)
+        self.assertAlmostEqual(infer.cost("claude-sonnet-5", usage), 0.20)
+        self.assertAlmostEqual(infer.cost("claude-opus-5", usage), 0.50)
 
 
 class TestTiersMatchTheAudit(unittest.TestCase):
-    """The roster table in the 2026-09-26 audit (finding F9). A tier is a
-    judgement, so it is written down once and checked here rather than
-    re-derived from price in each report."""
+    """The roster table in the 2026-09-26 audit (finding F9), and the step 6
+    roster's lab positioning. A tier is a judgement, so it is written down
+    once and checked here rather than re-derived from price in each report."""
 
     def test_tiers(self):
         expect = {
@@ -202,6 +325,23 @@ class TestTiersMatchTheAudit(unittest.TestCase):
             "qwen/qwen3.5-flash-02-23": "cheap",
             "z-ai/glm-5.3-flash": "cheap",
             "deepseek/deepseek-v4-flash": "cheap",
+            # docs/evidence/2026-09-27-v2-run-preregistration.md
+            "claude-opus-5-5": "top",
+            "x-ai/grok-4.7": "top",
+            "moonshotai/kimi-k3": "top",
+            "z-ai/glm-5.3": "top",
+            "qwen/qwen3.8-max-0902": "top",
+            "openai/gpt-6-sol": "mid",
+            "google/gemini-3.8-flash": "mid",
+            "deepseek/deepseek-v4-pro-0813": "mid",
+            "xiaomi/mimo-v2.6-pro": "mid",
+            "minimax/minimax-m3": "mid",
+            "openai/gpt-6-luna": "cheap",
+            "google/gemini-3.5-flash-lite": "cheap",
+            "qwen/qwen3.8-flash": "cheap",
+            "deepseek/deepseek-v4.1-flash": "cheap",
+            "xiaomi/mimo-v2.6-flash": "cheap",
+            "tencent/hy3": "cheap",
         }
         for m, tier in expect.items():
             self.assertEqual(R[m].tier, tier, m)

@@ -260,7 +260,8 @@ before or after the block.
 
 # ------------------------------------------------------------ the targets
 class Target(object):
-    def __init__(self, key, jurisdiction, vendor, adapter, roles, label):
+    def __init__(self, key, jurisdiction, vendor, adapter, roles, label,
+                 split="dev", prefix=None):
         self.key = key
         self.jurisdiction = jurisdiction
         self.vendor = vendor
@@ -270,6 +271,14 @@ class Target(object):
         # inferred so a scoring change is a visible diff.
         self.roles = roles
         self.label = label
+        # "dev": prompts, including the hint, were written while reading this
+        # target's pages and model output on them. "test": held out - no
+        # prompt was written against it, and it is only ever scored.
+        self.split = split
+        # Only manifest files whose name starts with this. A held-out target
+        # is one closed window's walk; an earlier one-off page of the same
+        # portal is a different sample and stays out of its corpus.
+        self.prefix = prefix
 
     def reference(self, html):
         out = self.adapter.parse_index(html)
@@ -289,6 +298,31 @@ TARGETS = {
          "permit_type": "type", "status": "status",
          "issued_date": "date"},
         "Clark County NV - Accela ACA grid"),
+    # Held out: pages fetched by spikes/heldout_fetch.py, one closed window
+    # each. Same vendor as Clark, different template - column set, column
+    # order, or which rows carry a detail link - so a pass here says the
+    # extractor learned the grid rather than Clark's layout.
+    "santabarbara": Target(
+        "santabarbara", "santabarbara", "accela-aca", accela,
+        {"native_id": "number", "address": "address",
+         "permit_type": "type", "status": "status",
+         "issued_date": "date"},
+        "Santa Barbara CA - Accela ACA grid (held out)",
+        split="test", prefix="acc_santabarbara_ho"),
+    "polkco": Target(
+        "polkco", "POLKCO", "accela-aca", accela,
+        {"native_id": "number", "address": "address",
+         "permit_type": "type", "status": "status",
+         "issued_date": "date"},
+        "Polk County - Accela ACA grid (held out)",
+        split="test", prefix="acc_POLKCO_ho"),
+    "oregon": Target(
+        "oregon", "oregon", "accela-aca", accela,
+        {"native_id": "number", "address": "address",
+         "permit_type": "type", "status": "status",
+         "issued_date": "date"},
+        "Oregon statewide - Accela ACA grid (held out)",
+        split="test", prefix="acc_oregon_ho"),
 }
 
 
@@ -304,7 +338,9 @@ def corpus(target):
         if (r["jurisdiction"] == target.jurisdiction
                 and r["vendor"] == target.vendor
                 and r["page_type"].endswith("INDEX")
-                and r["http_status"] == "200"):
+                and r["http_status"] == "200"
+                and r["verdict"] == "ok"
+                and r["file"].startswith(target.prefix or "")):
             p = os.path.join(PAGES, r["file"])
             if os.path.exists(p):
                 rows.append((r["file"], p))
@@ -373,6 +409,18 @@ def window(html, budget, step=1000):
     with no permit rows on it, scored zero, and the number would have
     described this function rather than the model. That is the whole reason
     the coverage percentage and the window offset are printed on every run.
+
+    **Version three failed too, on the first held-out page** (Santa Barbara,
+    2026-09-27, before any model saw it). Its search form puts seven 4- and
+    5-cell layout rows near the top, and its record rows are long enough that
+    a span over the grid holds only six, so the window showed the form and
+    none of the ten records. Clark and Polk County had escaped by 7 to 5 and
+    6 to 5. The fallback: a results grid's rows share one width, the most
+    common cell count among data rows. If the chosen window holds fewer than
+    `MIN_GRID_ROWS` of them, it starts at the first one, the grid's header,
+    instead. Where version three worked the window is unchanged, byte for
+    byte, on every stored page of both development targets; a different
+    selection rule was tried first and moved every Clark window.
     """
     s = strip(html)
     if len(s) <= budget:
@@ -385,8 +433,27 @@ def window(html, budget, step=1000):
         n = sum(1 for a, b in rows if a >= i and b <= i + span)
         if n > best_n:
             best, best_n = i, n
+    grid = grid_rows(s, rows)
+    if grid and sum(1 for a, b in grid
+                    if a >= best and b <= best + span) < MIN_GRID_ROWS:
+        best = grid[0][0]
     return (s[:head] + "\n...[document elided]...\n" + s[best:best + span],
             float(budget) / len(s), best)
+
+
+MIN_GRID_ROWS = 3
+
+
+def grid_rows(s, rows):
+    """The data rows of the grid's width: the most common cell count among
+    `rows`, the wider on a tie."""
+    width = [len(TD.findall(s[a:b])) for a, b in rows]
+    if not width:
+        return []
+    counts = {w: width.count(w) for w in width}
+    top = max(counts.values())
+    w_grid = max(w for w, n in counts.items() if n == top)
+    return [r for r, w in zip(rows, width, strict=True) if w == w_grid]
 
 
 # ------------------------------------------------------------- the scorer
@@ -919,7 +986,7 @@ def main():
     for key in args.targets.split(","):
         target = TARGETS[key.strip()]
         pages = corpus(target)
-        print("\n=== %s: %s" % (target.key, target.label))
+        print("\n=== %s: %s  [%s]" % (target.key, target.label, target.split))
         print("    %d index pages in the manifest" % len(pages))
         if not pages:
             continue

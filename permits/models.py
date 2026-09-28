@@ -31,7 +31,9 @@ class Provider(StrEnum):
 
 
 class Tier(StrEnum):
-    """Price tier, as assigned in the 2026-09-26 audit's roster table.
+    """Tier: the 2026-09-26 audit's roster table for the v1 models, and for
+    the step 6 roster the lab's own positioning of the model in its lineup
+    (`docs/evidence/2026-09-27-v2-run-preregistration.md`). Not a price band.
 
     `FREE` is a smoke-test endpoint, not a tier: OpenRouter does not promise
     which upstream, quantization or context window serves a free request, so
@@ -122,9 +124,19 @@ class ModelSpec:
 
     `quantizations` are the host precisions OpenRouter may route to: the
     lowest precision the lab itself released, and anything higher. None means
-    no filter, for a model with a single, lab-run host. `ignore` names
-    OpenRouter endpoints (base provider slugs) excluded because they were
-    measured rendering the same prompt whatever effort is sent.
+    no filter, for a closed-weight model, whose every host serves the lab's
+    weights under licence and reports `unknown`. `ignore` names OpenRouter
+    endpoints excluded, either a base provider slug (every endpoint of that
+    provider) or one endpoint's tag, for one of two reasons: measured
+    rendering the same prompt whatever effort is sent, or a
+    `max_completion_tokens` below the output cap, since OpenRouter does not
+    document routing around a host that cannot emit what is asked. Where the
+    card gives no sampling for a closed-weight model, `temperature` and
+    `top_p` are None and nothing is sent, which leaves the lab's own default
+    in charge; GPT-6's endpoints accept neither.
+
+    `cache_read` is the cache-hit price as a multiple of the input price.
+    Anthropic bills 0.1x, except 0.05x on Opus 5.5.
 
     `released` is the catalogue's `created` date from
     `openrouter.ai/api/v1/models`, read 2026-09-25, for Claude too, so every
@@ -151,6 +163,46 @@ class ModelSpec:
     levels: tuple[tuple[str, str], ...] = ()
     quantizations: tuple[str, ...] | None = None
     ignore: tuple[str, ...] = ()
+    cache_read: float = 0.1
+
+
+# OpenRouter service-tier endpoints (`openai/fast`, `google-vertex/flex`,
+# `.../priority`) are opt-in: "Requests that don't use any of these are never
+# routed to a non-default service tier"
+# (openrouter.ai/docs/guides/features/service-tiers, read 2026-09-27).
+SERVICE_TIERS = frozenset({"fast", "flex", "priority"})
+
+
+def routed(spec: "ModelSpec", endpoints: list[dict]) -> list[dict]:
+    """The endpoints of an OpenRouter listing (`/models/{id}/endpoints`)
+    that a protocol v2 request for `spec` can be served by.
+
+    Mirrors `provider` in `permits.infer.OpenRouterTransport.build_chat`:
+    `quantizations`, `ignore`, and `require_parameters` against the sampling
+    and reasoning fields the request carries. Service tiers are left out
+    because no request asks for one. Tests use this to check that every
+    such host can emit the output cap and is priced under the ceiling.
+    """
+    out = []
+    for e in endpoints:
+        tag = e["tag"]
+        parts = tag.split("/")
+        if len(parts) > 1 and parts[-1] in SERVICE_TIERS:
+            continue
+        if (spec.quantizations is not None
+                and e.get("quantization") not in spec.quantizations):
+            continue
+        if tag in spec.ignore or parts[0] in spec.ignore:
+            continue
+        params = set(e.get("supported_parameters") or ())
+        wanted = {name for name, v in (("temperature", spec.temperature),
+                                       ("top_p", spec.top_p)) if v is not None}
+        if spec.reasoning in (ReasoningControl.EFFORT, ReasoningControl.SWITCH):
+            wanted.add("reasoning")
+        if not wanted <= params:
+            continue
+        out.append(e)
+    return out
 
 
 def lab_level(spec: "ModelSpec", effort: str) -> str:
@@ -170,7 +222,9 @@ def output_cap(spec: "ModelSpec") -> int:
 
 PRICES_AS_OF = "2026-06-24 (DESIGN.md section 6)"
 OPENROUTER_PRICES_AS_OF = ("2026-09-23 (openrouter.ai/api/v1/models); reasoning output "
-                           "rates reconciled to invoice 2026-09-25")
+                           "rates reconciled to invoice 2026-09-25; raised to "
+                           "the routed hosts' rates and step 6 roster added "
+                           "2026-09-27")
 
 # Protocol v1 only. Room to think, added on top of the answer budget for the
 # models v1 sent `reasoning_effort` to, rather than taken out of it. OpenRouter counts reasoning tokens and output tokens
@@ -188,10 +242,12 @@ REASONING_HEADROOM = 32000
 ANT, OR = Provider.ANTHROPIC, Provider.OPENROUTER
 
 # Host precisions, per the lowest precision each lab released on Hugging Face
-# (`data/audit/2026-09-26-huggingface-configs.json`), checked against
-# OpenRouter's endpoint list (`data/audit/2026-09-26-openrouter-endpoints.json`).
-# Hosts that report `unknown` are excluded.
-FROM_FP4 = ("fp4", "fp8", "fp16", "bf16")
+# (`data/audit/2026-09-26-huggingface-configs.json`,
+# `data/audit/2026-09-27-roster-hf.json`), checked against OpenRouter's
+# endpoint list (`data/audit/2026-09-27-roster-endpoints.json`). Hosts that
+# report `unknown` are excluded. `mxfp4` is the format gpt-oss and Kimi K3
+# were released in; `nvfp4` is a different 4-bit format and is not admitted.
+FROM_FP4 = ("mxfp4", "fp4", "fp8", "fp16", "bf16")
 FROM_INT4 = ("int4", "int8", "fp8", "fp16", "bf16")
 FROM_FP8 = ("fp8", "fp16", "bf16")
 
@@ -224,6 +280,27 @@ FROM_FP8 = ("fp8", "fp16", "bf16")
 # tracking it, since the next call can be served by an upstream none of these
 # calls used. The two newest entries are about 1.5x the rate that bounds
 # their worst call.
+#
+# Every OpenRouter ceiling is also at least the highest rate among the
+# endpoints a v2 request can be routed to (`routed`), checked in
+# `tests/test_models.py` against the 2026-09-27 listing. Four input ceilings
+# and qwen3-coder's output ceiling were below that and were raised on
+# 2026-09-27. The step 6 roster entries, which have no calls to reconcile
+# against, are 1.5x the highest routed rate, and 3.5x on output for Z.ai
+# models, whose reasoning was measured under-reported by up to 3.38x.
+# Endpoints whose `max_completion_tokens` is below `OUTPUT_CAP`, from the
+# 2026-09-27 listing. OpenRouter does not document routing around a host that
+# cannot emit the `max_tokens` asked for, so a draw sent there could be cut
+# short by the host rather than by the cap every other model has.
+SHORT = {
+    "openai/gpt-oss-120b": ("novita/fp4", "deepinfra/turbo", "siliconflow/fp8",
+                            "cerebras/fp16"),
+    "deepseek/deepseek-v4-pro": ("deepinfra/fp8",),
+    "moonshotai/kimi-k3": ("deepinfra/bf16",),
+    "deepseek/deepseek-v4-pro-0813": ("deepinfra/fp8",),
+    "deepseek/deepseek-v4.1-flash": ("baseten/fp8",),
+}
+
 _SPECS = [
     # Claude: `max_output` from OpenRouter's `anthropic/*` catalogue entries.
     # Thinking fixes temperature at 1.0 and the API rejects anything else.
@@ -258,7 +335,8 @@ _SPECS = [
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=1.0, max_output=65536,
               effort="medium", efforts=("low", "medium", "high"),
-              quantizations=FROM_FP4),
+              quantizations=FROM_FP4,
+              ignore=SHORT["openai/gpt-oss-120b"]),
     # OpenRouter's asynchronous variant, 80% off rather than the 50% Anthropic's
     # Batch API gives. The suffix is part of the id, which is why `--cells`
     # splits on the first and last colon rather than on every one, and why the
@@ -274,7 +352,7 @@ _SPECS = [
     # repetition_penalty 1.05, which the policy does not send. Qwen released
     # bf16 and an fp8 checkpoint.
     ModelSpec("qwen/qwen3-coder", OR, "qwen", Tier.CHEAP, "qwen3-coder",
-              date(2025, 7, 23), (0.450, 1.500), (0.300, 1.000),
+              date(2025, 7, 23), (0.450, 1.550), (0.300, 1.000),
               temperature=0.7, top_p=0.8, max_output=65536,
               quantizations=FROM_FP8),
     # Always reasons and lists no effort levels. Released in INT4. The card
@@ -291,7 +369,7 @@ _SPECS = [
     # on Z.ai's API (which maps it so) and on an endpoint running the open
     # template (which turns anything but `high` into max).
     ModelSpec("z-ai/glm-5.2", OR, "z-ai", Tier.MID, "glm-5.2",
-              date(2026, 6, 16), (0.650, 7.500), (0.650, 2.042),
+              date(2026, 6, 16), (1.400, 7.500), (0.650, 2.042),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=0.95, max_output=131072,
               effort="xhigh", efforts=("high", "xhigh"),
@@ -301,18 +379,19 @@ _SPECS = [
     # Max on all 30 V4 endpoints probed 2026-09-27. Novita serves Pro at Think
     # Max and Parasail at high whatever effort is sent, so both are excluded.
     ModelSpec("deepseek/deepseek-v4-pro", OR, "deepseek", Tier.MID, "deepseek-v4-pro",
-              date(2026, 4, 24), (0.940, 5.000), (0.940, 1.879),
+              date(2026, 4, 24), (1.740, 5.000), (0.940, 1.879),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=1.0, max_output=384000,
               effort="high", efforts=("high", "xhigh"),
               levels=(("xhigh", "max"),),
-              quantizations=FROM_FP8, ignore=("novita", "parasail")),
+              quantizations=FROM_FP8,
+              ignore=("novita", "parasail", *SHORT["deepseek/deepseek-v4-pro"])),
     # Current-generation cheap tier, added 2026-09-25. Reasoning was probed,
     # not assumed from the name: both return a populated `reasoning` field and
     # non-zero `reasoning_tokens` when sent no reasoning parameter. Both were
     # released in fp8.
     ModelSpec("z-ai/glm-5.3-flash", OR, "z-ai", Tier.CHEAP, "glm-5.3-flash",
-              date(2026, 8, 26), (0.070, 2.300), (0.045, 0.140),
+              date(2026, 8, 26), (0.165, 2.300), (0.045, 0.140),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=0.95, max_output=128000,
               effort="max", efforts=("low", "high", "max"),
@@ -320,12 +399,155 @@ _SPECS = [
     # As Pro. GMICloud, SiliconFlow and Parasail render one prompt for every
     # effort sent, so they are excluded.
     ModelSpec("deepseek/deepseek-v4-flash", OR, "deepseek", Tier.CHEAP, "deepseek-v4-flash",
-              date(2026, 4, 24), (0.075, 0.750), (0.047, 0.095),
+              date(2026, 4, 24), (0.190, 0.750), (0.047, 0.095),
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=1.0, max_output=384000,
               effort="high", efforts=("high", "xhigh"),
               levels=(("xhigh", "max"),),
               quantizations=FROM_FP8, ignore=("gmicloud", "siliconflow", "parasail")),
+    # ---- The step 6 roster, added 2026-09-27 ----------------------------
+    # docs/evidence/2026-09-27-v2-run-preregistration.md. Sources, all read
+    # 2026-09-27 and snapshotted by `spikes/fetch_roster_sources.py`: the
+    # catalogue (`data/audit/2026-09-27-openrouter-models.json`) for release
+    # date, list price, efforts and output limit; the endpoint listing
+    # (`2026-09-27-roster-endpoints.json`) for hosts; each open model's Hugging
+    # Face config, card and chat template (`2026-09-27-roster-hf.json`,
+    # `2026-09-27-roster-cards/`) for precision, sampling and reasoning
+    # default; the labs' API docs for the closed models. The reasoning level
+    # sent is the lab's API default except where noted.
+    #
+    # Anthropic's API default effort for Opus 5.5 is `medium` (the catalogue
+    # says `high`); adaptive thinking with no effort sent is that default.
+    # Cache hits bill at 0.05x input (platform.claude.com pricing page).
+    ModelSpec("claude-opus-5-5", ANT, "anthropic", Tier.TOP, "opus-5-5",
+              date(2026, 9, 22), (4.0, 20.0), (4.0, 20.0),
+              ReasoningControl.ADAPTIVE, supports_reasoning=True,
+              temperature=1.0, max_output=128000, cache_read=0.05),
+    # Closed weights; every endpoint is OpenAI's model under licence. Default
+    # effort `medium` (developers.openai.com model pages). The endpoints
+    # accept no sampling parameter, so none is sent.
+    ModelSpec("openai/gpt-6-sol", OR, "openai", Tier.MID, "gpt-6-sol",
+              date(2026, 9, 22), (3.300, 16.500), (2.000, 10.000),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              max_output=128000, effort="medium",
+              efforts=("max", "xhigh", "high", "medium", "low", "none")),
+    ModelSpec("openai/gpt-6-luna", OR, "openai", Tier.CHEAP, "gpt-6-luna",
+              date(2026, 9, 22), (0.165, 0.825), (0.100, 0.500),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              max_output=128000, effort="medium",
+              efforts=("max", "xhigh", "high", "medium", "low", "none")),
+    # Default thinking level `medium` for 3.8 Flash and `minimal` for 3.5
+    # Flash-Lite (ai.google.dev thinking guide). Google "strongly recommend[s]
+    # keeping the temperature parameter at its default value of 1.0" for
+    # Gemini 3, so nothing is sent and both Google hosts stay eligible.
+    ModelSpec("google/gemini-3.8-flash", OR, "google", Tier.MID, "gemini-3.8-flash",
+              date(2026, 9, 2), (1.125, 5.625), (0.750, 3.750),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              max_output=65536, effort="medium",
+              efforts=("high", "medium", "low")),
+    ModelSpec("google/gemini-3.5-flash-lite", OR, "google", Tier.CHEAP,
+              "gemini-3.5-flash-lite",
+              date(2026, 7, 21), (0.495, 4.125), (0.300, 2.500),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              max_output=65536, effort="minimal",
+              efforts=("high", "medium", "low", "minimal")),
+    # Default `high` (docs.x.ai reasoning guide). xAI publishes no sampling;
+    # the catalogue's `default_parameters` are 0.7 / 0.95.
+    ModelSpec("x-ai/grok-4.7", OR, "x-ai", Tier.TOP, "grok-4.7",
+              date(2026, 9, 21), (2.400, 7.200), (1.600, 4.800),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              temperature=0.7, top_p=0.95, max_output=450000, effort="high",
+              efforts=("xhigh", "high", "medium", "low")),
+    # Always reasons, default `max`; released as MXFP4 weights from
+    # quantization-aware training; card sampling 1.0 / 0.95 for single-step
+    # tasks. Moonshot's own endpoint lists no sampling parameters, so
+    # `require_parameters` leaves it out.
+    ModelSpec("moonshotai/kimi-k3", OR, "moonshotai", Tier.TOP, "kimi-k3",
+              date(2026, 7, 16), (4.500, 22.500), (3.000, 15.000),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              temperature=1.0, top_p=0.95, max_output=943718, effort="max",
+              efforts=("max", "high", "low"),
+              quantizations=FROM_FP4, ignore=SHORT["moonshotai/kimi-k3"]),
+    # Z.ai's flagship, so its top tier: glm-5.3-prime, first picked, is the
+    # same weights served faster. The card's template turns anything but
+    # `low` or `high` into `max`, the default. Released in fp8.
+    ModelSpec("z-ai/glm-5.3", OR, "z-ai", Tier.TOP, "glm-5.3",
+              date(2026, 8, 18), (2.100, 15.400), (1.400, 4.400),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              temperature=1.0, top_p=0.95, max_output=943717, effort="max",
+              efforts=("max", "high", "low"),
+              quantizations=FROM_FP8),
+    # The dated snapshot of Qwen3.8 Max (qwen3.8-max-prime, first picked, is a
+    # higher-throughput SKU of it). Served by Alibaba only. Reasoning on by
+    # default at `xhigh`; no sampling published, so none is sent.
+    ModelSpec("qwen/qwen3.8-max-0902", OR, "qwen", Tier.TOP, "qwen3.8-max-0902",
+              date(2026, 9, 3), (3.000, 9.000), (2.000, 6.000),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              max_output=131072, effort="xhigh",
+              efforts=("xhigh", "high", "medium", "low", "minimal")),
+    # Alibaba's hosted model built on the open Qwen3.8-Flash-Next, whose card
+    # gives thinking-mode sampling 1.0 / 0.95 and thinks by default. The
+    # catalogue lists no effort levels, so reasoning is switched on.
+    ModelSpec("qwen/qwen3.8-flash", OR, "qwen", Tier.CHEAP, "qwen3.8-flash",
+              date(2026, 8, 26), (0.225, 0.705), (0.150, 0.470),
+              ReasoningControl.SWITCH, supports_reasoning=True,
+              temperature=1.0, top_p=0.95, max_output=131072),
+    # DeepSeek's default is `high` (api-docs.deepseek.com thinking mode). The
+    # card gives top_p 0.95 for agent loops and 1.0 otherwise; this task is
+    # one turn. The hosts excluded for ignoring effort were measured on V4
+    # Pro and V4 Flash and are carried over to these ids, not re-measured.
+    ModelSpec("deepseek/deepseek-v4-pro-0813", OR, "deepseek", Tier.MID,
+              "deepseek-v4-pro-0813",
+              date(2026, 8, 12), (1.980, 5.940), (0.24502, 3.500),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              temperature=1.0, top_p=1.0, max_output=943718, effort="high",
+              efforts=("max", "high", "low"),
+              quantizations=FROM_FP8,
+              ignore=("novita", "parasail",
+                      *SHORT["deepseek/deepseek-v4-pro-0813"])),
+    # Released fp8 with fp4 experts, so fp4 hosts are admitted.
+    ModelSpec("deepseek/deepseek-v4.1-flash", OR, "deepseek", Tier.CHEAP,
+              "deepseek-v4.1-flash",
+              date(2026, 9, 10), (0.565, 2.250), (0.035, 0.290),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              temperature=1.0, top_p=1.0, max_output=384000, effort="high",
+              efforts=("max", "high", "low"),
+              quantizations=FROM_FP4,
+              ignore=("gmicloud", "siliconflow", "parasail",
+                      *SHORT["deepseek/deepseek-v4.1-flash"])),
+    # The template thinks unless `enable_thinking` is false; no effort
+    # levels. Card sampling 1.0 / 0.95. Released in fp8.
+    ModelSpec("xiaomi/mimo-v2.6-pro", OR, "xiaomi", Tier.MID, "mimo-v2.6-pro",
+              date(2026, 9, 21), (0.655, 1.305), (0.435, 0.870),
+              ReasoningControl.SWITCH, supports_reasoning=True,
+              temperature=1.0, top_p=0.95, max_output=131072,
+              quantizations=FROM_FP8),
+    ModelSpec("xiaomi/mimo-v2.6-flash", OR, "xiaomi", Tier.CHEAP, "mimo-v2.6-flash",
+              date(2026, 9, 21), (0.210, 0.420), (0.140, 0.280),
+              ReasoningControl.SWITCH, supports_reasoning=True,
+              temperature=1.0, top_p=0.95, max_output=131072,
+              quantizations=FROM_FP8),
+    # A departure, decided 2026-09-27: the template's default is `adaptive`
+    # thinking, which OpenRouter's on/off switch cannot ask for, so reasoning
+    # is switched on, one step above the lab default, rather than left to
+    # each host. Card sampling 1.0 / 0.95. MiniMax released an MXFP8
+    # checkpoint.
+    ModelSpec("minimax/minimax-m3", OR, "minimax", Tier.MID, "minimax-m3",
+              date(2026, 5, 31), (0.450, 1.800), (0.300, 1.200),
+              ReasoningControl.SWITCH, supports_reasoning=True,
+              temperature=1.0, top_p=0.95, max_output=512000,
+              quantizations=FROM_FP8),
+    # A departure, decided 2026-09-27: the template's default is `no_think`,
+    # and the card says to "Set reasoning_effort to "high" for complex tasks
+    # (math, coding, reasoning)", so `high` is sent. Card sampling 0.9 / 1.0;
+    # Tencent's own endpoint lists no top_p, so it is left out. Tencent
+    # released Hy3-FP8.
+    ModelSpec("tencent/hy3", OR, "tencent", Tier.CHEAP, "hy3",
+              date(2026, 7, 6), (0.300, 1.200), (0.132, 0.528),
+              ReasoningControl.EFFORT, supports_reasoning=True,
+              temperature=0.9, top_p=1.0, max_output=128000, effort="high",
+              efforts=("high", "low", "none"),
+              quantizations=FROM_FP8),
     # For verifying the path end to end before any money is added to the
     # account. See `Tier.FREE`. Never a measurement, so no reasoning setting.
     ModelSpec("nvidia/nemotron-3-ultra-550b-a55b:free", OR, "nvidia", Tier.FREE,

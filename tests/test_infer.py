@@ -511,6 +511,39 @@ class TestSynthesisWindow(unittest.TestCase):
                     "contains no permit rows - synthesis would be scored on a "
                     "page with no data on it" % (key, at, 100 * frac))
 
+    def test_window_falls_back_to_the_grid_when_layout_rows_outnumber_it(self):
+        """Santa Barbara, 2026-09-27: seven 4-cell form rows near the top
+        outnumbered the six long grid rows a span could hold, and the window
+        showed the form and no records."""
+        layout = "".join("<table><tr>%s</tr></table>" % ("<td>f%d</td>" % i * 4)
+                         for i in range(7))
+        pad = "<p>%s</p>" % ("x" * 9000)
+        cell = "<td>%s</td>" % ("y" * 120)
+        grid = ("<table><tr>" + "<th>GRIDHEADER</th>" * 11 + "</tr>"
+                + "".join("<tr><td>REC%d</td>%s</tr>" % (i, cell * 10)
+                          for i in range(10)) + "</table>")
+        html = "<html><body>" + layout + pad + grid + pad + "</body></html>"
+        win, _frac, _at = self.C.window(html, 6000)
+        self.assertIn("GRIDHEADER", win)
+        self.assertIn("REC0", win)
+
+    @unittest.skipUnless(os.path.exists(CLARK) and os.path.exists(SJ),
+                         "target pages not in the store")
+    def test_every_target_window_shows_its_records(self):
+        """Every registered target, held-out ones included: page 1's window
+        carries at least two of the adapter's records."""
+        for key, t in self.C.TARGETS.items():
+            pages = self.C.corpus(t)
+            if not pages:
+                continue
+            html = self.C.read(pages[0][1])
+            win, _f, at = self.C.window(html, 24000)
+            ids = [r.get(t.roles["native_id"]) for r in t.reference(html)]
+            with self.subTest(target=key):
+                self.assertGreaterEqual(
+                    sum(1 for i in ids if i and i in win), 2,
+                    "%s: window at char %d shows under two records" % (key, at))
+
     def test_data_rows_ignores_layout_tables(self):
         """A layout row has one or two cells; a grid row has many."""
         layout = "<table><tr><td>a</td><td>b</td></tr></table>" * 20

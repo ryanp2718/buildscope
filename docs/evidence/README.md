@@ -60,6 +60,7 @@ the distinction is exactly what a reader needs.
 | [2026-09-21 Drift robustness](2026-09-21-drift-robustness.md) | Do synthesised extractors survive realistic template drift? | Current |
 | [2026-09-22 Cost per success](2026-09-22-cost-per-success.md) | Does cost per token or cost per working extractor rank models correctly? | Superseded in scope by 2026-09-25 |
 | [2026-09-25 Open-weight model axis](2026-09-25-open-weight-model-axis.md) | Does the cost-per-success rule survive a 90x price band and a second provider? | Qualified by 2026-09-26 audit |
+| [2026-09-27 v2 run pre-registration](2026-09-27-v2-run-preregistration.md) | What will the protocol v2 comparison run, on which targets, at what n, judged how, for how much? | Pre-registered |
 | [2026-09-26 Model-comparison fairness audit](2026-09-26-model-comparison-fairness-audit.md) | Is the cross-vendor comparison a fair test, and what must change before the next paid run? | Current |
 | [2026-09-27 Reasoning effort on OpenRouter](2026-09-27-openrouter-reasoning-effort.md) | Which efforts does each model accept, and what does OpenRouter send for one a model does not list? | Current |
 
