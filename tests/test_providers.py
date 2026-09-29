@@ -585,6 +585,96 @@ class TestTheLedgerKnowsWhoWasCalled(ClientCase):
         self.assertEqual(reply.usd, 0.0)
 
 
+class TestAHostClosedStreamIsNotAnAnswer(ClientCase):
+    """AtlasCloud closed glm-5.3-flash streams at 301 s and Phala at 602 s on
+    2026-09-28, mid-reasoning, with a usage block and no finish reason. The
+    empty text was scored `no_code`, a model failure, seven times (step 6
+    pre-registration, deviation 2)."""
+
+    MODEL = "qwen/qwen3-coder"
+
+    def cut(self, tokens=50, cost=0.02):
+        return _FakeResponse(text="", finish_reason=None, host="Phala",
+                             usage=_FakeUsage(prompt_tokens=10,
+                                              completion_tokens=tokens,
+                                              cost=cost))
+
+    def test_it_is_retried_then_a_host_failure(self):
+        comp = self.install(self.cut())
+        with self.assertRaises(infer.TransientError):
+            self.client.message(self.MODEL, "S", "U", 100, "synthesis")
+        self.assertEqual(len(comp.bodies), infer.ATTEMPTS)
+
+    def test_each_attempt_is_a_failure_row_carrying_its_charge(self):
+        self.install(self.cut())
+        with self.assertRaises(infer.TransientError):
+            self.client.message(self.MODEL, "S", "U", 100, "synthesis")
+        rows = self.rows()
+        self.assertEqual(len(rows), infer.ATTEMPTS)
+        for row in rows:
+            self.assertFalse(row.ok)
+            self.assertEqual(row.usd, 0.02)
+            self.assertEqual(row.output_tokens, 50)
+            self.assertEqual(row.host, "Phala")
+        self.assertAlmostEqual(self.client.budget.spent,
+                               0.02 * infer.ATTEMPTS)
+
+    def test_nothing_is_cached_to_replay(self):
+        comp = self.install(self.cut())
+        for _ in range(2):
+            with self.assertRaises(infer.TransientError):
+                self.client.message(self.MODEL, "S", "U", 100, "synthesis")
+        self.assertEqual(len(comp.bodies), 2 * infer.ATTEMPTS)
+
+    def test_no_reason_with_the_whole_budget_used_is_still_truncation(self):
+        cap = int(self.client.request(self.MODEL, "S", "U", 100)["max_tokens"])
+        self.install(self.cut(tokens=cap))
+        reply = self.client.message(self.MODEL, "S", "U", 100, "synthesis")
+        self.assertTrue(reply.truncated)
+
+    def test_a_natural_stop_is_untouched(self):
+        self.install(_FakeResponse(usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=50, cost=0.01)))
+        reply = self.client.message(self.MODEL, "S", "U", 100, "synthesis")
+        self.assertEqual(reply.stop_reason, "end_turn")
+        self.assertTrue(self.rows()[-1].ok)
+
+    def plant(self, protocol):
+        """A host-closed stream in the cache, as the client stored them
+        before `cut_by_host` existed."""
+        body = self.client.request(self.MODEL, "S", "U", 100,
+                                   protocol=protocol)
+        self.client._store(self.client._key_for(body, 0), {
+            "text": "", "usage": {"input_tokens": 10, "output_tokens": 50},
+            "stop_reason": None, "host": "Phala", "response_id": "gen-x"})
+
+    def test_a_cached_one_is_bought_again_under_v2(self):
+        self.plant(Protocol.V2)
+        comp = self.install(_FakeResponse(text="fresh", usage=_FakeUsage(
+            prompt_tokens=10, completion_tokens=50, cost=0.01)))
+        reply = self.client.message(self.MODEL, "S", "U", 100, "synthesis")
+        self.assertEqual(len(comp.bodies), 1)
+        self.assertEqual(reply.text, "fresh")
+        self.assertFalse(reply.cached)
+
+    def test_a_cached_one_replays_under_v1_as_published(self):
+        self.plant(V1)
+        comp = self.install(_FakeResponse())
+        reply = self.client.message(self.MODEL, "S", "U", 100, "synthesis",
+                                    protocol=V1)
+        self.assertEqual(len(comp.bodies), 0)
+        self.assertTrue(reply.cached)
+
+    def test_the_rule(self):
+        u = infer.Usage
+        self.assertTrue(infer.cut_by_host(None, u(output_tokens=26061), 64000))
+        self.assertFalse(infer.cut_by_host(None, u(output_tokens=64000), 64000))
+        self.assertFalse(infer.cut_by_host("end_turn", u(output_tokens=10),
+                                           64000))
+        self.assertFalse(infer.cut_by_host("max_tokens",
+                                           u(output_tokens=64000), 64000))
+
+
 # ------------------------------------------------------- the price table
 class TestThePriceTableIsUsable(unittest.TestCase):
 

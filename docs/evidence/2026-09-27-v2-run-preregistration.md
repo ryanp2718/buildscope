@@ -13,8 +13,9 @@ Inputs:    `data/audit/2026-09-27-openrouter-models.json`, `data/audit/2026-09-2
 Outputs:   none yet. The run will write `data/infer/variance.json` cells keyed `|v2`, and a results
            report that cites this one.
 Status:    Pre-registered; amended once before any draw and once after the smoke draws (see
-           "Amendments"); smoke draws bought 2026-09-28. The plan below was fixed before the data
-           existed; any change is reported in the results as a deviation, with its reason.
+           "Amendments"); smoke draws bought 2026-09-28, stage 1 started the same day. The plan
+           below was fixed before the data existed; any change is reported in the results as a
+           deviation, with its reason (see "Deviations during the run").
 
 Step 6 of the order of work in the
 [2026-09-26 fairness audit](2026-09-26-model-comparison-fairness-audit.md). The audit's decisions are
@@ -396,6 +397,49 @@ false positive from the overrun, not a cut-off answer. The draw is kept and scor
 count of grok-4.7 draws over the cap and by how much, since a model allowed past the cap has had
 more reasoning budget than the rest. Amendment 2 changes the harness so a natural stop past the cap
 is not flagged, which makes this the rule rather than an exception.
+
+**2. 2026-09-28, stage 1: streams the host closed early were scored as model failures.** Eight
+`z-ai/glm-5.3-flash` calls ended with a usage block and no finish reason, mid-reasoning, at 301 s
+on AtlasCloud (2 of its 2 calls) and at 602 s on Phala (6 calls; Phala also completed calls of
+1,118 s and 1,702 s, so its cut is not a fixed per-request limit). OpenRouter's own generation
+record agrees for the first seven, checked: `native_finish_reason` null, `cancelled` false, generation time 301.0
+s or 601.3-601.6 s, and no reasoning-token count. The model had not reached its answer, so the text
+was empty and the harness scored `no_code`, a model failure: draws 0, 1, 8 and 9 of the Clark hint
+cell, and draws 4, 5, 6 and 7 of the Clark baseline cell. The harness only treated a stream as failed
+when it ended without choices, without usage, or on an `error` finish, and `truncated()` reads a
+missing stop reason as truncation only when the whole budget was used.
+
+This is not a model result, and dropping the draws would not fix it either: 8 of glm-5.3-flash's
+21 v2 calls to that point were cut, all of them long-reasoning calls, so either reading biases the
+model's rate. Found by looking into the no-code draws after the hint cell's result (5/10) was seen;
+the rule below is decided on the stop reason and token count alone, not on any draw's outcome.
+
+- **The rule.** A stream with no stop reason and fewer output tokens than the cap is a host
+  failure (`infer.cut_by_host`): retried once under the same draw number, then recorded as
+  `infra_error` and left out of n, like any other host failure. Its ledger row is a failure row
+  that carries the charge the host reported, since the tokens were billed, and `model_stats`
+  reports that spend per model as `usd_failed_calls`, outside `usd_total`. With the whole budget
+  used, a missing stop reason is still truncation (amendment 2).
+- **Cached copies.** A response cached before the rule existed that meets it is not replayed under
+  v2; the draw is bought again. v1 replays are unchanged, so no published v1 figure moves.
+- **Routing.** glm-5.3-flash no longer routes to AtlasCloud or Phala. Without that, a draw's retry
+  lands on the same hosts and about one draw in seven would fail twice, and those would be the
+  longest-reasoning draws. The routing is part of the request, so every glm-5.3-flash v2 draw
+  misses the cache: **all of them are re-bought under the new routing**, the smoke draw included,
+  and the earlier draws are superseded rather than pooled, so the model's cells are one routing
+  policy. Their records are kept, and the superseded Clark cells are reported beside the
+  replacements. Cost of the re-buy: about $1.
+- **Other models.** The stage 1 processes already running keep the old code. Before stage 1's
+  results are used, the ledger is searched again for calls with no stop reason under the cap; any
+  such draw on another model is re-bought by the same cache rule, and the count per model and host
+  is reported. At the time of writing there were none: of 521 successful calls in the ledger, 8
+  had no stop reason, 7 of them these, and the other (2026-09-24) is not a scored draw; the eighth
+  glm-5.3-flash cut came after.
+- **The v1 comparison (question 4).** One published v1 draw has the older form of the same
+  problem: draw 7 of the v1 `clarkco|moonshotai/kimi-k2-thinking` cell stopped on a host `error`
+  finish after 13.7 s and was scored `no_code`, from a client that did not yet treat that as a
+  host failure. The v1 cell is left as published; question 4 reports kimi-k2-thinking's v1 rate
+  both as published and with that draw left out.
 
 **Operational, not a deviation.** The first smoke run was stopped by the host for low memory during
 `qwen/qwen3.8-max-0902`'s draw, after 11 of 19 models. The re-run replayed those 11 from the cache

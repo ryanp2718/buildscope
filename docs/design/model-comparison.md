@@ -65,6 +65,11 @@ The policy is therefore versioned (`models.Protocol`) rather than edited in plac
   number at the model's catalogue limit up to 128,000 (`models.redraw_cap`); a second cut-off is
   scored as it stands. Both attempts are the draw's cost. Haiku 4.5's catalogue limit is the cap,
   so it has no re-draw.
+- **A stream the host closed early** (`infer.cut_by_host`): no stop reason and fewer tokens than
+  the cap is a host failure, not an answer and not a truncation: retried once, then `infra_error`.
+  Its failure row carries the charge the host reported. Under v2 a cached copy of one is bought
+  again rather than replayed; v1 replays are unchanged. glm-5.3-flash skips AtlasCloud and Phala,
+  which closed its streams at 301 s and 602 s (pre-registration deviation 2).
 
 ### Per-model settings under protocol v2
 
@@ -134,6 +139,8 @@ each cell is a mixture in unknown proportion.
   the settings every draw was sent with, and a two-stage cell its `stage1`, `max_draws` and whether
   it stopped after stage 1. A re-drawn draw records the cap it was re-drawn at and the cut-off
   attempt's output tokens, which `model_stats` joins its ledger row by; `usd` covers both attempts.
+  `model_stats` reports the billed spend on failed calls per model and target as
+  `usd_failed_calls`, outside `usd_total`.
 - **Cache** (`data/infer/cache/`): the response text, usage, stop reason, host and response id.
 
 ## File guarantees
@@ -210,3 +217,7 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   first, and a truncated v2 draw is re-drawn once at the catalogue limit, up to 128,000, with both
   attempts costed. The Anthropic cache writes were confirmed; reads come with the second draw of a
   cell.
+- **2026-09-28**: Stage 1 started, eight processes. Eight glm-5.3-flash streams were closed by the
+  host mid-reasoning (AtlasCloud at 301 s, Phala at 602 s) and scored `no_code`. Deviation 2: such
+  a stream is a host failure, cached copies are re-bought under v2, glm-5.3-flash skips both hosts,
+  and all its v2 draws are re-bought under that routing. No other model was affected.

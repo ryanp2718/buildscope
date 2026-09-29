@@ -240,8 +240,20 @@ class TransientError(ApiError):
 
 class _HostError(Exception):
     """A host failure the harness detects itself rather than the SDK: a
-    stream that ended without choices or usage, an `error` finish, or the
-    wall-clock limit."""
+    stream that ended without choices or usage, an `error` finish, a stream
+    closed with no finish reason short of the cap, or the wall-clock limit.
+
+    `billed`, `output_tokens` and `host` are set when the stream got as far as
+    its usage block, so the failed attempt's ledger row carries what the host
+    charged for it rather than zero."""
+
+    def __init__(self, message: str, billed: float | None = None,
+                 output_tokens: int | None = None,
+                 host: str | None = None) -> None:
+        super().__init__(message)
+        self.billed = billed
+        self.output_tokens = output_tokens
+        self.host = host
 
 
 # What a transport can raise. `httpx2.RequestError` is listed because the
@@ -414,8 +426,9 @@ class LedgerRow:
     # Seconds from sending to the first streamed token, thinking included
     # where the host streams it. Absent on rows written before 2026-09-26.
     # On a failure row it means tokens were generated before the call died,
-    # so the host may have billed for them; `usd` there is still 0.0 because
-    # nothing reports what.
+    # so the host may have billed for them; `usd` there is 0.0 because
+    # nothing reports what, except on a stream the host closed with its usage
+    # block sent (`cut_by_host`), where `usd` is the reported charge.
     ttft_s: float | None = None
     # What was asked for (`settings_sent`) and who answered. Absent on rows
     # written before 2026-09-26, whose settings are protocol v1's.
@@ -648,6 +661,22 @@ def truncated(stop_reason: str | None, usage: Usage | None,
         return False
     out = usage.output_tokens if usage is not None else 0
     return bool(max_tokens) and out >= max_tokens
+
+
+def cut_by_host(stop_reason: str | None, usage: Usage | None,
+                max_tokens: int) -> bool:
+    """A stream the host closed before the model finished: no stop reason,
+    and fewer tokens than the cap.
+
+    Neither a natural stop nor the cap, so neither the model's answer nor a
+    truncation. On 2026-09-28 AtlasCloud closed glm-5.3-flash streams at 301 s
+    and Phala at 602 s, mid-reasoning, with a usage block and no finish reason
+    in OpenRouter's own generation record; the empty text was scored
+    `no_code`, a model failure, seven times. It is a host failure (step 6
+    pre-registration, deviation 2). With the whole budget used, a missing
+    reason is still read as truncation, as `truncated` says."""
+    out = usage.output_tokens if usage is not None else 0
+    return stop_reason is None and not (max_tokens and out >= max_tokens)
 
 
 # Stop reasons that say the model finished on its own, in Anthropic's
@@ -1098,6 +1127,14 @@ class Client:
                 span.set_attribute("permits.tag", tag)
 
             hit = self.cached(key)
+            if (hit is not None and protocol is not Protocol.V1
+                    and cut_by_host(hit.get("stop_reason"),
+                                    Usage.from_dict(hit["usage"]),
+                                    max_tokens)):
+                # A host-closed stream cached before `cut_by_host` existed is
+                # not an answer to replay; the draw is bought again. v1
+                # replays are left exactly as they were published.
+                hit = None
             span.set_attribute("permits.cache_hit", hit is not None)
             if hit is not None:
                 usage = Usage.from_dict(hit["usage"])
@@ -1141,9 +1178,18 @@ class Client:
                     # error rate was structurally unobservable and "67 calls"
                     # meant "67 calls that happened to work". Every failed
                     # attempt is a row, billed at 0.
+                    billed = getattr(e, "billed", None)
                     self._log_failure(model, call_class, tag, draw, clock,
-                                      type(e).__name__, status, sent)
-                    if clock.first is not None:
+                                      type(e).__name__, status, sent,
+                                      usd=billed or 0.0,
+                                      output_tokens=getattr(
+                                          e, "output_tokens", None),
+                                      host=getattr(e, "host", None))
+                    if billed is not None:
+                        # The stream reached its usage block, so the charge
+                        # is known.
+                        self.budget.record(billed)
+                    elif clock.first is not None:
                         # Tokens were generated before the call died and the
                         # host may bill for them; nothing says how many. The
                         # ceiling is a guarantee, so it is charged the worst
@@ -1264,12 +1310,15 @@ class Client:
         no parameter for, so they go in `extra_body`; the serving host comes
         back as `provider` on each chunk.
 
-        Three ways a stream can end without an answer, each a host failure
+        Four ways a stream can end without an answer, each a host failure
         rather than an empty reply. With no choices at all, the caller would
         read empty text as an extractor that produced nothing. With an
         `error` finish, OpenRouter is reporting an upstream failure after a
         200. With no usage block, what the call cost is unknown, and a
-        zero-token row would price a paid call at nothing.
+        zero-token row would price a paid call at nothing. With no finish
+        reason short of the cap, the host closed the stream before the model
+        finished (`cut_by_host`); that one was billed, so the error carries
+        the charge.
         """
         if clock is None:
             clock = _Clock(wall_limit(int(body.get("max_tokens") or 0)))
@@ -1319,11 +1368,19 @@ class Client:
                              "usage block" % (model,))
         usage, billed = _usage_from_chat(raw_usage)
         stop = FINISH_REASONS.get(finish, finish) if finish else finish
+        out = int(usage.get("output_tokens") or 0)
+        if cut_by_host(stop, Usage(output_tokens=out),
+                       int(body.get("max_tokens") or 0)):
+            raise _HostError("stream for %r closed with no finish reason "
+                             "after %d output tokens" % (model, out),
+                             billed=billed, output_tokens=out, host=host)
         return _Reply("".join(parts), usage, stop, resp_model, billed, host)
 
     def _log_failure(self, model: str, call_class: str, tag: str, draw: int,
                      clock: _Clock, error_type: str,
-                     status: int | None, sent: dict[str, Any]) -> None:
+                     status: int | None, sent: dict[str, Any],
+                     usd: float = 0.0, output_tokens: int | None = None,
+                     host: str | None = None) -> None:
         """A ledger row for a call that reached the API and failed.
 
         `usd` is zero because a rejected request is not billed, but the row
@@ -1331,12 +1388,15 @@ class Client:
         ledger is the number of calls *made*. Rows written before 2026-09-22
         have no `ok` field and are read as successes, which they are: the old
         client could not write anything else. A row with `ttft_s` failed
-        after tokens arrived and may have been billed for them.
+        after tokens arrived and may have been billed for them. A stream the
+        host closed after sending its usage block reports its charge, and
+        `usd`, `output_tokens` and `host` then carry it.
         """
         self.ledger.write(LedgerRow(
             at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             call_class=call_class, tag=tag, model=model,
             provider=provider_for(model), draw=draw, ok=False,
             error_type=error_type, status_code=status,
-            usd=0.0, seconds=clock.elapsed(), stop_reason=None,
+            usd=round(usd, 6), seconds=clock.elapsed(), stop_reason=None,
+            output_tokens=output_tokens or 0, host=host,
             ttft_s=clock.ttft(), response_id=clock.response_id, **sent))

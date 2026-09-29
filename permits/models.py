@@ -407,7 +407,12 @@ _SPECS = [
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=0.95, max_output=128000,
               effort="max", efforts=("low", "high", "max"),
-              quantizations=FROM_FP8),
+              quantizations=FROM_FP8,
+              # Closed streams mid-reasoning with no finish reason, at 301 s
+              # (AtlasCloud, 2 of 2) and 602 s (Phala, 5 calls) on 2026-09-28,
+              # so a long answer could not finish there. Step 6
+              # pre-registration, deviation 2.
+              ignore=("atlas-cloud", "phala")),
     # As Pro. GMICloud, SiliconFlow and Parasail render one prompt for every
     # effort sent, so they are excluded.
     ModelSpec("deepseek/deepseek-v4-flash", OR, "deepseek", Tier.CHEAP, "deepseek-v4-flash",

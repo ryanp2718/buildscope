@@ -311,6 +311,18 @@ def aggregate(rows):
         # failed call has no draw to join to, so this one figure is pooled
         # over every call for the model on the target.
         errs = pick(rows, "ledger", "ok", target, model)
+        # What failed calls were billed, pooled the same way. Zero until a
+        # host closed streams early with the charge reported (step 6
+        # pre-registration, deviation 2); outside `usd_total`, which is what
+        # the scored draws cost, so a host's failures are not read as the
+        # model's price.
+        calls = collections.defaultdict(dict)
+        for r in rows:
+            if (r["experiment"] == "ledger" and r["target"] == target
+                    and r["model"] == model):
+                calls[r["unit_id"]][r["metric"]] = r["value"]
+        usd_failed = sum(c.get("usd", 0.0) for c in calls.values()
+                         if not c.get("ok", 1))
         # What the run that wrote the record paid, and what the cell's draws
         # cost to buy. The second is the denominator: a draw replayed from
         # the cache is free to repeat but was not free to buy.
@@ -360,6 +372,7 @@ def aggregate(rows):
             "ttft_p50_s": pctile(var("ttft_s"), 0.50),
             "tokens_per_s_p50": pctile(var("tokens_per_s"), 0.50),
             "api_calls": len(errs),
+            "usd_failed_calls": round(usd_failed, 6),
             "api_error_rate": (1.0 - float(sum(errs)) / len(errs)
                                if errs else None),
         }

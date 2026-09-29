@@ -207,6 +207,20 @@ class TestSamplingAndRouting(unittest.TestCase):
                          ("deepseek/deepseek-v4.1-flash", flash)):
             self.assertLessEqual(hosts, set(R[m].ignore), m)
 
+    def test_hosts_that_closed_streams_early_are_excluded(self):
+        """2026-09-28: AtlasCloud closed glm-5.3-flash streams at 301 s and
+        Phala at 602 s, mid-reasoning (step 6 pre-registration, deviation
+        2)."""
+        s = R["z-ai/glm-5.3-flash"]
+        self.assertLessEqual({"atlas-cloud", "phala"}, set(s.ignore))
+        eps = _snapshot(ENDPOINTS)
+        if eps is None:
+            return
+        tags = {e["tag"] for e in models.routed(
+            s, eps[s.id]["data"]["endpoints"])}
+        self.assertFalse({"atlas-cloud/fp8", "phala/fp8"} & tags)
+        self.assertIn("streamlake/fp8", tags)
+
     def _routed(self):
         eps = _snapshot(ENDPOINTS)
         if eps is None:
