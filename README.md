@@ -36,7 +36,7 @@ above as wrapper maintenance (Kushmerick, 1997; Lerman, Minton & Knoblock, 2003)
 | **26 model-generated extractors**, pass@1, never hand-edited | **agreement 1.0000** on 4,188 records over 71 pages, and that benchmark turned out to be saturated | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
 | **8 record-preserving page mutations**, no labels required | 20 extractors that scored *identically perfect* split under drift; **5 of 20** survived a CSS class rename | [report](docs/evidence/2026-09-21-drift-robustness.md) |
 | **55 draws, pass@1**, across 3 models × 2 layouts | success rates from 5% to 100%; **86% of failures were silent**: zero rows, no exception | [report](docs/evidence/2026-09-21-extractor-conformance.md) |
-| **67 priced calls, $4.3411**, every one ledgered before it billed | **cost per working extractor inverts the per-token price list**: $0.286/success on the frontier model against $0.686 on the cheapest | [report](docs/evidence/2026-09-22-cost-per-success.md) |
+| **11 priced cells compared pairwise**, every call ledgered before it billed | **cost per working extractor can invert the per-token price list**: gpt-oss-120b is 6.7× cheaper per success than qwen3.5-flash on St. Johns (95% range about 4× to 12×) while costing 2.3× more per token | [report](docs/evidence/2026-09-27-cost-per-success-intervals.md) |
 
 The last row generalises furthest. A cheap model that succeeds once in twenty attempts bills for all twenty,
 so per-token price ranks models correctly only when they all succeed. Page difficulty decides which regime
@@ -52,9 +52,11 @@ they are.
   misread the same column heading the same way. There is no record-level ground truth anywhere in this
   project yet; the golden set is specified in
   [ADR-0014](docs/adr/0014-the-golden-set-precedes-the-pipeline.md) and unbuilt.
-- **n is small where it matters most.** The frontier-model cell in the cost comparison is three draws,
-  with a 95% interval of [0.44, 1.00]. The *direction* of the cost inversion survives that. The 2.4×
-  magnitude does not.
+- **n is small where it matters most.** The frontier-model cell in the v1 cost comparison is three
+  draws. With intervals on both rates, the Clark ranking of Opus 5 over Haiku on cost per success is
+  60–77% likely, not settled; the inversion that does hold is the St. Johns one in the table above
+  ([intervals report](docs/evidence/2026-09-27-cost-per-success-intervals.md)). The v2 run re-asks the
+  Clark question at n = 10 to 20 per model.
 - **Two platforms is not a difficulty axis.** "Page difficulty decides which model is cheaper" is the
   natural reading of two points. It is not a measurement.
 - **Nothing is measured on small jurisdictions**, which are the population this project claims to serve.
@@ -71,11 +73,12 @@ the build if one is missing.
 ```
 permits/      the library: capture, strip, identity, vocabulary, adapters,
               emit, inference, model registry, telemetry, statistics.
-              17 modules, 5,154 lines.
-scripts/      six maintained tools.  conformance.py is the experiment harness;
+              18 modules, 5,905 lines.
+scripts/      seven maintained tools.  conformance.py is the experiment harness;
               model_stats.py rolls every measurement into one tidy table;
+              export_results.py builds the results page's data from it;
               three check_*.py validate the docs, the identities and the notes.
-spikes/       the lab notebook.  54 scripts, unmaintained, kept because the
+spikes/       the lab notebook.  55 scripts, unmaintained, kept because the
               published numbers came out of them.  See spikes/README.md.
 tests/        448 tests, replay over stored pages.  No network, no spend.
 docs/         adr/ why a rule exists · design/ how it works · evidence/ what
@@ -110,10 +113,11 @@ scripts/conformance.py --matrix` prints the current price ladder, which spans ab
 open-weight model to Opus 5.
 
 That spread is the point rather than a saving. The project's central claim is that **cost per success, not
-cost per token, is what ranks models**, and until 2026-09-23 it was measured only across three Claude tiers
-— a 5× band, inside which the claim holds: Haiku needs a 20% success rate to beat Opus on cost per success
-and measures 5%. Whether it survives an 88× band, where a model needs roughly one success in eighty-eight,
-is a different question and an open one.
+cost per token, is what ranks models**. Across the three Claude tiers, a 5× band, the v1 data leans that way
+on Clark without settling it: Haiku needs a 20% success rate to beat Opus 5 per success and measured 5%, but
+Opus 5's rate rests on three draws, and the ranking is 60–77% likely once both rates carry intervals. The
+inversion that holds is between open-weight models on St. Johns. Whether the claim holds across the v2
+roster's 140× band, with every model under one configuration, is what the v2 run measures.
 
 Every call is ledgered before it bills and any call whose worst-case cost would break the configured ceiling
 is refused rather than attempted. Responses are cached under a hash of the request, so a 55-call experiment
