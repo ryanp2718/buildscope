@@ -141,7 +141,7 @@ class TestPackageBoundary(unittest.TestCase):
 class TestToolsAreNotTheNotebook(unittest.TestCase):
     """`scripts/` is the maintained surface. It has no allowlist.
 
-    The six files in `scripts/` are what the README tells a reader to run, so
+    The files in `scripts/` are what the README tells a reader to run, so
     each has to stand on its own: everything shared comes from `permits/`, and
     nothing reaches sideways into a sibling tool or downwards into `spikes/`.
     There is no ratchet here because there is nothing to ratchet - the rule

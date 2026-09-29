@@ -258,8 +258,12 @@ class TestPublishedCellStatistics(unittest.TestCase):
                     # bought them.
                     self.assertGreater(e["usd_per_success"], 0)
                     self.assertEqual(e["draws_unpriced"], 0)
-                    self.assertGreaterEqual(e["usd_total"],
-                                            e["usd_this_run"])
+                    # The ledger rounds each call to the micro-dollar and a
+                    # draw record does not, so the two sums may differ by
+                    # half a micro-dollar per draw.
+                    self.assertGreaterEqual(
+                        e["usd_total"] + 5e-7 * e["draws_scored"],
+                        e["usd_this_run"])
 
     def test_silent_failures_dominate_where_there_are_failures(self):
         """55 draws, 29 failures, 25 silent. Asserted per-cell so a change in

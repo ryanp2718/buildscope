@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Price of a Working Extractor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+  :root {
+    --bg: #f6f7f5;
+    --panel: #ffffff;
+    --ink: #17191c;
+    --mut: #62666d;
+    --faint: #9a9ea5;
+    --rule: #d9dcd8;
+    --pass: #0b7a63;
+    --silent: #c8373f;
+    --loud: #8f949b;
+    --hilite: #fff2b3;
+    --step-bg: rgba(255, 255, 255, 0.94);
+    --sans: "Libre Franklin", "Franklin Gothic Medium", "Helvetica Neue", Arial, sans-serif;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #121416; --panel: #1a1d20; --ink: #e7e9ea; --mut: #a0a5ab; --faint: #6e747b;
+      --rule: #2e3236; --pass: #3cc49e; --silent: #f0646b; --loud: #6e747b;
+      --hilite: #4a3f10; --step-bg: rgba(26, 29, 32, 0.94);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121416; --panel: #1a1d20; --ink: #e7e9ea; --mut: #a0a5ab; --faint: #6e747b;
+    --rule: #2e3236; --pass: #3cc49e; --silent: #f0646b; --loud: #6e747b;
+    --hilite: #4a3f10; --step-bg: rgba(26, 29, 32, 0.94);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 18px/1.6 var(--serif); padding-inline: 16px; }
+  .col { max-width: 38rem; margin-inline: auto; }
+  .wide { max-width: 62rem; margin-inline: auto; }
+
+  .preview { font: 500 13px/1.45 var(--sans); color: var(--mut); border: 1px dashed var(--rule);
+             padding: .6rem .8rem; margin: 1.5rem auto 0; max-width: 38rem; }
+  header.top { padding-block: 2.5rem 1rem; }
+  .kicker { font: 600 12px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase;
+            color: var(--pass); margin: 0 0 .9rem; }
+  h1 { font: 800 clamp(2rem, 5.2vw, 3.1rem)/1.06 var(--sans); letter-spacing: -.02em;
+       margin: 0 0 1rem; text-wrap: balance; }
+  .dek { font-size: 1.2rem; line-height: 1.5; color: var(--mut); margin: 0; text-wrap: pretty; }
+  h2 { font: 800 1.55rem/1.15 var(--sans); letter-spacing: -.01em; margin: 3.5rem 0 .8rem;
+       text-wrap: balance; }
+  p { margin: 0 0 1.1rem; }
+  .num { font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums;
+         font-size: .92em; }
+  a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+  abbr { text-decoration: none; }
+
+  /* scroll-driven figure */
+  .scrolly { position: relative; margin-block: 1.5rem 3rem; }
+  .sticky { position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; height: 100svh;
+            display: flex; flex-direction: column; justify-content: center; z-index: 0; }
+  .fig-title { font: 700 15px/1.3 var(--sans); margin: 0 0 .2rem; }
+  .fig-sub { font: 400 13px/1.35 var(--sans); color: var(--mut); margin: 0 0 .4rem; min-height: 1.35em; }
+  .steps { position: relative; z-index: 1; margin-top: -30vh; padding-bottom: 30vh; pointer-events: none; }
+  .step { max-width: 22rem; margin: 0 0 75vh; padding: .9rem 1.1rem; background: var(--step-bg);
+          border: 1px solid var(--rule); font-size: 1rem; line-height: 1.5; pointer-events: auto; }
+  .step p:last-child { margin: 0; }
+  .step:first-child { margin-top: 0; }
+  @media (min-width: 900px) {
+    .scrolly { display: grid; grid-template-columns: 19rem 1fr; gap: 2.5rem; }
+    .sticky { grid-column: 2; grid-row: 1; align-self: start; }
+    .steps { grid-column: 1; grid-row: 1; margin-top: 0; padding-block: 35vh 45vh; }
+    .step { margin-bottom: 70vh; background: none; border: 0; border-left: 3px solid var(--rule);
+            padding: .2rem 0 .2rem 1rem; }
+    .step.is-active { border-left-color: var(--ink); }
+  }
+  @media (max-width: 899px) {
+    .sticky { height: 72vh; height: 72svh; top: calc(env(safe-area-inset-top, 0px) + 4vh); }
+  }
+
+  svg { display: block; overflow: visible; }
+  svg text { font-family: var(--sans); fill: var(--ink); }
+  .axis text { font-size: 11px; fill: var(--mut); font-variant-numeric: tabular-nums; }
+  .axis line, .axis path { stroke: var(--rule); }
+  .grid line { stroke: var(--rule); stroke-dasharray: 2 3; }
+  .axis-label { font-size: 11.5px; fill: var(--mut); }
+  .ci { stroke: var(--faint); stroke-width: 1.5; }
+  .dot { stroke: var(--bg); stroke-width: 1.5; }
+  .lbl { font-size: 11.5px; font-weight: 500; paint-order: stroke; stroke: var(--bg);
+         stroke-width: 3px; stroke-linejoin: round; }
+  .lbl.dim, .dot.dim, .ci.dim { opacity: .28; }
+  .iso { stroke: var(--faint); stroke-dasharray: 4 4; fill: none; }
+  .iso-lbl { font-size: 10.5px; fill: var(--mut); font-style: italic; }
+  .shelf-line { stroke: var(--silent); stroke-width: 1; stroke-dasharray: 1 3; }
+  .shelf-lbl { font-size: 11px; font-weight: 600; fill: var(--silent); letter-spacing: .02em; }
+
+  /* unit chart */
+  .units { margin-block: 1.2rem 1rem; }
+  .units-scroll { overflow-x: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font: 13px/1.3 var(--sans);
+            color: var(--mut); margin: .2rem 0 1rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+  .sw { width: 11px; height: 11px; display: inline-block; }
+  .group-lbl { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; fill: var(--mut); }
+  .col-head { font-size: 12px; font-weight: 600; }
+  .col-sub { font-size: 10.5px; fill: var(--mut); }
+  .row-lbl { font-size: 12px; }
+  .row-price { font-size: 10.5px; fill: var(--mut); font-variant-numeric: tabular-nums; }
+  .row-k { font-size: 10.5px; fill: var(--mut); font-variant-numeric: tabular-nums; }
+
+  .tip { position: fixed; pointer-events: none; z-index: 10; background: var(--panel); color: var(--ink);
+         border: 1px solid var(--rule); font: 12.5px/1.4 var(--sans); padding: .45rem .6rem;
+         max-width: 16rem; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  .tip b { font-weight: 600; }
+
+  .note { font: 13px/1.5 var(--sans); color: var(--mut); }
+  footer { border-top: 1px solid var(--rule); margin-top: 4rem; padding-block: 1.2rem 3rem; }
+  noscript p { font: 15px/1.5 var(--sans); border: 1px solid var(--rule); padding: .8rem 1rem; }
+  :focus-visible { outline: 2px solid var(--pass); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+
+<p class="preview" id="preview">Preview built from stage 1 of the run. Top- and mid-tier models
+have one draw each until stages 2 and 3; every chart updates when the data does.
+<span id="asof"></span></p>
+
+<header class="top col">
+  <p class="kicker">Language models writing web scrapers</p>
+  <h1>The price of a program that works</h1>
+  <p class="dek">We asked 19 language models to write the same scraper for a county permit portal,
+  again and again, and checked every attempt against a hand-written one. Cheap tokens bought
+  the working programs.</p>
+</header>
+
+<main>
+<section class="col" id="what">
+  <p>Each attempt, or <em>draw</em>, is one request: the model gets a sample of a portal's search
+  results page and must write a Python extractor that returns every permit on it as rows. The
+  extractor then runs on every saved page from that portal and passes only if its rows agree with a
+  hand-written reference on all of them. The share of draws that pass is the model's
+  <abbr title="the share of single attempts that pass">pass@1</abbr>.</p>
+  <p>Every model got the same prompt, the same 64,000-token output budget, its lab's default
+  reasoning level and its model card's sampling settings. The first portal, Clark County, Nevada,
+  has <span class="num" data-q="clarkPages">57</span> saved pages.</p>
+</section>
+
+<section id="price">
+  <div class="col">
+    <h2>Paying more per token doesn't buy a working program</h2>
+  </div>
+  <div class="scrolly wide">
+    <div class="sticky">
+      <p class="fig-title" id="fig-title">Clark County: pass@1 against price per token</p>
+      <p class="fig-sub" id="fig-sub">Each dot is one model. Bars are 95% Wilson intervals.</p>
+      <div id="price-chart" role="img" aria-label="Scatter chart of each model's pass rate on Clark County against its list price per million output tokens."></div>
+    </div>
+    <div class="steps">
+      <div class="step" data-step="0">
+        <p>List prices on the roster span about <span class="num" data-q="priceSpan">140</span> times,
+        from <span class="num" data-q="priceMin">$0.14</span> to
+        <span class="num" data-q="priceMax">$20</span> per million output tokens.
+        Price runs left to right; pass@1 runs bottom to top.</p>
+      </div>
+      <div class="step" data-step="1">
+        <p>The best records so far are at the cheap end.
+        <b data-q="bestName">DeepSeek V4.1 Flash</b> passed
+        <span class="num" data-q="bestK">10 of 10</span> at
+        <span class="num" data-q="bestPrice">$0.29</span> per million tokens.
+        <b>Claude Haiku 4.5</b>, at <span class="num" data-q="haikuPrice">$5</span>, passed
+        <span class="num" data-q="haikuK">0 of 10</span>.</p>
+      </div>
+      <div class="step" data-step="2">
+        <p>What a team pays for is a program that works. Divide what a model's draws cost by the
+        number that passed, and the vertical axis becomes <b>cost per success</b>. The dashed lines
+        show what fixed numbers of output tokens cost at each price.</p>
+      </div>
+      <div class="step" data-step="3">
+        <p>Models with no passing draw have no cost per success, only a bill. They sit on the shelf
+        at the top instead of being dropped from the chart.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="draws">
+  <div class="col">
+    <h2>Every draw is a square</h2>
+    <p>A rate hides how it was earned. Here each square is one draw, on three portals: Clark
+    County, where the prompt was developed, and St. Johns County, Florida, and Santa Barbara
+    County, California, which no prompt was written against. On Clark, a model that passed or
+    failed all of its first ten draws stopped there; the rest drew ten more, shown as a second
+    row.</p>
+    <p>The red squares matter most. A red extractor ran without error and returned rows that were
+    wrong or missing, the failure a pipeline doesn't notice until someone checks the numbers.</p>
+  </div>
+  <div class="units wide">
+    <div class="legend" id="legend"></div>
+    <div class="units-scroll"><div id="unit-chart" role="img" aria-label="One square per draw, per model and portal, coloured by outcome."></div></div>
+  </div>
+</section>
+
+<noscript><div class="col"><p>The charts on this page need JavaScript. The figures behind them
+are in <a href="data.json">data.json</a>.</p></div></noscript>
+</main>
+
+<footer class="col note">
+  <p>Pass@1 is agreement with a hand-written reference extractor on every saved page of a portal,
+  not accuracy against the portal itself. Costs are what each draw cost to buy, in US dollars;
+  prices are list prices. Intervals are 95% Wilson score intervals; cost-per-success ranges combine
+  a Beta posterior on the pass rate with a bootstrap of the cost per draw.</p>
+  <p>Data: <a href="data.json">data.json</a>. Source:
+  <a href="https://github.com/ryanp2718/buildscope">github.com/ryanp2718/buildscope</a>.</p>
+</footer>
+
+<div class="tip" id="tip" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var NAMES = {
+    "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5": "Claude Sonnet 5",
+    "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
+    "openai/gpt-6-sol": "GPT-6 Sol", "openai/gpt-6-luna": "GPT-6 Luna",
+    "google/gemini-3.8-flash": "Gemini 3.8 Flash", "google/gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
+    "x-ai/grok-4.7": "Grok 4.7", "moonshotai/kimi-k3": "Kimi K3",
+    "z-ai/glm-5.3": "GLM-5.3", "z-ai/glm-5.3-flash": "GLM-5.3 Flash",
+    "qwen/qwen3.8-max-0902": "Qwen3.8 Max", "qwen/qwen3.8-flash": "Qwen3.8 Flash",
+    "deepseek/deepseek-v4-pro-0813": "DeepSeek V4 Pro", "deepseek/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
+    "xiaomi/mimo-v2.6-pro": "MiMo V2.6 Pro", "xiaomi/mimo-v2.6-flash": "MiMo V2.6 Flash",
+    "minimax/minimax-m3": "MiniMax M3", "tencent/hy3": "Hunyuan 3",
+    "z-ai/glm-5.2": "GLM-5.2", "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro (Apr)",
+    "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash", "moonshotai/kimi-k2-thinking": "Kimi K2 Thinking",
+    "openai/gpt-oss-120b": "gpt-oss-120b", "qwen/qwen3.5-flash-02-23": "Qwen3.5 Flash",
+    "qwen/qwen3-coder": "Qwen3 Coder"
+  };
+  var OUTCOMES = [
+    ["perfect", "Passed", "var(--pass)"],
+    ["silent_empty", "Returned no rows, no error", "var(--silent)"],
+    ["silent_partial", "Returned wrong rows, no error", "var(--silent)"],
+    ["loud", "Raised an error or wrote no program", "var(--loud)"],
+    ["infra_error", "Host failed; not counted", "none"]
+  ];
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var tip = document.getElementById("tip");
+
+  function name(id) { return NAMES[id] || id; }
+  function usd(x) {
+    if (x == null) return "n/a";
+    if (x >= 1) return "$" + x.toFixed(2);
+    if (x >= 0.1) return "$" + x.toFixed(2);
+    if (x >= 0.01) return "$" + x.toFixed(3);
+    return "$" + x.toFixed(4);
+  }
+  function price(x) { return "$" + (x < 1 ? x.toFixed(2) : (x % 1 ? x.toFixed(2) : x.toFixed(0))); }
+  function pct(x) { return Math.round(x * 100) + "%"; }
+
+  function showTip(ev, html) {
+    tip.innerHTML = html; tip.hidden = false;
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    var x = ev.clientX + 14, y = ev.clientY + 14;
+    if (x + w > window.innerWidth - 8) x = ev.clientX - w - 14;
+    if (y + h > window.innerHeight - 8) y = ev.clientY - h - 14;
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+  }
+  function hideTip() { tip.hidden = true; }
+
+  function fill(q, text) {
+    document.querySelectorAll('[data-q="' + q + '"]').forEach(function (el) { el.textContent = text; });
+  }
+
+  fetch("data.json").then(function (r) {
+    if (!r.ok) throw new Error("data.json: HTTP " + r.status);
+    return r.json();
+  }).then(start).catch(function (e) {
+    document.getElementById("price-chart").textContent = "The data could not be loaded: " + e.message;
+    throw e;
+  });
+
+  function start(data) {
+    var models = {};
+    data.models.forEach(function (m) { models[m.id] = m; });
+    var roster = data.models.filter(function (m) { return m.group === "roster"; });
+    var cellOf = {};
+    data.cells.forEach(function (c) { cellOf[c.key] = c; });
+    var drawsOf = d3.group(data.draws, function (d) { return d.cell; });
+
+    document.getElementById("asof").textContent = data.as_of ? "Data as of " + data.as_of.replace("T", " ").replace("Z", " UTC") + "." : "";
+
+    // The Clark baseline cell of each roster model under protocol v2.
+    var pts = roster.map(function (m) {
+      var c = cellOf["clarkco|" + m.id + "|v2"];
+      return c ? { m: m, c: c } : null;
+    }).filter(Boolean);
+
+    var prices = roster.map(function (m) { return m.price_out; });
+    var pmin = d3.min(prices), pmax = d3.max(prices);
+    fill("priceSpan", Math.round(pmax / pmin));
+    fill("priceMin", price(pmin)); fill("priceMax", price(pmax));
+    var best = pts.filter(function (p) { return p.c.n >= 10; })
+                  .sort(function (a, b) { return b.c.rate - a.c.rate || b.c.n - a.c.n; })[0];
+    if (best) {
+      fill("bestName", name(best.m.id));
+      fill("bestK", best.c.k + " of " + best.c.n);
+      fill("bestPrice", price(best.m.price_out));
+    }
+    var haiku = pts.find(function (p) { return p.m.id === "claude-haiku-4-5-20251001"; });
+    if (haiku) { fill("haikuPrice", price(haiku.m.price_out)); fill("haikuK", haiku.c.k + " of " + haiku.c.n); }
+
+    var priceFig = priceChart(document.getElementById("price-chart"), pts, best, haiku);
+    unitChart(document.getElementById("unit-chart"), data, models, cellOf, drawsOf);
+    legend();
+
+    var steps = document.querySelectorAll(".step");
+    var current = -1;
+    function go(i) {
+      if (i === current) return;
+      current = i;
+      steps.forEach(function (s) { s.classList.toggle("is-active", +s.dataset.step === i); });
+      priceFig.state(i);
+    }
+    go(0);
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) go(+e.target.dataset.step); });
+      }, { rootMargin: window.innerWidth < 900 ? "-78% 0px -12% 0px" : "-45% 0px -45% 0px" });
+      steps.forEach(function (s) { io.observe(s); });
+    }
+    var rw;
+    window.addEventListener("resize", function () {
+      clearTimeout(rw);
+      rw = setTimeout(function () {
+        priceFig.redraw(); unitChart(document.getElementById("unit-chart"), data, models, cellOf, drawsOf);
+      }, 150);
+    });
+  }
+
+  // ---- Section 2: price against pass@1, then against cost per success ----
+  function priceChart(el, pts, best, haiku) {
+    var state = 0, svg, W, H, M;
+    var highlight = new Set([best && best.m.id, haiku && haiku.m.id].filter(Boolean));
+
+    function draw() {
+      el.innerHTML = "";
+      W = el.clientWidth || 600;
+      H = Math.max(300, Math.min(520, Math.round(window.innerHeight * (window.innerWidth < 900 ? 0.52 : 0.62))));
+      M = { t: 34, r: W < 500 ? 12 : 120, b: 44, l: 52 };
+      svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+      svg.append("g").attr("class", "grid gy");
+      svg.append("g").attr("class", "axis ax").attr("transform", "translate(0," + (H - M.b) + ")");
+      svg.append("g").attr("class", "axis ay").attr("transform", "translate(" + M.l + ",0)");
+      svg.append("text").attr("class", "axis-label").attr("x", M.l).attr("y", H - 8)
+        .text("List price, $ per million output tokens (log scale)");
+      svg.append("text").attr("class", "axis-label ylabel").attr("x", M.l - 44).attr("y", 14);
+      svg.append("g").attr("class", "isos");
+      svg.append("g").attr("class", "shelf");
+      svg.append("g").attr("class", "marks");
+      svg.append("g").attr("class", "labels");
+      render(false);
+    }
+
+    function x() { return d3.scaleLog().domain([0.1, 25]).range([M.l, W - M.r]); }
+
+    function render(animate) {
+      var X = x();
+      var cost = state >= 2;
+      var ok = function (p) { return p.c.usd_per_success != null; };
+      var Y = cost ? d3.scaleLog().domain([0.002, 3]).range([H - M.b, M.t + 26]).clamp(true)
+                   : d3.scaleLinear().domain([0, 1]).range([H - M.b, M.t]);
+      var shelfY = M.t + 4;
+      var t = svg.transition().duration(animate && !reduce ? 750 : 0);
+
+      svg.select(".ax").call(d3.axisBottom(X).tickValues([0.1, 0.3, 1, 3, 10, 20])
+        .tickFormat(function (v) { return "$" + v; }).tickSizeOuter(0));
+      var yAxis = cost ? d3.axisLeft(Y).tickValues([0.003, 0.01, 0.03, 0.1, 0.3, 1, 3])
+                          .tickFormat(function (v) { return "$" + v; })
+                       : d3.axisLeft(Y).ticks(5).tickFormat(d3.format(".0%"));
+      svg.select(".ay").transition(t).call(yAxis.tickSizeOuter(0));
+      svg.select(".gy").transition(t).call(
+        (cost ? d3.axisLeft(Y).tickValues([0.003, 0.01, 0.03, 0.1, 0.3, 1, 3]) : d3.axisLeft(Y).ticks(5))
+          .tickSize(-(W - M.l - M.r)).tickFormat(""))
+        .attr("transform", "translate(" + M.l + ",0)");
+      svg.select(".gy .domain").remove();
+      svg.select(".ylabel").text(cost ? "Cost per working extractor (log scale)" : "pass@1");
+      d3.select("#fig-title").text(cost ? "Clark County: cost per working extractor against price per token"
+                                        : "Clark County: pass@1 against price per token");
+      d3.select("#fig-sub").text(cost ? "Bars are 95% ranges; hollow dots rest on a single draw. Dashed lines mark the list price of 10k, 100k and 1M output tokens."
+                                      : "Each dot is one model. Bars are 95% Wilson intervals; hollow dots rest on a single draw.");
+
+      // Iso-token lines: the list price of N output tokens at each price.
+      var isos = cost ? [1e4, 1e5, 1e6] : [];
+      var iso = svg.select(".isos").selectAll("g.iso-g").data(isos, function (d) { return d; });
+      iso.exit().transition(t).style("opacity", 0).remove();
+      var isoIn = iso.enter().append("g").attr("class", "iso-g").style("opacity", 0);
+      isoIn.append("path").attr("class", "iso");
+      isoIn.append("text").attr("class", "iso-lbl");
+      iso = isoIn.merge(iso);
+      iso.transition(t).style("opacity", 1);
+      // Each line is drawn only inside the y domain, and labelled where it
+      // leaves the plot: at the top edge, or else at the right edge.
+      var ylo = 0.002, yhi = 3;
+      iso.select("path").attr("d", function (n) {
+        var xs = d3.range(0, 81).map(function (i) { return 0.1 * Math.pow(250, i / 80); });
+        return d3.line()(xs.filter(function (p) { var v = p * n / 1e6; return v >= ylo && v <= yhi; })
+          .map(function (p) { return [X(p), Y(p * n / 1e6)]; }));
+      });
+      iso.select("text").each(function (n) {
+        var p = Math.min(25, yhi / (n / 1e6));
+        d3.select(this).attr("x", X(p) - 4).attr("y", Y(p * n / 1e6) + (p < 25 ? 12 : -5))
+          .attr("text-anchor", "end")
+          .text((n >= 1e6 ? "1M" : (n / 1e3) + "k") + " tokens");
+      });
+
+      // The never-worked shelf.
+      var sg = svg.select(".shelf");
+      sg.selectAll("*").remove();
+      if (state >= 3) {
+        sg.append("line").attr("class", "shelf-line").attr("x1", M.l).attr("x2", W - M.r)
+          .attr("y1", shelfY + 8).attr("y2", shelfY + 8);
+        sg.append("text").attr("class", "shelf-lbl").attr("x", M.l).attr("y", shelfY - 2)
+          .text("NO PASSING DRAW YET");
+        var named = pts.filter(function (p) { return !ok(p) && p.c.n > 1; })
+                       .sort(function (a, b) { return a.m.price_out - b.m.price_out; })
+                       .map(function (p) { return name(p.m.id) + " (0 of " + p.c.n + ")"; });
+        var single = pts.filter(function (p) { return !ok(p) && p.c.n <= 1; }).length;
+        d3.select("#fig-sub").text("Top shelf: " + named.join(", ") +
+          (single ? ", and " + single + " models whose one draw so far failed." : "."));
+      }
+
+      function yOf(p) {
+        if (!cost) return Y(p.c.rate);
+        return ok(p) ? Y(p.c.usd_per_success) : shelfY + 8;
+      }
+      function ci(p) {
+        if (!cost) return [Y(p.c.ci95[0]), Y(p.c.ci95[1])];
+        var r = p.c.usd_per_success_range;
+        if (!r || !ok(p)) return [yOf(p), yOf(p)];
+        return [Y(r.jeffreys[0]), Y(r.jeffreys[2])];
+      }
+      var visible = function (p) { return state < 2 || state >= 3 || ok(p); };
+      var dim = function (p) { return state === 1 && !highlight.has(p.m.id); };
+      var single = function (p) { return p.c.n <= 1; };
+
+      var g = svg.select(".marks").selectAll("g.pt").data(pts, function (p) { return p.m.id; });
+      var gin = g.enter().append("g").attr("class", "pt").attr("tabindex", 0);
+      gin.append("line").attr("class", "ci");
+      gin.append("circle").attr("class", "dot").attr("r", 5.5);
+      g = gin.merge(g);
+      g.on("mousemove", function (ev, p) { showTip(ev, tipHtml(p)); })
+       .on("mouseleave", hideTip)
+       .on("focus", function (ev, p) { var b = this.getBoundingClientRect(); showTip({ clientX: b.right, clientY: b.top }, tipHtml(p)); })
+       .on("blur", hideTip);
+
+      g.transition(t).style("opacity", function (p) { return visible(p) ? 1 : 0; });
+      g.select("line").classed("dim", dim)
+        .style("opacity", function (p) { return single(p) ? 0.45 : null; })
+        .transition(t)
+        .attr("x1", function (p) { return X(p.m.price_out); }).attr("x2", function (p) { return X(p.m.price_out); })
+        .attr("y1", function (p) { return ci(p)[0]; }).attr("y2", function (p) { return ci(p)[1]; });
+      // Inline styles, so the theme tokens win over the .dot rule.
+      g.select("circle").classed("dim", dim)
+        .style("fill", function (p) { return single(p) ? "var(--bg)" : (cost && !ok(p) ? "var(--silent)" : "var(--ink)"); })
+        .style("stroke", function (p) { return single(p) ? (cost && !ok(p) ? "var(--silent)" : "var(--ink)") : "var(--bg)"; })
+        .attr("r", function (p) { return single(p) ? 4.5 : 5.5; })
+        .transition(t)
+        .attr("cx", function (p) { return X(p.m.price_out); }).attr("cy", yOf);
+
+      // Direct labels for models with a real sample, in their own layer so no
+      // interval line crosses them; single-draw models are named on hover.
+      var labelled = pts.filter(function (p) {
+        return visible(p) && !single(p) && !(cost && !ok(p));
+      });
+      var ys = nudge(labelled.map(function (p) { return { id: p.m.id, y: yOf(p), x: X(p.m.price_out) }; }), 13);
+      var lab = svg.select(".labels").selectAll("text").data(labelled, function (p) { return p.m.id; });
+      lab.exit().remove();
+      lab = lab.enter().append("text").attr("class", "lbl").attr("dy", "0.32em")
+        .attr("x", function (p) { return X(p.m.price_out) + 9; })
+        .attr("y", function (p) { return ys[p.m.id]; })
+        .merge(lab);
+      lab.classed("dim", dim).text(function (p) { return name(p.m.id); })
+        .transition(t)
+        .attr("x", function (p) { return X(p.m.price_out) + 9; })
+        .attr("y", function (p) { return ys[p.m.id]; });
+    }
+
+    function tipHtml(p) {
+      var c = p.c, r = c.usd_per_success_range;
+      return "<b>" + name(p.m.id) + "</b><br>" +
+        c.k + " of " + c.n + " draws passed (" + pct(c.rate) + "; 95% " + pct(c.ci95[0]) + "&ndash;" + pct(c.ci95[1]) + ")<br>" +
+        "List price " + price(p.m.price_out) + " / M output tokens<br>" +
+        "Cost per draw " + usd(c.usd_per_draw) + "<br>" +
+        (c.usd_per_success != null
+          ? "Cost per success " + usd(c.usd_per_success) + (r ? " (95% " + usd(r.jeffreys[0]) + "&ndash;" + usd(r.jeffreys[2]) + ")" : "")
+          : "No passing draw yet");
+    }
+
+    draw();
+    return {
+      state: function (i) { var prev = state; state = i; render(prev !== i); },
+      redraw: draw
+    };
+  }
+
+  // Greedy vertical de-overlap of labels that share an x neighbourhood,
+  // working up from the bottom so labels at 0% stay above the axis.
+  function nudge(items, gap) {
+    var out = {};
+    items.sort(function (a, b) { return b.y - a.y; });
+    var placed = [];
+    items.forEach(function (it) {
+      var y = it.y;
+      for (var k = 0; k < 40; k++) {
+        var clash = placed.find(function (p) { return Math.abs(p.x - it.x) < 120 && Math.abs(p.y - y) < gap; });
+        if (!clash) break;
+        y = clash.y - gap;
+      }
+      placed.push({ x: it.x, y: y });
+      out[it.id] = y;
+    });
+    return out;
+  }
+
+  // ---- Section 3: one square per draw ----
+  function unitChart(el, data, models, cellOf, drawsOf) {
+    el.innerHTML = "";
+    var W = Math.max(el.clientWidth || 600, 340);
+    var cols = [
+      { t: "clarkco", head: "Clark County", sub: "10, then 10 more", per: 10, slots: 20 },
+      { t: "stjohns", head: "St. Johns", sub: "10 draws", per: 10, slots: 10 },
+      { t: "santabarbara", head: "Santa Barbara", sub: "5 draws", per: 5, slots: 5 }
+    ];
+    var labelW = W < 560 ? 104 : 190;
+    var gapCol = W < 560 ? 12 : 26;
+    var units = 25;
+    var s = Math.max(6, Math.min(15, Math.floor((W - labelW - 2 * gapCol - 60) / units / 1.2)));
+    var step = s * 1.2;
+    var colX = [], xx = labelW;
+    cols.forEach(function (c) { colX.push(xx); xx += c.per * step + gapCol; });
+    var kX = xx - gapCol + 10;
+
+    var groups = [
+      { title: "The roster", ids: data.models.filter(function (m) { return m.group === "roster"; }) },
+      { title: "Earlier models, re-run", ids: data.models.filter(function (m) { return m.group === "v1_rerun"; }) }
+    ];
+    var rows = [];
+    groups.forEach(function (g) {
+      rows.push({ group: g.title });
+      g.ids.slice().sort(function (a, b) { return a.price_out - b.price_out; })
+        .forEach(function (m) { rows.push({ m: m }); });
+    });
+
+    var y = 44, layout = [];
+    rows.forEach(function (r) {
+      if (r.group) { y += 14; layout.push({ group: r.group, y: y }); y += 12; return; }
+      var clark = cellOf["clarkco|" + r.m.id + "|v2"];
+      var twoRows = clark && drawsOf.get(clark.key) && drawsOf.get(clark.key).some(function (d) { return d.draw >= 10; });
+      var h = (twoRows ? 2 : 1) * step + 7;
+      layout.push({ m: r.m, y: y, h: h });
+      y += h;
+    });
+    var H = y + 8;
+
+    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, xx + 48, H])
+      .attr("width", xx + 48).attr("height", H);
+    cols.forEach(function (c, i) {
+      svg.append("text").attr("class", "col-head").attr("x", colX[i]).attr("y", 14).text(c.head);
+      svg.append("text").attr("class", "col-sub").attr("x", colX[i]).attr("y", 28).text(c.sub);
+    });
+    svg.append("text").attr("class", "col-sub").attr("x", kX).attr("y", 28).text("passed");
+
+    layout.forEach(function (L) {
+      if (L.group) {
+        svg.append("text").attr("class", "group-lbl").attr("x", 0).attr("y", L.y).text(L.group);
+        svg.append("line").attr("x1", 0).attr("x2", xx + 40).attr("y1", L.y + 5).attr("y2", L.y + 5)
+          .attr("stroke", "var(--rule)");
+        return;
+      }
+      var row = svg.append("g").attr("transform", "translate(0," + L.y + ")");
+      row.append("text").attr("class", "row-lbl").attr("x", 0).attr("y", s * 0.85).text(name(L.m.id));
+      if (W >= 560) {
+        row.append("text").attr("class", "row-price").attr("x", labelW - 12).attr("y", s * 0.85)
+          .attr("text-anchor", "end").text(price(L.m.price_out));
+      }
+      var ks = [];
+      cols.forEach(function (c, i) {
+        var cell = cellOf[c.t + "|" + L.m.id + "|v2"];
+        var ds = cell ? (drawsOf.get(cell.key) || []) : [];
+        if (cell) ks.push(cell.k + "/" + cell.n);
+        else ks.push("–");
+        ds.forEach(function (d) {
+          var col = d.draw % c.per, rr = Math.floor(d.draw / c.per);
+          if (rr > 1) return;
+          var o = OUTCOMES.find(function (o) { return o[0] === d.outcome; }) || OUTCOMES[3];
+          var rect = row.append("rect")
+            .attr("x", colX[i] + col * step).attr("y", rr * step)
+            .attr("width", s).attr("height", s)
+            .attr("fill", o[2] === "none" ? "var(--bg)" : o[2]);
+          if (d.outcome === "silent_partial") rect.attr("fill-opacity", 0.55);
+          if (d.outcome === "infra_error") rect.attr("stroke", "var(--mut)").attr("stroke-dasharray", "2 2");
+          rect.on("mousemove", function (ev) {
+            showTip(ev, "<b>" + name(L.m.id) + "</b>, " + c.head + ", draw " + d.draw + "<br>" + o[1] +
+              (d.usd != null ? "<br>Cost " + usd(d.usd) : "") +
+              (d.output_tokens ? "<br>" + d3.format(",")(d.output_tokens) + " output tokens" : "") +
+              (d.redrawn ? "<br>Re-drawn at a higher output cap" : ""));
+          }).on("mouseleave", hideTip);
+        });
+      });
+      row.append("text").attr("class", "row-k").attr("x", kX).attr("y", s * 0.85).text(ks.join("  "));
+    });
+  }
+
+  function legend() {
+    var el = document.getElementById("legend");
+    el.innerHTML = "";
+    OUTCOMES.forEach(function (o) {
+      if (o[0] === "silent_partial") return;
+      var span = document.createElement("span");
+      var sw = document.createElement("i");
+      sw.className = "sw";
+      sw.style.background = o[2] === "none" ? "transparent" : o[2];
+      if (o[0] === "infra_error") sw.style.outline = "1px dashed var(--mut)";
+      span.appendChild(sw);
+      span.appendChild(document.createTextNode(o[0] === "silent_empty" ? "Returned wrong or no rows, no error" : o[1]));
+      el.appendChild(span);
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -77,7 +77,7 @@ scripts/      six maintained tools.  conformance.py is the experiment harness;
               three check_*.py validate the docs, the identities and the notes.
 spikes/       the lab notebook.  54 scripts, unmaintained, kept because the
               published numbers came out of them.  See spikes/README.md.
-tests/        432 tests, replay over stored pages.  No network, no spend.
+tests/        448 tests, replay over stored pages.  No network, no spend.
 docs/         adr/ why a rule exists · design/ how it works · evidence/ what
               was measured, dated and reproducible.
 DESIGN.md     the narrative: thesis, open questions, sequencing, risk register.

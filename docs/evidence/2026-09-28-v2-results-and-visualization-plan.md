@@ -147,6 +147,15 @@ question any reader already has.
 shared as private previews until then. The Pages workflow deploys everything under `site/` on a push
 to `main`, so `site/results/` reaches `main` only when the page is ready to publish.
 
+## Progress
+
+- 2026-09-29: `scripts/export_results.py` and `tests/test_export_results.py` written, on stage 1
+  data. The roll-up they share with `scripts/model_stats.py` is now `permits/rollup.py`.
+- 2026-09-29: a prototype of sections 2 and 3 in `site/results/index.html`, shared as a private
+  preview. It uses D3 alone; the scroll steps use the browser's IntersectionObserver, which does
+  what Scrollama would with one dependency fewer. The slope chart waits until the export carries
+  the pairwise comparisons, so that it can mark only settled rankings.
+
 ## What this does not establish
 
 **Anything about the models.** This is a plan for presentation and measures nothing.

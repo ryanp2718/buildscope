@@ -14,8 +14,10 @@ page. The cell reports the pass rate (pass@1) with a Wilson 95% interval. Draws 
 twice are `infra_error` and are reported beside the rate, not inside it. That rate is agreement
 with an adapter, not accuracy.
 
-- Code: `run_variance` in `scripts/conformance.py`; `scripts/model_stats.py` rolls every cell into
-  `data/infer/model_stats.csv` and `.json`.
+- Code: `run_variance` in `scripts/conformance.py`; `permits/rollup.py` rolls every cell up, and
+  `scripts/model_stats.py` writes that to `data/infer/model_stats.csv` and `.json`.
+  `scripts/export_results.py` builds the results page's `site/results/data.json` from the same
+  functions.
 - A cell's key is `target|model[@effort][|hint][|v2]`, in `data/infer/variance.json`; its extractor
   files carry the same condition suffix. Two conditions never share a key, a file or a pool.
 - Run: `python scripts/conformance.py --run --cells clarkco:z-ai/glm-5.2:10` (dry run without
@@ -221,3 +223,8 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   host mid-reasoning (AtlasCloud at 301 s, Phala at 602 s) and scored `no_code`. Deviation 2: such
   a stream is a host failure, cached copies are re-bought under v2, glm-5.3-flash skips both hosts,
   and all its v2 draws are re-bought under that routing. No other model was affected.
+- **2026-09-29**: The roll-up moved from `scripts/model_stats.py` into `permits/rollup.py`, so the
+  results export can share it (identical rows and aggregates on the same inputs). The export writes
+  cells, draws and a per-cell cost-per-success range; a first page prototype runs on stage 1 data.
+  A cell's `usd_total` (ledger, rounded per call to the micro-dollar) may sit below `usd_this_run`
+  (draw records, unrounded) by half a micro-dollar per draw.
