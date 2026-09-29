@@ -7,7 +7,8 @@ Inputs:    `data/infer/variance.json` (55 synthesis draws, 2026-09-21),
            `data/infer/ledger.jsonl` (67 priced calls)
 Outputs:   `data/infer/model_stats.csv` (1,090 observations, long format),
            `data/infer/model_stats.json` (5 cells with Wilson intervals)
-Status:    Current. Pinned by `tests/test_model_stats.py`.
+Status:    Current, qualified by [2026-09-27 cost per success with its uncertainty](2026-09-27-cost-per-success-intervals.md):
+           the Clark inversion and its 2.40x are not established. Pinned by `tests/test_model_stats.py`.
 
 ## What changed
 

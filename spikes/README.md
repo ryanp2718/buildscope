@@ -40,6 +40,7 @@ a notebook and would not be acceptable anywhere else in this repo.
 | `preregister_v2_run` | 1 | What does the step 6 plan cost, and does the roster follow its rule? | [v2-run-preregistration](../docs/evidence/2026-09-27-v2-run-preregistration.md) |
 | `fetch_roster_sources` | 1 | What do the step 6 roster's endpoint listings, Hugging Face configs, cards and chat templates say, for setting its registry entries? | [v2-run-preregistration](../docs/evidence/2026-09-27-v2-run-preregistration.md), `permits/models.py` |
 | `heldout_fetch`, `heldout_review` | 2 | Held-out targets for the step 6 comparison: fetch one closed window per tenancy, and hand-check the adapter's reference on it. | [v2-run-preregistration](../docs/evidence/2026-09-27-v2-run-preregistration.md) |
+| `cost_per_success_intervals` | 1 | How sure can we be which model is cheaper per working extractor? | [cost-per-success-intervals](../docs/evidence/2026-09-27-cost-per-success-intervals.md) |
 | `backfill_fingerprints`, `fix_portal_identity` | 2 | — | One-shot data migrations, run once against the private store. |
 
 The inference experiments — variance, drift, conformance — are **not** here.

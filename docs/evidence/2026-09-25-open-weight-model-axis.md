@@ -9,7 +9,8 @@ Inputs:    `data/infer/variance.json` (variance cells, 2026-09-21 to 2026-09-26)
 Outputs:   `data/infer/model_stats.csv` (long format),
            `data/infer/model_stats.json` (per-cell aggregates with Wilson intervals)
 Status:    Current, qualified by the
-           [2026-09-26 fairness audit](2026-09-26-model-comparison-fairness-audit.md).
+           [2026-09-26 fairness audit](2026-09-26-model-comparison-fairness-audit.md) and by
+           [2026-09-27 cost per success with its uncertainty](2026-09-27-cost-per-success-intervals.md).
            Cell figures pinned by `tests/test_model_stats.py::TestOpenWeightAxisFigures`.
 
 ## What changed
