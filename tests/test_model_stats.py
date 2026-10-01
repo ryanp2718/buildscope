@@ -238,6 +238,12 @@ class TestPublishedCellStatistics(unittest.TestCase):
         for name, e in self.cells.items():
             with self.subTest(cell=name):
                 self.assertEqual(len(e["success_ci95"]), 2)
+                if e["draws_scored"] == 0:
+                    # Opened but not yet drawn: no rate, and an interval
+                    # that says nothing.
+                    self.assertIsNone(e["success_rate"])
+                    self.assertEqual(e["success_ci95"], [0.0, 1.0])
+                    continue
                 self.assertLessEqual(e["success_ci95"][0],
                                      e["success_rate"])
                 self.assertGreaterEqual(e["success_ci95"][1],

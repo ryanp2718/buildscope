@@ -12,10 +12,15 @@ Inputs:    `data/audit/2026-09-27-openrouter-models.json`, `data/audit/2026-09-2
            `data/step1/heldout_review/*.csv` (the human review of the held-out references)
 Outputs:   none yet. The run will write `data/infer/variance.json` cells keyed `|v2`, and a results
            report that cites this one.
-Status:    Pre-registered; amended once before any draw and once after the smoke draws (see
-           "Amendments"); smoke draws bought 2026-09-28, stage 1 started the same day. The plan
+Status:    Pre-registered; amended once before any draw, once after the smoke draws, and once
+           before stage 3 to raise the cap to $50 (see "Amendments"); smoke draws bought
+           2026-09-28, stage 1 started the same day. The plan
            below was fixed before the data existed; any change is reported in the results as a
-           deviation, with its reason (see "Deviations during the run").
+           deviation, with its reason (see "Deviations during the run"). Stage 1 closed
+           2026-09-29, and the first pre-registered cut applied before stage 2 (see "Cuts under
+           the cap"). Stage 2 closed 2026-09-29. Deviation 4, how a pass is scored, recorded
+           2026-09-30 while stage 3 ran. Stage 3 closed at its cutoff, 2026-09-30 05:57:47Z;
+           one process ran past it (deviation 5).
 
 Step 6 of the order of work in the
 [2026-09-26 fairness audit](2026-09-26-model-comparison-fairness-audit.md). The audit's decisions are
@@ -168,7 +173,9 @@ catalogue output limit (at most 128,000), and the count is reported.
 ## Success criteria
 
 A draw **passes** if the generated module clears the static audit, raises on no page, and agrees with
-the adapter on every record of every page of the target's corpus. Anything less fails.
+the adapter on every record of every page of the target's corpus. Anything less fails. (As
+scored, a record agrees when its permit number matches; agreement on every field is reported
+beside the pass rate. See deviation 4.)
 
 **Primary, per cell:** pass@1, the pass rate over scored draws, with a Wilson 95% interval.
 
@@ -280,7 +287,8 @@ set to what remains of its allocation, so a heavy stage stops rather than overru
 2. Re-project stages 2 and 3 from the measured smoke-draw tokens, which replace the assumed ones.
 3. Stage 2, then stage 3, each funded to its re-projected heavy cost.
 
-**The cap is $45 in total.** If a re-projection puts the run over it, cells are cut in this order
+**The cap is $45 in total** (raised to $50 before stage 3, amendment 3, and to $53 during it, amendment 4). If a re-projection puts the
+run over it, cells are cut in this order
 until it fits, and every cut is reported:
 
 1. the hint arm on the mid tier;
@@ -383,6 +391,53 @@ after seeing those outputs. It changes how cut-off draws are handled, not what i
 
 The one smoke draw this re-draws is qwen3.8-flash's, at 128,000. grok-4.7's draw is kept as scored.
 
+**3. 2026-09-29, after stage 2 and before any stage 3 draw: the cap raised to $50.** The
+re-projection at stage 2's close ([stage 3 plan](2026-09-29-v2-stage3-plan.md)) put the whole run at
+$42.66 typical, inside $45 on the test this plan set. Stage 2 then showed that a process's spend limit
+needs headroom: `--max-spend` is checked against each call's worst case, so three stage 2 processes
+sized near their expected spend stopped before finishing and had to be relaunched. Limits of typical
+cost plus one worst-case call per stage 3 process sum to $28.81, against $25.75 left under $45, and
+fitting them would have taken cuts 2 and 3. The $45 was a budget, not a statistical parameter, and the
+user chose to fund the difference rather than cut cells. Changed:
+
+- **The cap is $50.** The cut order and the never-cut list are unchanged.
+- **Cuts 2 and 3 are not applied.** glm-5.2's Clark hint cell runs (10 draws), and the top tier's St.
+  Johns cells keep 10 draws.
+- **Cut 1 stays applied.** The mid tier's hint cells were cut under the $45 cap before stage 2 and are
+  not restored; question 5 is answered for 15 models, and the results say the cut was for budget.
+- **What "fits" means from here.** A cut is applied if the sum over the processes still to run of
+  typical cost plus one worst-case call exceeds what is left of the cap, not only if typical cost does.
+  At $50 that sum is $28.81 against $30.75 left, so no cut is needed; cut 4 applies if a later
+  re-projection says otherwise.
+- **Projection, whole run:** $42.66 typical, $65.05 heavy. As before, the heavy case is over the cap and
+  is held to it by the per-process limits, which sum to no more than what is left.
+
+Written with stages 1 and 2 scored and one smoke draw per top-tier model seen. The change restores
+cells the plan already had; it selects none by result, and it is the same for every top-tier model.
+The time box for stage 3 (deviation 3) is set in the stage 3 plan before launch.
+
+**4. 2026-09-30, during stage 3: the cap raised to $53 to restore protected cells cut by a
+process's spend limit.** glm-5.3's process stopped at its $5.28 limit after 9 Clark draws (7
+perfect), with draw 9's cut-off attempt bought and its re-draw refused, and with its Santa Barbara
+and St. Johns cells never started. Seven of its 10 Clark draws ran past 64,000 tokens and were
+re-drawn at 128,000 (amendment 2), about $0.37 a draw against the $0.21 its limit was sized on.
+Santa Barbara is never cut, and without it the model has no answer to question 3.
+
+- **The rule.** Any top-tier model whose protected cells (the first 10 Clark draws, Santa Barbara,
+  St. Johns draws 1-5) were cut by its process's spend limit has them restored by one relaunch,
+  sized at typical cost plus one worst-case call from its measured stage 3 cost per draw. Clark
+  draws 11-20 and St. Johns draws 6-10 stay cut. At the time of writing only glm-5.3 qualifies:
+  kimi-k3's relaunch finished its protected cells within the $50 cap, and grok-4.7's St. Johns
+  process has room for its fifth draw.
+- **The cap is $53.** glm-5.3's relaunch (Clark draw 9, Santa Barbara, St. Johns draws 1-5; 11
+  draws) is limited to $6.06: $4.07 typical at $0.37 a draw, plus $1.99 for one call at 128,000
+  tokens. With every stage 3 process at its full limit, the run's worst case is $52.07.
+- **The stage 3 cutoff is unchanged** (deviation 3). A relaunched cell still incomplete then is
+  reported at its completed draws.
+
+Written with glm-5.3's Clark draws and every other finished stage 3 cell seen. The rule restores
+cells the plan already had and never cuts, chosen by what the spend limit cut, not by any result.
+
 ## Deviations during the run
 
 Departures from the plan made after draws began, each with the reason, decided before the affected
@@ -440,6 +495,113 @@ the rule below is decided on the stop reason and token count alone, not on any d
   finish after 13.7 s and was scored `no_code`, from a client that did not yet treat that as a
   host failure. The v1 cell is left as published; question 4 reports kimi-k2-thinking's v1 rate
   both as published and with that draw left out.
+- **Addendum, 2026-09-29, at stage 1's close.** The search over every model is done
+  ([stage 1 check and re-projection](2026-09-29-v2-stage1-check-and-reprojection.md), section 1):
+  of 580 successful v2 calls, the only 8 with no stop reason under the cap are the glm-5.3-flash
+  calls above, so no other model's draws are re-bought. Under the new routing, 7 more
+  glm-5.3-flash calls were cut (Io Net 3, GMICloud 3, SiliconFlow 1) and retried under the rule;
+  two draws failed twice. Failed calls per model, host and kind are in that report's section 2.
+
+**3. 2026-09-29: cells time-boxed.** glm-5.3-flash's draws take 11-44 minutes each and its hosts
+often fail, so its three incomplete cells (Clark baseline, Clark hint, St. Johns) are closed at
+their completed draws rather than re-run. This was decided after the cells' results were seen. The
+rule applies to any cell still incomplete at the end of stage 3, and the stage 3 cutoff is set
+before stage 3 starts. Draws never attempted are missing by design. Draws lost to host failures
+after their retry are reported with best- and worst-case bounds, and no claim changes between them:
+
+| cell | reported | missing | bounds |
+|---|---|---|---|
+| Clark baseline | 15/19, [0.57, 0.92] | draw 11, host failure | 15/20 [0.53, 0.89] to 16/20 [0.58, 0.92] |
+| Clark hint | 9/9, [0.70, 1.00] | draw 9, never attempted | none needed |
+| St. Johns | 3/3, [0.44, 1.00] | draw 0, host failure; draws 4-9, never attempted | 3/4 [0.30, 0.95] to 4/4 [0.51, 1.00] |
+
+The settled cost-per-success reversals against glm-5.3-flash on Clark are 6-8 times, which a
+5-point change in its rate cannot move; its hint-minus-baseline interval includes 0 at both Clark
+bounds ([-0.08, 0.47] and [-0.12, 0.42]); and its St. Johns cell enters only question 1's rate for
+that portal, reported with its interval.
+
+- **Stage 3's cutoff, set 2026-09-29 before any stage 3 draw.** Stage 3 is time-boxed at **6 hours
+  from launch**; every stage 3 process still running then is stopped, and its cells are reported at
+  their completed draws under the rule above. To make that fit, grok-4.7 and qwen3.8-max-0902 each
+  run as two processes, one for the Clark cell and one for Santa Barbara and St. Johns. Each
+  process lists its cells in the order the plan protects them, so a process stopped by the clock or
+  by its spend limit loses what the cut order removes first: a model's first 10 Clark draws and its
+  Santa Barbara cell come first, then St. Johns draws 1-5, then Clark draws 11-20, then St. Johns
+  draws 6-10. The per-process spend limits and cell lists are in the
+  [stage 3 plan](2026-09-29-v2-stage3-plan.md). Any draw lost this way is reported per model, as
+  cut by the clock or by the ceiling.
+
+**4. 2026-09-30, stage 3 running: the pass rule is the one coded, and field agreement is reported
+beside it.** Found while testing a reference-free check on the stored draws
+([agentic extractor plan](2026-09-29-agentic-extractor-plan.md), step 1). "Success criteria" says a
+pass agrees with the adapter "on every record of every page". The scorer (`conformance.score`)
+decides on the records alone: a draw is `perfect` when, on every page, the set of permit numbers it
+returns equals the adapter's (recall and precision 1.0 on `native_id`). It compares every other
+field of each matched record and stores the agreement, but the outcome does not depend on it. The
+same code scored v1, so the published v1 figures and question 4 use the same rule.
+
+Re-scored with every field required, compared as the scorer already compares them (exact after
+collapsing whitespace), 311 of the 349 draws then scored perfect still pass: Clark 164 of 166, Santa
+Barbara 46 of 47, St. Johns 101 of 136. Most of the failures leave a whole column null on every
+record, nearly all on St. Johns (address in 34 draws, issue date 26, structure code 23). The largest
+change is Gemini 3.8 Flash's St. Johns cell, from 10/10 to 3/10.
+
+- **The rule.** Record agreement, as coded, stays the primary pass rule for questions 1-5. Every
+  decision made during the run was made on it: the re-projections, the cuts, and which Clark cells
+  stopped at 10. Changing it now would change those after the fact.
+- **Reported beside it.** Field-level pass@1 (a draw that passes and also agrees on every field of
+  every matched record), with its Wilson interval, in every table that reports pass@1, and
+  field-level cost per success beside cost per success. Questions 1-3 are answered under both
+  rules, and where a claim holds under one and not the other the report says so.
+- **Wording.** In this document and the design doc, "agrees on every record" means the sets of
+  permit numbers match; field agreement is the named secondary measure.
+- **Timing.** Decided before stage 3 finished. The primary rule is the one already coded, so no
+  stage 3 result could have chosen it.
+- **The reference-free check.** Its false-accept rate is reported against both rules. A check aimed
+  at this gap (a column the page's grid prints but the output leaves null on every row) was
+  designed after this was found, on St. Johns, and is checked on Santa Barbara; it is reported as
+  post hoc.
+
+**5. 2026-09-30: one process ran 53 minutes past the stage 3 cutoff.** The cutoff (05:57:47Z,
+deviation 3) was to be enforced by hand: a timer, then stopping every process still running. When
+it fired, the operator was waiting on an unrelated decision and did not act on it, and glm-5.3's
+relaunch (amendment 4) ran on to finish its St. Johns cell at 06:50:17Z. No other stage 3 process
+was running.
+
+| St. Johns x glm-5.3 draw | finished (ledger) | outcome |
+|---|---|---|
+| 0 | 05:15:37Z | perfect |
+| 1 | 05:42:40Z (after a host failure at 05:21:30Z) | perfect |
+| 2 | first call cut off at 64,000 tokens 05:57:33Z; re-drawn at 128,000, 06:08:26Z | perfect |
+| 3 | 06:30:21Z | perfect |
+| 4 | cut off 06:43:27Z; re-drawn, 06:50:17Z | perfect |
+
+- **The rule applies as written.** The cell is reported at the draws completed by the cutoff:
+  **2/2, [0.34, 1.00]**, with draws 2-4 cut by the clock. Draw 2 was not complete: its re-draw,
+  required by amendment 2, finished after the cutoff.
+- **The later draws are kept and labelled.** Draws 2-4 are in the ledger and `variance.json`, and
+  are reported beside the cell as bought after the cutoff (5/5, [0.57, 1.00]). They enter no
+  question's primary answer. Their $0.77 (the three re-draws or draws that finished after
+  05:57:47Z) counts toward the run's spend: $3.96 of the relaunch's $6.06 limit, within the $53 cap.
+- **Timing.** Written after the later draws were seen. The rule was fixed before any stage 3 draw
+  and is applied unchanged, so they could not have chosen it; all five draws passed, so no
+  question's answer would differ under either reading.
+- **Cause and fix.** The stop depended on a person acting on time. A harness that enforces its
+  own deadline (no new call starts after it) is proposed for the next run in the
+  [design doc](../design/model-comparison.md), "Proposed for the next run".
+
+## Cuts under the cap
+
+Cuts made in the pre-registered order when a re-projection put the run over the cap ($45; $50
+from amendment 3). They
+follow the plan, so they are not deviations, and each is reported in the results.
+
+**1. 2026-09-29, before stage 2: the hint arm on the mid tier.** The re-projection from stage 1's
+measured costs ([stage 1 check and re-projection](2026-09-29-v2-stage1-check-and-reprojection.md))
+put the run at $46.40 typical against the cap. The Clark hint cells of the six mid-tier roster
+models (claude-sonnet-5, openai/gpt-6-sol, google/gemini-3.8-flash, deepseek/deepseek-v4-pro-0813,
+xiaomi/mimo-v2.6-pro, minimax/minimax-m3) are not run, which brings it to $43.37. Question 5 is
+answered for 15 models, the cheap tier and the seven v1 models, not 21.
 
 **Operational, not a deviation.** The first smoke run was stopped by the host for low memory during
 `qwen/qwen3.8-max-0902`'s draw, after 11 of 19 models. The re-run replayed those 11 from the cache

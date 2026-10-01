@@ -10,7 +10,10 @@ A **variance cell** is *k* independent draws of one identical synthesis request,
 portal, one model and one condition. Each draw asks the model for an extractor, runs it on every page
 of the target's stored corpus, and scores it against the hand-written adapter. A draw passes only if
 it clears the static audit, raises on no page, and agrees with the adapter on every record of every
-page. The cell reports the pass rate (pass@1) with a Wilson 95% interval. Draws the host failed on
+page, where a record agrees when its permit number (`native_id`) matches: on each page, the set of
+permit numbers returned equals the adapter's. The other fields of each matched record are compared
+and reported as field-level pass@1 beside the rate, but do not decide it. The cell reports the pass
+rate (pass@1) with a Wilson 95% interval. Draws the host failed on
 twice are `infra_error` and are reported beside the rate, not inside it. That rate is agreement
 with an adapter, not accuracy.
 
@@ -183,6 +186,39 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   seed, plus Santa Barbara's 3 rows with no detail link. No disagreement was found. Santa Barbara's form has
   no date filter, so its corpus is the most recent Residential Alteration records, dated 2020 to 2024.
 
+## Proposed for the next run (draft, to review)
+
+Written 2026-09-30, as the v2 run's stage 3 closed; not yet reviewed. Both change how a run is
+executed, not what is sent or scored, so neither touches a cache key or a stored draw.
+
+- **Draws of a cell in parallel.** A process runs its draws one at a time, and draws are
+  independent samples of one request. glm-5.3's took 3 to 47 minutes each, so a cell of 10 could
+  take hours of wall-clock time that 3 to 5 draws in flight would mostly remove. Needs: a bounded
+  worker pool per cell, per-draw records written as each finishes (already merged under a lock),
+  the draw number fixed before the call so the cache key and the cut order are unchanged, and a
+  per-host concurrency limit so parallel draws do not provoke the host failures they would then be
+  retried for.
+- **One spend limit for the run, not one per process.** Each process now needs its typical spend
+  plus one worst-case call held back, so money sat idle in one process while another stopped at
+  its limit: that forced the kimi-k3 and glm-5.3 relaunches (amendment 4) and cut grok-4.7's and
+  qwen3.8-max-0902's later draws. Instead, each call reserves its worst case against a run-wide
+  cap before it is sent and settles to its billed cost when it ends, with the reservations kept
+  next to the ledger under its lock, so any number of processes or workers share one cap. The
+  cut order the pre-registration protects then applies to the run as a whole. This is also what
+  parallel draws need, since each in-flight call holds a reservation.
+- **A deadline the harness enforces.** Stage 3's cutoff was a timer and a person stopping the
+  processes, and one ran 53 minutes past it (deviation 5 of the pre-registration). Instead, a
+  `--deadline` (a UTC time) that no new call or re-draw starts after, and that marks the draws it
+  prevents as cut by the clock in the process's own report. A call already in flight finishes,
+  since stopping it loses the partial output; a draw that needs a re-draw after the deadline is
+  incomplete, as the pre-registered rule says.
+- **Not proposed: resuming a draw that was cut off.** A host that closes the stream, a response
+  that reaches its token limit and a process stopped mid-call all lose the partial output. It is
+  not resumable: reasoning comes back summarised or encrypted if at all, so a continuation is a
+  different request, and a stitched draw is not an independent sample of the pre-registered one
+  (amendment 2 re-draws at 128,000 tokens for this reason). Replay already skips every finished
+  draw on a relaunch; the agent runner resumes at each finished turn from a LangGraph checkpoint.
+
 ## Log
 
 - **2026-09-25**: OpenRouter added as a second provider, widening the model axis to a 90x price
@@ -228,3 +264,51 @@ locked. An unreadable `variance.json` raises instead of being treated as empty.
   cells, draws and a per-cell cost-per-success range; a first page prototype runs on stage 1 data.
   A cell's `usd_total` (ledger, rounded per call to the micro-dollar) may sit below `usd_this_run`
   (draw records, unrounded) by half a micro-dollar per draw.
+- **2026-09-29**: [Stage 1 check and re-projection](../evidence/2026-09-29-v2-stage1-check-and-reprojection.md),
+  drafted while stage 1's last cells run. Deviation 2's search finds no other model with a stream
+  closed early. Io Net and GMICloud cut every glm-5.3-flash stream they served (at 1,800 s and 602 s),
+  and SiliconFlow stopped two at 32,768 tokens with `max_tokens`, below the requested cap; the
+  harness re-drew them, as amendment 2 says. With measured costs, the run is $46 typical against the
+  $45 cap, and fits after the first pre-registered cut (the mid tier's hint arm). Proposed for
+  decision: that cut, a second re-projection before stage 3, and the cut-off hosts excluded for
+  glm-5.3. The export gains pairwise cost-per-success comparisons (P under both priors, settled at
+  0.975) and a tables page; the results page gains the slope chart and its data tables. The
+  [report plan](../evidence/2026-09-28-v2-results-and-visualization-plan.md) gains four reporting
+  additions: minimum detectable effects for questions 4 and 5, the unit of generalization,
+  missing draws split by cause with bounds on host-failure losses, and an exploratory false
+  discovery rate for the settled rankings. Decided the same day, before stage 2: cut 1 applied (the mid tier's hint arm; question 5
+  now covers 15 models), and deviation 3, which closes glm-5.3-flash's three incomplete cells at
+  their completed draws, with best/worst-case bounds on the two draws lost to host failures, and
+  sets a time box for stage 3 before it starts.
+- **2026-09-29**: Stage 2 ran as six processes, one per mid-tier model, and every cell completed.
+  Three processes stopped early and were relaunched for their unfinished cells: `--max-spend` is
+  checked before each call against that call's worst case, and a call that failed after the host
+  started answering is charged its worst case, so a limit sized to expected spend stops short. The
+  [stage 3 plan](../evidence/2026-09-29-v2-stage3-plan.md) (draft) sizes each process at typical
+  cost plus one worst-case call, applies the pre-registered cuts until those limits fit the cap,
+  orders each process's cells so an overrun loses what the pre-registration cuts first, and
+  excludes five hosts for glm-5.3. Stage 2 cost $7.85 (typical projection $8.29). Re-projected with
+  the cost ratio taken over the 21 finished models, the rule called for cuts 2 and 3 under $45
+  ($23.49 of limits against $25.75 of room). Instead the cap was raised to $50 (amendment 3 of the
+  pre-registration), so stage 3 runs every pre-registered cell and glm-5.2's hint cell: $28.81 of
+  limits against $30.75.
+- **2026-09-29**: Stage 3 launched at 23:57 UTC as eight processes (grok-4.7 and qwen3.8-max-0902
+  each split into a Clark process and a Santa Barbara plus St. Johns process), limits summing to
+  $30.62, with a 6-hour time box. glm-5.3 now excludes the five hosts that failed glm-5.3-flash,
+  which leaves 8 of its 12 eligible endpoints. Two plans were written alongside: reliability and
+  economics metrics for the results report (pass@k, pass^k, silent failure rate, time per success),
+  and an [agentic extractor plan](../evidence/2026-09-29-agentic-extractor-plan.md) that tests a
+  reference-free verifier and best-of-k offline on the stored draws before any agent is built.
+- **2026-09-30**: The scorer decides a pass on permit numbers alone and stores field agreement
+  without using it, while this doc and the pre-registration described a pass as agreement on every
+  record. Found by the offline verifier: 311 of 349 perfect v2 draws also agree on every field, and
+  most that do not leave a whole St. Johns column null. The coded rule stays primary and
+  field-level pass@1 is reported beside it
+  ([pre-registration, deviation 4](../evidence/2026-09-27-v2-run-preregistration.md)).
+- **2026-09-30**: [Failure cases](failure-cases.md), a living log of the odd cases found so far
+  (model, harness, scorer, verifier, host and provider), each with its evidence, frequency and
+  consequence, seeded with eight.
+- **2026-09-30**: glm-5.3 re-drew 7 of its first 10 Clark draws at 128,000 tokens and stopped at its
+  spend limit before Santa Barbara. The cap rose to $53 (amendment 4) under a rule that restores any
+  top-tier model's protected cells cut by its limit; glm-5.3's are relaunched at $6.06. kimi-k3
+  was relaunched within the $50 cap at $3.40 and finished its protected cells.
