@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 448 tests, ~18s, no network
+python scripts/run_tests.py           # everything: 527 tests, no network
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -48,7 +48,7 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_fingerprint.py` | skeleton stability, version guard, absence guard, Spike C's negative result | the empty-DOM collision |
 | `test_adapters.py` | replay over stored pages; column-order assertions; truncation detection | the Clark vocabulary bug, the truncated page |
 | `test_artifacts.py` | published figures, classification shape, D1's capture invariant, record store | the 112 → 180 re-quote |
-| `test_structure.py` | the `permits/`/`scripts/` boundary ratchet, declared-dependency rule, adapters stay thin | 23 scripts importing the capture layer |
+| `test_structure.py` | the `permits/`/`scripts/` boundary ratchet, declared-dependency rule, adapters stay thin, the agent imports no reference parser | 23 scripts importing the capture layer |
 | `test_capture.py` | robots, politeness, the budget ceiling, schema migration, the verdict rules, and D1's page-and-row invariant | the unrecorded page it found on its first run |
 | `test_providers.py` | provider routing, the OpenAI/Anthropic usage translation, which figure gets billed, the golden cache keys, protocol v1 frozen and protocol v2's request and ledger fields | the `stream` cache-key bug, and four ways a second wire format can produce a wrong number |
 | `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, every model that reasons is asked to at its lab's default level, and the protocol v2 efforts, caps, sampling, host filters and excluded endpoints against the catalogue and endpoint snapshots | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
@@ -57,6 +57,9 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_export_results.py` | the results page's data: the exported cells equal the stats roll-up's, a re-run writes identical bytes, a cell that never worked gets no cost per success, pairs are compared only within a target, arm and protocol and marked settled only at P ≥ 0.975 under both priors, the tables page lists what the charts draw, and nothing private leaves | a page that could quote a number no report does |
 | `test_render.py` | the results page in a browser, at a desktop and a phone width, light and dark, and with JavaScript off: no script errors, one mark per model and draw counted against `data.json`, no chart text off the screen, no page wider than a phone | labels that ran off the screen and dots drawn invisible, both found only by looking |
 | `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
+| `test_converse.py` | conversations with tools on both providers: tool calls assembled from stream fragments, thinking signatures and reasoning details sent back unchanged, tool-less turns, the cache kept inside one run, one episode and one arm, one-shot cache keys unchanged, tracing settings kept out of requests | written with the agentic extractor, before its first paid call |
+| `test_agent.py` | the agent and the scripted loop against a scripted fake model and a real sandbox: routing, the turn and dollar limits, resuming from a SQLite checkpoint without buying turns again, the review interrupt, the behaviour the plan measures (submitting unchecked or after a failed check), the limit on list-priced spend, each turn's spend and latest draft, the agent told its budget after each turn and the scripted loop not told, and the tracing switch staying off without a key | written with the agentic extractor, before its first paid call |
+| `test_agent_eval.py` | the agent's runner: best-of-k's success and spend, exactly, against every order of the draws; the v2 outcomes and field agreement on every draft; an episode read at any cap as a live limit would have stopped it, with the cases that are not observed left out; the one-shot control and its re-draw; a run and its re-run, which buys nothing; a worst case over the cap sends nothing; exploratory and pre-registered runs cannot share a run id | written with the runner, before its first paid call |
 
 ## Four ideas worth knowing before editing these
 

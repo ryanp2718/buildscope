@@ -312,3 +312,23 @@ executed, not what is sent or scored, so neither touches a cache key or a stored
   spend limit before Santa Barbara. The cap rose to $53 (amendment 4) under a rule that restores any
   top-tier model's protected cells cut by its limit; glm-5.3's are relaunched at $6.06. kimi-k3
   was relaunched within the $50 cap at $3.40 and finished its protected cells.
+- **2026-09-30**: The agentic extractor's $0 build ([plan](../evidence/2026-09-29-agentic-extractor-plan.md),
+  step 3). `Client.converse` adds multi-turn conversations with tools to the transport, sharing
+  `Client._call` with `message`, whose bodies and cache keys are unchanged. The static audit, the
+  sandbox runner, the code-block reader and the data-row rule moved from `scripts/conformance.py`
+  to `permits/sandbox.py` and are re-exported, so the harness is unchanged. The agent and its
+  scripted-loop control are LangGraph graphs in `permits/agent/`, which may not import a reference
+  parser.
+- **2026-09-30**: The runner for the agent's paid arms, `scripts/agent_eval.py`. The harness's
+  targets, corpus, stripping, excerpt window, synthesis prompt and scorer moved verbatim from
+  `scripts/conformance.py` to `permits/harness.py` so the runner scores with the same code;
+  `conformance.py` re-exports them, and on every page of the three targets the results are
+  identical before and after the move.
+- **2026-09-30**: The agent is compared with best-of-k on a cost-accuracy frontier on list-priced
+  spend, not at one matched dollar limit: the same model's calls were billed at a median 0.11 to
+  0.61 of list price depending on the host, and a limit matched to best-of-5 left a cheap model
+  two or three agent turns ([plan](../evidence/2026-09-29-agentic-extractor-plan.md), "Arms").
+- **2026-09-30**: After the agent's smoke run, the agent is told its budget after each turn, and
+  the default cap is $0.15 list-priced with 30 turns. A conversation turn's cache key now includes
+  the arm: the one-shot control's requests equalled the scripted loop's first turns and replayed
+  them.
