@@ -1,6 +1,6 @@
 # ADR-0001: Source-to-office links are an evidence-bearing bitemporal relation
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
@@ -104,7 +104,7 @@ observation layer, not here).
 ## References
 
 - [`docs/design/entity-resolution.md`](../design/entity-resolution.md) - schema, constraints, views
-- `DESIGN.md` §D1 (observation log), §D3 (BPS ID as identity), §D5, §D7 (bitemporality)
+- `docs/design/history.md` §D1 (observation log), §D3 (BPS ID as identity), §D5, §D7 (bitemporality)
 - `data/frame/bucket1_candidates.csv` - 183 matched offices with confidence tiers
 - `data/frame/bucket1_audit.csv` - 347 rejections, each with its reason
 - [ADR-0002](0002-no-mirror-relation.md), [ADR-0003](0003-jurisdiction-identity-is-bps-scoped.md)

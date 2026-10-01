@@ -4,9 +4,8 @@
 
 # Captured pages, raw extracts, inference cache and ledgers. ~260 MB, and the
 # raw store is deliberately private: prompts and cached responses carry page
-# content fetched from municipal portals, and ADR-0015 keeps that on the
-# machine that fetched it. `docs/evidence/` publishes the derived numbers;
-# `docs/evidence/` publishes the derived numbers.
+# content fetched from municipal portals, which stays on the machine that
+# fetched it. `docs/evidence/` publishes the derived numbers.
 data/*
 data/spike_a/*
 
@@ -31,6 +30,7 @@ __pycache__/
 *.py[cod]
 .ruff_cache/
 .pytest_cache/
+.mypy_cache/
 *.egg-info/
 build/
 dist/

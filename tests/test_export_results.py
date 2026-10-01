@@ -78,6 +78,94 @@ def _store():
     return {"cells": cells}, ledger
 
 
+def _audit(cell, draw, disagree=0, still=True):
+    return {"cell": cell, "draw": draw, "ids_still_perfect": still,
+            "disagree": {"address": disagree, "status": 0},
+            "compared": {"address": 10, "status": 10}, "examples": []}
+
+
+class TestFieldsAndExclusions(unittest.TestCase):
+    """Field-level pass@1 beside pass@1 (v2 pre-registration, deviation 4),
+    and draws bought but left out of every figure (deviation 5)."""
+
+    KEY = "clarkco|%s|v2" % M
+
+    def test_field_level_pass_counts_perfect_draws_that_agree_on_every_field(self):
+        v, ledger = _store()
+        data = export_results.build(v, ledger, [_audit(self.KEY, 0),
+                                                _audit(self.KEY, 2, 3)])
+        c = {c["key"]: c for c in data["cells"]}[self.KEY]
+        self.assertEqual((c["k"], c["k_field"], c["n"]), (2, 1, 3))
+        self.assertAlmostEqual(c["rate_field"], 0.3333)
+        self.assertAlmostEqual(c["usd_per_field_success"], 0.12)
+        self.assertEqual([d["field_perfect"] for d in data["draws"]
+                          if d["cell"] == self.KEY], [True, False, False])
+
+    def test_a_perfect_draw_with_no_verdict_leaves_the_field_rate_unstated(self):
+        v, ledger = _store()
+        data = export_results.build(v, ledger, [_audit(self.KEY, 0)])
+        c = {c["key"]: c for c in data["cells"]}[self.KEY]
+        self.assertIsNone(c["k_field"])
+        self.assertIsNone(c["rate_field"])
+        self.assertIsNone(c["usd_per_field_success"])
+
+    def test_a_rerun_that_lost_a_permit_number_is_not_field_perfect(self):
+        self.assertFalse(rollup.field_perfect(_audit(self.KEY, 0, still=False)))
+        self.assertIsNone(rollup.field_perfect({"cell": self.KEY, "draw": 0,
+                                                "error": "timed out"}))
+
+    def test_an_excluded_draw_is_outside_n_and_the_cost_and_listed_apart(self):
+        from unittest import mock
+        v, ledger = _store()
+        with mock.patch.dict(rollup.EXCLUDED, {(self.KEY, 2): "late"}):
+            data = export_results.build(v, ledger)
+        c = {c["key"]: c for c in data["cells"]}[self.KEY]
+        self.assertEqual((c["k"], c["n"], c["draws_excluded"]), (1, 2, 1))
+        self.assertAlmostEqual(c["usd_total"], 0.06)
+        self.assertEqual([d["draw"] for d in data["draws"]
+                          if d["cell"] == self.KEY], [0, 1])
+        self.assertEqual(data["excluded"], [{"cell": self.KEY, "draw": 2,
+                                             "outcome": "perfect",
+                                             "why": "late"}])
+
+    def test_contrasts_are_hint_against_baseline_and_v2_against_v1(self):
+        v, ledger = _store()
+        v["cells"]["clarkco|%s|v2" % V1] = _cell(
+            [_draw(i, 1000 + i, True, model=V1) for i in range(3)], model=V1)
+        ledger += [_buy(i, 1000 + i, model=V1) for i in range(3)]
+        cs = {(q["kind"], q["model"]): q
+              for q in export_results.build(v, ledger)["contrasts"]}
+        self.assertEqual(sorted(cs), [("config", V1), ("hint", M)])
+        h = cs[("hint", M)]
+        self.assertEqual((h["from"], h["to"]), ([2, 3], [0, 1]))
+        c = cs[("config", V1)]
+        self.assertEqual((c["from"], c["to"]), ([0, 1], [3, 3]))
+        self.assertAlmostEqual(c["diff"][0], 1.0)
+        self.assertEqual(c["claimed"], c["diff"][1] > 0)
+
+    def test_the_wall_lists_every_call_of_its_model_by_how_it_ended(self):
+        rows = [
+            infer.LedgerRow(at="t", call_class="synthesis", tag="clarkco/var",
+                            model=export_results.WALL_MODEL, provider="openrouter",
+                            draw=0, ok=ok, usd=0.0, seconds=s, stop_reason=stop,
+                            output_tokens=out, max_tokens=64000, protocol="v2",
+                            host="H")
+            for ok, s, stop, out in ((True, 50.0, "end_turn", 9000),
+                                     (True, 301.2, None, 30000),
+                                     (True, 900.0, "max_tokens", 32768),
+                                     (True, 1200.0, "max_tokens", 64000),
+                                     (False, 3600.0, None, 0))]
+        self.assertEqual([w["what"] for w in export_results.wall(rows)], [
+            "finished", "closed by the host",
+            "stopped by the host below the cap", "reached the output cap",
+            "failed with no output"])
+
+    def test_the_excluded_draws_are_the_ones_deviation_5_names(self):
+        self.assertEqual(
+            sorted(rollup.EXCLUDED),
+            [("stjohns|z-ai/glm-5.3|v2", d) for d in (2, 3, 4)])
+
+
 class TestRoster(unittest.TestCase):
 
     def test_the_roster_is_the_one_the_preregistration_published(self):

@@ -1,11 +1,11 @@
 # ADR-0006: The observation log is the source of truth; every table is a fold over it
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
-*Back-fill. The decision is D1 in `DESIGN.md` and was taken at the start of the project, before this
-directory existed; `DESIGN.md` has been authoritative for it until now. The context and alternatives below
+*Back-fill. The decision is D1 in `docs/design/history.md` and was taken at the start of the project, before this
+directory existed; `docs/design/history.md` has been authoritative for it until now. The context and alternatives below
 are the original ones. The consequences section has been written with three replays' worth of hindsight
 that the original decision did not have, and says so where it matters.*
 
@@ -105,7 +105,7 @@ would be the first real evidence that the log shape is wrong rather than merely 
 
 ## References
 
-- `DESIGN.md` §D1, §D5, §D9, §10 (the raw-store risk row)
+- `docs/design/history.md` §D1, §D5, §D9, §10 (the raw-store risk row)
 - [`docs/evidence/2026-09-20-step1-stjohns-reconciliation.md`](../evidence/2026-09-20-step1-stjohns-reconciliation.md)
   — the three replays and the completeness boundary
 - `permits/emit.py`, `permits/capture.py` (manifest write), `spikes/step1_rebuild.py` (replay)

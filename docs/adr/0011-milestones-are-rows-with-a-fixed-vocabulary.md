@@ -1,10 +1,10 @@
 # ADR-0011: Milestones are rows with a fixed vocabulary, not a state machine over booleans
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
-*Back-fill. The decision is D6 in `DESIGN.md` and predates this directory.*
+*Back-fill. The decision is D6 in `docs/design/history.md` and predates this directory.*
 
 ## Context
 
@@ -98,7 +98,7 @@ being describable and has to be built.
 
 ## References
 
-- `DESIGN.md` §D6, §D5, §D7, §5 (quality metrics)
+- `docs/design/history.md` §D6, §D5, §D7, §5 (quality metrics)
 - [ADR-0010](0010-permit-identity-has-two-levels.md) — the surrogate this deliverable justifies
 - [ADR-0008](0008-time-is-recorded-twice.md) — `reported_date` is per milestone, not per permit
 - `permits/emit.py` — `MILESTONES`, `milestone()`, `reported()`

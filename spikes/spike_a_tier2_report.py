@@ -134,7 +134,7 @@ def main():
         print("  tier-2 gap is not a coverage problem and cannot be closed.")
 
     print("\n" + "-" * 78)
-    print("DECISION THRESHOLDS (DESIGN.md)")
+    print("DECISION THRESHOLDS (docs/design/history.md)")
     print("-" * 78)
     v = pct(t2_enum, len(t2))
     for label, cond in (

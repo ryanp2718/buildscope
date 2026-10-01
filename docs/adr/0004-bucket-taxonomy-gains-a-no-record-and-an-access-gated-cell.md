@@ -1,12 +1,12 @@
 # ADR-0004: the bucket taxonomy gains a no-record cell and an access-gated cell
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
 ## Context
 
-The six-bucket taxonomy in `DESIGN.md` was written before a single portal had been looked at. It orders
+The six-bucket taxonomy in `docs/design/history.md` was written before a single portal had been looked at. It orders
 jurisdictions by how hard their permit records are to acquire, from bulk download (1) to no online portal
 found (6). Bucket 6 was terminal, so anything that was not 1-5 landed there.
 
@@ -120,7 +120,7 @@ different cost, different legal posture.
 - [Spike A: portal enumerability](../evidence/2026-09-20-spike-a-portal-enumerability.md) - bucket 7, 4 of 28
 - [Tier-2 rerun at the issuing level](../evidence/2026-09-20-tier2-issuing-level-rerun.md) - bucket 0, and why
   the county is never the alternative level
-- `DESIGN.md`, Spike A protocol - the canonical bucket table, updated to match this ADR
+- `docs/design/history.md`, Spike A protocol - the canonical bucket table, updated to match this ADR
 - `data/spike_a/classification.csv`, `data/spike_a/tier2_reclassification.csv` - the classified rows
 - [ADR-0003](0003-jurisdiction-identity-is-bps-scoped.md) - why the issuing body is not the identity, even
   when it is a private contractor or nobody at all

@@ -1,6 +1,6 @@
 # ADR-0005: A bucket is demonstrated, not inferred from the search form; and the gate metric may fire but may not clear
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
@@ -19,7 +19,7 @@ That is the **bucket 3** definition, exactly. 3,627 records in 28 requests
 The misfiling matters out of all proportion to one row, for two reasons.
 
 **First, that row carries 28% of the sample's units.** St. Johns is 3,637 of bucket 4's 4,386 units. The
-revised gate in `DESIGN.md` states that unit-weighted reachability of 73.1% *"depends entirely on bucket 4
+revised gate in `docs/design/history.md` states that unit-weighted reachability of 73.1% *"depends entirely on bucket 4
 being acquirable"*, and that if adaptive query partitioning fails, reachability collapses to buckets 1–3
 plus 5 = **39.2%, below the 50% line, and the gate fires.** With St. Johns in bucket 3 that fallback floor
 is **67.3%** and the gate does not fire. One row moved a decision.
@@ -104,7 +104,7 @@ problem and not a permanent property of the metric.
   — the pull, the reclassification arithmetic, and the identity error
 - [`docs/evidence/2026-09-20-spike-a-portal-enumerability.md`](../evidence/2026-09-20-spike-a-portal-enumerability.md)
   — the original classification and its method
-- `DESIGN.md` §8, "The revised gate"
+- `docs/design/history.md` §8, "The revised gate"
 - [ADR-0004](0004-bucket-taxonomy-gains-a-no-record-and-an-access-gated-cell.md) — the taxonomy this
   re-files a row within
 - [ADR-0007](0007-office-identity-is-the-bps-office-id.md) — why a probe artifact may not supply identity

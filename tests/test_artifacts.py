@@ -8,7 +8,7 @@ units**, that figure was quoted onward, hand resolution later tripled it to
 wrong when *re-quoted*, and nothing carried the date forward to say so.
 
 A prose convention cannot prevent that. A test can: every headline figure in
-`DESIGN.md` is recomputed here from the artifact that produced it, and a change
+`docs/design/history.md` is recomputed here from the artifact that produced it, and a change
 to either side without the other fails the suite. That is the whole idea. These
 assertions are *supposed* to fail when a measurement changes - the failure is
 the reminder to write a new evidence report and update the prose, not a bug.
@@ -124,7 +124,7 @@ class TestGateArithmetic(unittest.TestCase):
     """The unit-weighted reachability metric, recomputed from the artifact.
 
     Published in `docs/evidence/2026-09-21-bucket4-resolution.md` and quoted in
-    `DESIGN.md` section 8. ADR-0005 governs how it may be read: **the metric
+    `docs/design/history.md` section 8. ADR-0005 governs how it may be read: **the metric
     may fire the gate but may not clear it.** At n=28 with one row carrying 28%
     of the units, it can catch a domain that is obviously unreachable and
     cannot certify one that is reachable.

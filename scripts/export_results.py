@@ -8,9 +8,21 @@ Writes `site/results/data.json`:
 
   models   one record per model on the run: lab, tier, list price
   cells    one record per (target, model, arm, protocol): pass@1 with its
-           Wilson interval, cost per draw and per success, a simulated 95%
-           range for cost per success, re-draws, host failures, hosts
-  draws    one record per draw: outcome, tokens, what it cost to buy, host
+           Wilson interval, field-level pass@1 beside it, cost per draw and
+           per success, a simulated 95% range for cost per success,
+           re-draws, host failures, excluded draws, hosts
+  draws    one record per draw: outcome, whether it agrees on every field,
+           tokens, what it cost to buy, host
+  excluded one record per draw bought but left out of every figure, with
+           the rule that leaves it out (`rollup.EXCLUDED`)
+  contrasts  hint minus baseline on Clark (question 5) and v2 minus v1 on
+           Clark and St. Johns (question 4), per model, with the
+           pre-registered Newcombe interval and whether an effect is claimed
+  wall     every glm-5.3-flash v2 synthesis call: how long, which host, and
+           whether it finished or the host closed the stream (deviation 2)
+  exploratory  figures from analyses outside the pre-registration, each
+           with its source: the caption-table test
+           (`spikes/v2_results.py --caption`), when it has been run
   pairs    one record per pair of comparable cells: which is cheaper per
            success, by how much, how likely, and whether that is settled
 
@@ -25,6 +37,11 @@ docs/evidence/2026-09-27-cost-per-success-intervals.md applied to one cell:
 the pass rate drawn from a Beta posterior, the mean cost per draw from a
 bootstrap of the cell's draws. It is seeded per cell, so a re-run with no
 new draws writes identical bytes, and a new cell does not move the others.
+
+Field-level pass@1 counts a draw that passes and also agrees on every field
+of every matched record (v2 pre-registration, deviation 4), from
+`data/infer/verifier/field_audit.json` (`scripts/field_audit.py`); without
+that file the export stops, so the page never goes out without it.
 
 What goes in is the step 6 roster and the seven v1 models re-run under v2
 (docs/evidence/2026-09-27-v2-run-preregistration.md), their v2 cells, and
@@ -46,9 +63,12 @@ import zlib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from permits import fileio, infer, models, rollup            # noqa: E402
+from permits.stats import newcombe                           # noqa: E402
 
 OUT = os.path.join(ROOT, "site", "results", "data.json")
 INFER = os.path.join(ROOT, "data", "infer")
+CAPTION = os.path.join(INFER, "verifier", "caption.json")
+WALL_MODEL = "z-ai/glm-5.3-flash"
 
 # The step 6 roster and the v1 models re-run under v2, by registry id, in the
 # pre-registration's order. `tests/test_export_results.py` checks this
@@ -208,9 +228,59 @@ def pairs(cells, sims):
     return out
 
 
-def build(v, ledger):
+def contrasts(cells):
+    """Questions 4 and 5 per model: hint minus baseline on Clark, and v2
+    minus v1 on Clark and St. Johns, with Newcombe intervals. An effect is
+    claimed only where the interval excludes 0, as pre-registered."""
+    at = {(c["target"], c["model"], c["arm"], c["protocol"]): c
+          for c in cells}
+    out = []
+    for (target, model, arm, protocol), a in sorted(at.items()):
+        if arm == "hint" and protocol == "v2" and target == "clarkco":
+            kind, b = "hint", at.get((target, model, "baseline", "v2"))
+        elif arm == "baseline" and protocol == "v2":
+            kind, b = "config", at.get((target, model, "baseline", "v1"))
+        else:
+            continue
+        if not (b and a["n"] and b["n"]):
+            continue
+        d, lo, hi = newcombe(a["k"], a["n"], b["k"], b["n"])
+        out.append({"kind": kind, "target": target, "model": model,
+                    "from": [b["k"], b["n"]], "to": [a["k"], a["n"]],
+                    "diff": [_r(d, 4), _r(lo, 4), _r(hi, 4)],
+                    "claimed": lo > 0 or hi < 0})
+    return out
+
+
+def wall(ledger):
+    """Every v2 synthesis call of the model whose hosts closed streams early,
+    by duration, so the fixed points at which they did can be seen."""
+    out = []
+    for r in ledger:
+        if not (r.model == WALL_MODEL and r.protocol == "v2"
+                and r.call_class == "synthesis" and r.tag.endswith("/var")):
+            continue
+        if r.stop_reason in infer.NATURAL_STOPS:
+            what = "finished"
+        elif r.stop_reason == "max_tokens" and r.max_tokens \
+                and r.output_tokens < r.max_tokens:
+            what = "stopped by the host below the cap"
+        elif r.stop_reason == "max_tokens":
+            what = "reached the output cap"
+        elif r.output_tokens and (not r.max_tokens
+                                  or r.output_tokens < r.max_tokens):
+            what = "closed by the host"
+        else:
+            what = "failed with no output"
+        out.append({"seconds": _r(r.seconds, 1), "host": r.host,
+                    "output_tokens": r.output_tokens, "what": what})
+    return sorted(out, key=lambda w: (w["seconds"], w["host"] or ""))
+
+
+def build(v, ledger, audit=(), caption=None):
     cells = {k: c for k, c in v["cells"].items() if wanted(c)}
-    rows = rollup.rows_from_variance({"cells": cells}, ledger)
+    fields = rollup.field_verdicts(audit)
+    rows = rollup.rows_from_variance({"cells": cells}, ledger, fields)
     rows += rollup.rows_from_ledger(ledger)
     agg = rollup.aggregate(rows)
 
@@ -221,7 +291,7 @@ def build(v, ledger):
                                         r["condition"])
             per_draw[(key, r["unit_id"])][r["metric"]] = r["value"]
 
-    out_cells, out_draws, sims = [], [], {}
+    out_cells, out_draws, out_excluded, sims = [], [], [], {}
     for key in sorted(cells):
         cell = cells[key]
         e = agg[key]
@@ -240,6 +310,10 @@ def build(v, ledger):
             "n": n, "k": k,
             "rate": _r(e["success_rate"], 4),
             "ci95": e["success_ci95"],
+            "k_field": e["field_perfect"],
+            "rate_field": _r(e["field_success_rate"], 4),
+            "ci95_field": e["field_success_ci95"],
+            "usd_per_field_success": _r(e["usd_per_field_success"]),
             "usd_total": _r(e["usd_total"]),
             "usd_per_draw": (_r(sum(known) / n)
                              if n and len(known) == n else None),
@@ -249,6 +323,7 @@ def build(v, ledger):
             "draws_redrawn": e["draws_redrawn"],
             "draws_truncated": e["draws_truncated"],
             "draws_infra_error": e["draws_infra_error"],
+            "draws_excluded": e["draws_excluded"],
             "usd_failed_calls": _r(e["usd_failed_calls"]),
             "silent_failures": e["silent_failures"],
             "reasoning_tokens_p50": e["reasoning_tokens_p50"],
@@ -256,9 +331,17 @@ def build(v, ledger):
         })
         for d in draws:
             m = per_draw[(key, "d%02d" % d.draw)]
+            why = rollup.EXCLUDED.get((key, d.draw))
+            if why:
+                out_excluded.append({"cell": key, "draw": d.draw,
+                                     "outcome": rollup.failure_mode(d),
+                                     "why": why})
+                continue
+            fp = m.get("field_perfect")
             out_draws.append({
                 "cell": key, "draw": d.draw,
                 "outcome": rollup.failure_mode(d),
+                "field_perfect": None if fp is None else bool(fp),
                 "output_tokens": d.output_tokens,
                 "reasoning_tokens": d.reasoning_tokens,
                 "usd": _r(m.get("usd_purchase")),
@@ -277,11 +360,19 @@ def build(v, ledger):
             "tier": str(s.tier),
             "group": "roster" if mid in ROSTER else "v1_rerun",
             "price_in": s.list_price[0], "price_out": s.list_price[1],
+            # What protocol v2 sent: the reasoning effort, and the sampling
+            # settings; None where nothing is sent and the lab's default rules.
+            "effort": s.effort, "temperature": s.temperature,
+            "top_p": s.top_p,
         })
     assert {m["id"] for m in out_models} == on_run
 
     return {
-        "as_of": max((r.at for r in ledger), default=None),
+        # The last purchase behind an exported draw, not the last ledger row:
+        # later calls of other experiments are not this data.
+        "as_of": max((ledger[i].at for i in
+                      rollup.purchases({"cells": cells}, ledger).values()
+                      if i is not None), default=None),
         "note": ("pass@1 is perfect agreement with a hand-written adapter on "
                  "every page of the target; agreement is not accuracy. Costs "
                  "are what each draw cost to buy, in USD. Prices are list "
@@ -300,7 +391,17 @@ def build(v, ledger):
         "models": out_models,
         "cells": out_cells,
         "draws": out_draws,
+        "excluded": out_excluded,
         "pairs": pairs(out_cells, sims),
+        "contrasts": contrasts(out_cells),
+        "wall": wall(ledger),
+        # Counts only: the file that holds them names its producer under
+        # `source`, a key nothing in this export may carry.
+        "exploratory": ({"caption": {
+            "silent_empty": caption["silent_empty"],
+            "rows_back": caption["rows_back"], "pass": caption["pass"],
+            "producer": "spikes/v2_results.py --caption"}}
+            if caption else {}),
     }
 
 
@@ -437,6 +538,46 @@ def render_tables(data):
             draw_rows.append([m["name"], label.split(",")[0], c["n"]]
                              + [k[o] for o, _ in OUTCOME_COLUMNS])
 
+    def rate(c):
+        if c is None:
+            return "not run"
+        return "%d of %d (%s to %s)" % (c["k"], c["n"], _pct(c["ci95"][0]),
+                                        _pct(c["ci95"][1]))
+    port_rows = [[m["name"]] + [rate(cells.get((t_, m["id"], "baseline", "v2")))
+                                for t_ in data["targets"]]
+                 for m in roster]
+
+    names = {m["id"]: m["name"] for m in data["models"]}
+    effect_rows = []
+    for q in sorted(data.get("contrasts", []),
+                    key=lambda q: (q["kind"], q["target"], names[q["model"]])):
+        d, lo, hi = q["diff"]
+        effect_rows.append([
+            names[q["model"]],
+            ("hint, " if q["kind"] == "hint" else "v1 to v2, ")
+            + data["targets"][q["target"]].split(",")[0],
+            "%d of %d" % tuple(q["from"]), "%d of %d" % tuple(q["to"]),
+            "%+d points (%+d to %+d)" % (round(d * 100), round(lo * 100),
+                                         round(hi * 100)),
+            "yes" if q["claimed"] else "no"])
+
+    wall_rows = [[w["host"] or "unknown", "%.0f" % w["seconds"],
+                  w["output_tokens"], w["what"]] for w in data.get("wall", [])]
+
+    setting_rows = []
+    for m in by_price:
+        mc = [c for c in data["cells"] if c["model"] == m["id"]
+              and c["protocol"] == "v2"]
+        hosts = collections.Counter()
+        for c in mc:
+            hosts.update(c["hosts"])
+        setting_rows.append([
+            m["name"], m["effort"] or "lab default",
+            "lab default" if m["temperature"] is None else m["temperature"],
+            "lab default" if m["top_p"] is None else m["top_p"],
+            sum(c["draws_redrawn"] for c in mc),
+            ", ".join("%s %d" % hc for hc in hosts.most_common())])
+
     parts = [
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
@@ -470,6 +611,29 @@ def render_tables(data):
         _table("t-draws", "Draws per model and portal",
                ["Model", "Portal", "Draws"] + [h for _, h in OUTCOME_COLUMNS],
                draw_rows, left=2),
+        "<h2>Pass here, fail there</h2>\n"
+        "<p>Each roster model's pass@1 on the three portals, protocol v2, baseline prompt. "
+        "Santa Barbara was held out: no prompt was written against it.</p>\n",
+        _table("t-ports", "pass@1 by portal, with 95% Wilson intervals",
+               ["Model"] + [v.split(",")[0] for v in data["targets"].values()],
+               port_rows, left=1),
+        "<h2>The hint, and the v1 settings against v2</h2>\n"
+        "<p>Differences in pass@1 with 95% Newcombe intervals. An effect is claimed only "
+        "where the interval excludes zero.</p>\n",
+        _table("t-effects", "Hint minus baseline, and v2 minus v1",
+               ["Model", "Comparison", "Before", "After", "Difference (95%)",
+                "Effect claimed"], effect_rows, left=2),
+        "<h2>Settings and hosts</h2>\n"
+        "<p>What each model was sent under protocol v2, the hosts that served its scored "
+        "draws, and the draws re-drawn at a higher output cap after a cut-off.</p>\n",
+        _table("t-settings", "Settings per model",
+               ["Model", "Reasoning effort", "Temperature", "top_p", "Re-drawn", "Hosts"],
+               setting_rows, left=2),
+        "<h2>GLM-5.3 Flash's calls, by duration</h2>\n"
+        "<p>Every protocol v2 synthesis call of the model whose hosts closed streams "
+        "early.</p>\n",
+        _table("t-wall", "Calls by duration",
+               ["Host", "Seconds", "Output tokens", "What happened"], wall_rows, left=1),
         "\n</body>\n</html>\n",
     ]
     return "".join(parts)
@@ -486,7 +650,12 @@ def main():
     v = fileio.read_json(vpath)
     lpath = os.path.join(INFER, "ledger.jsonl")
     ledger = infer.Ledger(lpath).rows() if os.path.exists(lpath) else []
-    data = build(v, ledger)
+    apath = os.path.join(INFER, "verifier", "field_audit.json")
+    if not os.path.exists(apath):
+        raise SystemExit("no %s; run scripts/field_audit.py first"
+                         % os.path.relpath(apath, ROOT))
+    caption = fileio.read_json(CAPTION) if os.path.exists(CAPTION) else None
+    data = build(v, ledger, fileio.read_json(apath), caption)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with io.open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(render(data))

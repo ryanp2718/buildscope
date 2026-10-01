@@ -30,7 +30,10 @@ tell apart:
   in the wrong place (failure case 6).
 - empty: fields that are null on every row of every page. The contract says a
   field the page does not print is null, so this is right on some portals
-  and a dropped column on others (failure case 5).
+  and a dropped column on others (failure case 5). Kept for analysis and not
+  shown to the agent since 2026-10-01: it fired on every correct Clark and
+  Santa Barbara module, whose grids print neither structure code nor
+  contractor.
 """
 import collections
 import re

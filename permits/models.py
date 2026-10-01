@@ -232,7 +232,7 @@ def redraw_cap(spec: "ModelSpec") -> int:
     return min(spec.max_output, REDRAW_CAP)
 
 
-PRICES_AS_OF = "2026-06-24 (DESIGN.md section 6)"
+PRICES_AS_OF = "2026-06-24 (docs/design/history.md section 6)"
 OPENROUTER_PRICES_AS_OF = ("2026-09-23 (openrouter.ai/api/v1/models); reasoning output "
                            "rates reconciled to invoice 2026-09-25; raised to "
                            "the routed hosts' rates and step 6 roster added "
@@ -263,7 +263,7 @@ FROM_FP4 = ("mxfp4", "fp4", "fp8", "fp16", "bf16")
 FROM_INT4 = ("int4", "int8", "fp8", "fp16", "bf16")
 FROM_FP8 = ("fp8", "fp16", "bf16")
 
-# Anthropic rates are quoted from DESIGN.md section 6, "Anthropic
+# Anthropic rates are quoted from docs/design/history.md section 6, "Anthropic
 # first-party, as of 2026-06-24 - re-verify before quoting". They are billed
 # from here, so a price that moved makes every dollar figure wrong while every
 # token figure stays right. Report tokens when in doubt.

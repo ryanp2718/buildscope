@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Spike B, mechanical half: draw the sample and pull the BPS oracle months.
 
-The protocol in DESIGN.md says to draw 5 tier-1 jurisdictions from buckets 1-3
+The protocol in docs/design/history.md says to draw 5 tier-1 jurisdictions from buckets 1-3
 "in Spike A". That cannot be done: Spike A's 28-office sample yielded two
 bucket-3 jurisdictions and zero in buckets 1-2, and **neither of the two is in
 the clean-oracle set** - Clark County NV and McMinnville OR both have imputed

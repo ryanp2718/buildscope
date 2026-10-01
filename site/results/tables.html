@@ -32,7 +32,7 @@
 </head>
 <body>
 <h1>The price of a program that works: the figures</h1>
-<p>Every figure behind the charts on <a href="index.html">the results page</a>, from the same data file (<a href="data.json">data.json</a>), as of 2026-09-29 23:11:15 UTC.</p>
+<p>Every figure behind the charts on <a href="index.html">the results page</a>, from the same data file (<a href="data.json">data.json</a>), as of 2026-09-30 06:50:17 UTC.</p>
 <h2>Clark County: pass@1 and cost per working extractor</h2>
 <p>Roster models under protocol v2, by list price per million output tokens. Intervals are 95% Wilson; the cost range is the 95% range of the simulation (Jeffreys prior).</p>
 <div class="scroll"><table id="t-price">
@@ -50,14 +50,14 @@
 <tr><th scope="row">Gemini 3.5 Flash-Lite</th><td>$2.50</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.0032</td><td>none passed</td><td></td></tr>
 <tr><th scope="row">DeepSeek V4 Pro</th><td>$3.50</td><td>10 of 10</td><td>100%</td><td>72% to 100%</td><td>$0.092</td><td>$0.092</td><td>$0.080 to $0.12</td></tr>
 <tr><th scope="row">Gemini 3.8 Flash</th><td>$3.75</td><td>19 of 20</td><td>95%</td><td>76% to 99%</td><td>$0.079</td><td>$0.083</td><td>$0.072 to $0.10</td></tr>
-<tr><th scope="row">GLM-5.3</th><td>$4.40</td><td>0 of 1</td><td>0%</td><td>0% to 79%</td><td>$0.17</td><td>none passed</td><td></td></tr>
-<tr><th scope="row">Grok 4.7</th><td>$4.80</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.33</td><td>$0.33</td><td>$0.33 to $2.27</td></tr>
+<tr><th scope="row">GLM-5.3</th><td>$4.40</td><td>7 of 10</td><td>70%</td><td>40% to 89%</td><td>$0.38</td><td>$0.54</td><td>$0.39 to $0.98</td></tr>
+<tr><th scope="row">Grok 4.7</th><td>$4.80</td><td>12 of 13</td><td>92%</td><td>67% to 99%</td><td>$0.33</td><td>$0.36</td><td>$0.31 to $0.48</td></tr>
 <tr><th scope="row">Claude Haiku 4.5</th><td>$5</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.075</td><td>none passed</td><td></td></tr>
-<tr><th scope="row">Qwen3.8 Max</th><td>$6</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.25</td><td>$0.25</td><td>$0.25 to $1.70</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td>$6</td><td>10 of 10</td><td>100%</td><td>72% to 100%</td><td>$0.25</td><td>$0.25</td><td>$0.24 to $0.32</td></tr>
 <tr><th scope="row">Claude Sonnet 5</th><td>$10</td><td>6 of 20</td><td>30%</td><td>15% to 52%</td><td>$0.040</td><td>$0.13</td><td>$0.074 to $0.30</td></tr>
 <tr><th scope="row">GPT-6 Sol</th><td>$10</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.022</td><td>none passed</td><td></td></tr>
-<tr><th scope="row">Kimi K3</th><td>$15</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.080</td><td>$0.080</td><td>$0.080 to $0.53</td></tr>
-<tr><th scope="row">Claude Opus 5.5</th><td>$20</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.12</td><td>$0.12</td><td>$0.12 to $0.85</td></tr>
+<tr><th scope="row">Kimi K3</th><td>$15</td><td>10 of 10</td><td>100%</td><td>72% to 100%</td><td>$0.15</td><td>$0.15</td><td>$0.11 to $0.22</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td>$20</td><td>18 of 20</td><td>90%</td><td>70% to 97%</td><td>$0.064</td><td>$0.071</td><td>$0.059 to $0.094</td></tr>
 </tbody>
 </table></div><h2>Clark County: rankings the data settles</h2>
 <p>Pairs of roster models where the probability that the first is cheaper per working extractor is at least 0.975 under both priors. "Reverses" marks the pairs where the first costs more per token.</p>
@@ -65,30 +65,79 @@
 <caption>Settled rankings, cheaper per success first</caption>
 <thead><tr><th scope="col" class="l">Cheaper per success</th><th scope="col" class="l">Dearer per success</th><th scope="col">Price per token</th><th scope="col">Reverses</th><th scope="col">Times cheaper (95% range)</th><th scope="col">P (Jeffreys / uniform)</th></tr></thead>
 <tbody>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">GLM-5.3</td><td>$20 against $4.40</td><td>yes</td><td>7.6× (4.9× to 14×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Grok 4.7</td><td>$20 against $4.80</td><td>yes</td><td>5.1× (3.7× to 7.1×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Kimi K3</td><td>$20 against $15</td><td>yes</td><td>2.1× (1.4× to 3.2×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Qwen3.8 Max</td><td>$20 against $6</td><td>yes</td><td>3.6× (2.7× to 4.7×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">GLM-5.3</td><td>$10 against $4.40</td><td>yes</td><td>4.2× (1.7× to 9.3×)</td><td>0.998 / 0.999</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Grok 4.7</td><td>$10 against $4.80</td><td>yes</td><td>2.8× (1.2× to 5.3×)</td><td>0.991 / 0.995</td></tr>
 <tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">GLM-5.3 Flash</td><td>$0.29 against $0.14</td><td>yes</td><td>7.6× (4.5× to 13×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">GLM-5.3</td><td>$15 against $4.40</td><td>yes</td><td>3.6× (2.2× to 6.8×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Grok 4.7</td><td>$15 against $4.80</td><td>yes</td><td>2.4× (1.6× to 3.6×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Qwen3.8 Max</td><td>$15 against $6</td><td>yes</td><td>1.7× (1.2× to 2.4×)</td><td>0.997 / 0.993</td></tr>
 <tr><th scope="row">MiMo V2.6 Flash</th><td class="l">GLM-5.3 Flash</td><td>$0.28 against $0.14</td><td>yes</td><td>6.1× (3.6× to 9.7×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">GLM-5.3</td><td>$6 against $4.40</td><td>yes</td><td>2.1× (1.4× to 3.8×)</td><td>1.000 / 0.999</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Grok 4.7</td><td>$6 against $4.80</td><td>yes</td><td>1.4× (1.1× to 1.9×)</td><td>0.991 / 0.982</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">GLM-5.3</td><td>$3.50 against $4.40</td><td>no</td><td>5.7× (3.8× to 10×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Grok 4.7</td><td>$3.50 against $4.80</td><td>no</td><td>3.8× (2.9× to 5.3×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Kimi K3</td><td>$3.50 against $15</td><td>no</td><td>1.6× (1.1× to 2.4×)</td><td>0.991 / 0.983</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Qwen3.8 Max</td><td>$3.50 against $6</td><td>no</td><td>2.7× (2.1× to 3.5×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Claude Opus 5.5</td><td>$0.29 against $20</td><td>no</td><td>13× (7.9× to 21×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.29 against $10</td><td>no</td><td>23× (11× to 58×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.29 against $3.50</td><td>no</td><td>17× (11× to 27×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">GLM-5.3</td><td>$0.29 against $4.40</td><td>no</td><td>100× (56× to 197×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.29 against $3.75</td><td>no</td><td>15× (9.5× to 23×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Grok 4.7</td><td>$0.29 against $4.80</td><td>no</td><td>66× (41× to 105×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Kimi K3</td><td>$0.29 against $15</td><td>no</td><td>28× (16× to 47×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">MiMo V2.6 Pro</td><td>$0.29 against $0.87</td><td>no</td><td>5.6× (3.2× to 10×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Qwen3.8 Flash</td><td>$0.29 against $0.47</td><td>no</td><td>8.0× (4.8× to 14×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Qwen3.8 Max</td><td>$0.29 against $6</td><td>no</td><td>47× (30× to 71×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Claude Opus 5.5</td><td>$0.14 against $20</td><td>no</td><td>1.7× (1.1× to 2.5×)</td><td>0.994 / 0.995</td></tr>
 <tr><th scope="row">GLM-5.3 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.14 against $10</td><td>no</td><td>3.1× (1.6× to 7.3×)</td><td>1.000 / 0.999</td></tr>
 <tr><th scope="row">GLM-5.3 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.14 against $3.50</td><td>no</td><td>2.3× (1.5× to 3.2×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">GLM-5.3</td><td>$0.14 against $4.40</td><td>no</td><td>13× (8.1× to 24×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">GLM-5.3 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.14 against $3.75</td><td>no</td><td>2.0× (1.4× to 2.8×)</td><td>0.999 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Grok 4.7</td><td>$0.14 against $4.80</td><td>no</td><td>8.7× (5.9× to 13×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Kimi K3</td><td>$0.14 against $15</td><td>no</td><td>3.6× (2.3× to 5.6×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Qwen3.8 Max</td><td>$0.14 against $6</td><td>no</td><td>6.2× (4.3× to 8.5×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Claude Opus 5.5</td><td>$0.50 against $20</td><td>no</td><td>5.1× (1.0× to 14×)</td><td>0.975 / 0.991</td></tr>
 <tr><th scope="row">GPT-6 Luna</th><td class="l">Claude Sonnet 5</td><td>$0.50 against $10</td><td>no</td><td>9.3× (1.6× to 34×)</td><td>0.992 / 0.998</td></tr>
 <tr><th scope="row">GPT-6 Luna</th><td class="l">DeepSeek V4 Pro</td><td>$0.50 against $3.50</td><td>no</td><td>6.8× (1.3× to 19×)</td><td>0.987 / 0.996</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">GLM-5.3</td><td>$0.50 against $4.40</td><td>no</td><td>39× (7.5× to 121×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">GPT-6 Luna</th><td class="l">Gemini 3.8 Flash</td><td>$0.50 against $3.75</td><td>no</td><td>6.0× (1.2× to 16×)</td><td>0.982 / 0.994</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Grok 4.7</td><td>$0.50 against $4.80</td><td>no</td><td>26× (5.1× to 71×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Kimi K3</td><td>$0.50 against $15</td><td>no</td><td>11× (2.1× to 31×)</td><td>0.996 / 0.999</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Qwen3.8 Max</td><td>$0.50 against $6</td><td>no</td><td>18× (3.6× to 50×)</td><td>0.999 / 1.000</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">GLM-5.3</td><td>$3.75 against $4.40</td><td>no</td><td>6.5× (4.4× to 12×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Grok 4.7</td><td>$3.75 against $4.80</td><td>no</td><td>4.4× (3.4× to 5.9×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Kimi K3</td><td>$3.75 against $15</td><td>no</td><td>1.8× (1.3× to 2.7×)</td><td>0.999 / 0.999</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Qwen3.8 Max</td><td>$3.75 against $6</td><td>no</td><td>3.1× (2.5× to 3.9×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Claude Opus 5.5</td><td>$0.28 against $20</td><td>no</td><td>10× (6.4× to 16×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.28 against $10</td><td>no</td><td>19× (9.2× to 46×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.28 against $3.50</td><td>no</td><td>14× (8.6× to 21×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">GLM-5.3</td><td>$0.28 against $4.40</td><td>no</td><td>79× (45× to 151×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.28 against $3.75</td><td>no</td><td>12× (7.7× to 18×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Grok 4.7</td><td>$0.28 against $4.80</td><td>no</td><td>53× (33× to 80×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Kimi K3</td><td>$0.28 against $15</td><td>no</td><td>22× (13× to 36×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Flash</th><td class="l">MiMo V2.6 Pro</td><td>$0.28 against $0.87</td><td>no</td><td>4.5× (2.6× to 7.9×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Qwen3.8 Flash</td><td>$0.28 against $0.47</td><td>no</td><td>6.4× (3.9× to 10×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Qwen3.8 Max</td><td>$0.28 against $6</td><td>no</td><td>37× (24× to 54×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Claude Opus 5.5</td><td>$0.87 against $20</td><td>no</td><td>2.3× (1.4× to 3.6×)</td><td>0.999 / 0.999</td></tr>
 <tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Claude Sonnet 5</td><td>$0.87 against $10</td><td>no</td><td>4.2× (2.0× to 10×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Pro</th><td class="l">DeepSeek V4 Pro</td><td>$0.87 against $3.50</td><td>no</td><td>3.1× (1.9× to 4.7×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">GLM-5.3</td><td>$0.87 against $4.40</td><td>no</td><td>18× (9.9× to 35×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Gemini 3.8 Flash</td><td>$0.87 against $3.75</td><td>no</td><td>2.7× (1.6× to 4.1×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Grok 4.7</td><td>$0.87 against $4.80</td><td>no</td><td>12× (7.1× to 18×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Kimi K3</td><td>$0.87 against $15</td><td>no</td><td>5.0× (2.8× to 8.1×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Qwen3.8 Max</td><td>$0.87 against $6</td><td>no</td><td>8.4× (5.1× to 12×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Claude Opus 5.5</td><td>$0.47 against $20</td><td>no</td><td>1.6× (1.1× to 2.4×)</td><td>0.990 / 0.988</td></tr>
 <tr><th scope="row">Qwen3.8 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.47 against $10</td><td>no</td><td>2.9× (1.5× to 7.0×)</td><td>1.000 / 0.999</td></tr>
 <tr><th scope="row">Qwen3.8 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.47 against $3.50</td><td>no</td><td>2.1× (1.5× to 3.1×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">GLM-5.3</td><td>$0.47 against $4.40</td><td>no</td><td>12× (7.5× to 23×)</td><td>1.000 / 1.000</td></tr>
 <tr><th scope="row">Qwen3.8 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.47 against $3.75</td><td>no</td><td>1.9× (1.3× to 2.6×)</td><td>0.999 / 0.999</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Grok 4.7</td><td>$0.47 against $4.80</td><td>no</td><td>8.2× (5.6× to 12×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Kimi K3</td><td>$0.47 against $15</td><td>no</td><td>3.5× (2.2× to 5.4×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Qwen3.8 Max</td><td>$0.47 against $6</td><td>no</td><td>5.8× (4.1× to 8.1×)</td><td>1.000 / 1.000</td></tr>
 </tbody>
 </table></div><h2>Every draw, by outcome</h2>
 <p>Protocol v2, baseline prompt. A host failure is a draw the host failed twice; it is retried and not counted in the rate.</p>
@@ -129,20 +178,30 @@
 <tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>19</td><td>0</td><td>1</td><td>0</td></tr>
 <tr><th scope="row">Gemini 3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
 <tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">GLM-5.3</th><td class="l">Clark County</td><td>1</td><td>0</td><td>1</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Grok 4.7</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Clark County</td><td>10</td><td>7</td><td>2</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">St. Johns County</td><td>2</td><td>2</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Clark County</td><td>13</td><td>12</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">St. Johns County</td><td>7</td><td>6</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
 <tr><th scope="row">Claude Haiku 4.5</th><td class="l">Clark County</td><td>10</td><td>0</td><td>9</td><td>1</td><td>0</td></tr>
 <tr><th scope="row">Claude Haiku 4.5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>1</td><td>0</td><td>0</td></tr>
 <tr><th scope="row">Claude Haiku 4.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Max</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">St. Johns County</td><td>8</td><td>8</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>1</td><td>0</td><td>0</td></tr>
 <tr><th scope="row">Claude Sonnet 5</th><td class="l">Clark County</td><td>20</td><td>6</td><td>13</td><td>1</td><td>0</td></tr>
 <tr><th scope="row">Claude Sonnet 5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
 <tr><th scope="row">Claude Sonnet 5</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
 <tr><th scope="row">GPT-6 Sol</th><td class="l">Clark County</td><td>10</td><td>0</td><td>0</td><td>10</td><td>0</td></tr>
 <tr><th scope="row">GPT-6 Sol</th><td class="l">St. Johns County</td><td>10</td><td>1</td><td>0</td><td>9</td><td>0</td></tr>
 <tr><th scope="row">GPT-6 Sol</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Kimi K3</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Claude Opus 5.5</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">St. Johns County</td><td>7</td><td>4</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Clark County</td><td>20</td><td>18</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
 <tr><th scope="row">DeepSeek V4 Flash</th><td class="l">Clark County</td><td>20</td><td>2</td><td>12</td><td>6</td><td>0</td></tr>
 <tr><th scope="row">DeepSeek V4 Flash</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
 <tr><th scope="row">Qwen3.5 Flash</th><td class="l">Clark County</td><td>10</td><td>0</td><td>7</td><td>3</td><td>0</td></tr>
@@ -157,6 +216,190 @@
 <tr><th scope="row">GLM-5.2</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
 <tr><th scope="row">Kimi K2 Thinking</th><td class="l">Clark County</td><td>10</td><td>0</td><td>8</td><td>2</td><td>0</td></tr>
 <tr><th scope="row">Kimi K2 Thinking</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>7</td><td>0</td></tr>
+</tbody>
+</table></div><h2>Pass here, fail there</h2>
+<p>Each roster model's pass@1 on the three portals, protocol v2, baseline prompt. Santa Barbara was held out: no prompt was written against it.</p>
+<div class="scroll"><table id="t-ports">
+<caption>pass@1 by portal, with 95% Wilson intervals</caption>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col">Clark County</th><th scope="col">St. Johns County</th><th scope="col">Santa Barbara County</th></tr></thead>
+<tbody>
+<tr><th scope="row">GLM-5.3 Flash</th><td>15 of 19 (57% to 91%)</td><td>3 of 3 (44% to 100%)</td><td>4 of 5 (38% to 96%)</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td>13 of 20 (43% to 82%)</td><td>4 of 10 (17% to 69%)</td><td>2 of 5 (12% to 77%)</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td>10 of 10 (72% to 100%)</td><td>9 of 10 (60% to 98%)</td><td>0 of 5 (0% to 43%)</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td>16 of 20 (58% to 92%)</td><td>8 of 10 (49% to 94%)</td><td>3 of 5 (23% to 88%)</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td>2 of 20 (3% to 30%)</td><td>3 of 10 (11% to 60%)</td><td>2 of 5 (12% to 77%)</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td>0 of 10 (0% to 28%)</td><td>5 of 10 (24% to 76%)</td><td>1 of 5 (4% to 62%)</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td>12 of 20 (39% to 78%)</td><td>5 of 10 (24% to 76%)</td><td>3 of 5 (23% to 88%)</td></tr>
+<tr><th scope="row">MiniMax M3</th><td>0 of 10 (0% to 28%)</td><td>9 of 10 (60% to 98%)</td><td>3 of 5 (23% to 88%)</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td>0 of 10 (0% to 28%)</td><td>9 of 10 (60% to 98%)</td><td>4 of 5 (38% to 96%)</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td>10 of 10 (72% to 100%)</td><td>7 of 10 (40% to 89%)</td><td>3 of 5 (23% to 88%)</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td>19 of 20 (76% to 99%)</td><td>10 of 10 (72% to 100%)</td><td>5 of 5 (57% to 100%)</td></tr>
+<tr><th scope="row">GLM-5.3</th><td>7 of 10 (40% to 89%)</td><td>2 of 2 (34% to 100%)</td><td>4 of 5 (38% to 96%)</td></tr>
+<tr><th scope="row">Grok 4.7</th><td>12 of 13 (67% to 99%)</td><td>6 of 7 (49% to 97%)</td><td>5 of 5 (57% to 100%)</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td>0 of 10 (0% to 28%)</td><td>9 of 10 (60% to 98%)</td><td>5 of 5 (57% to 100%)</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td>10 of 10 (72% to 100%)</td><td>8 of 8 (68% to 100%)</td><td>4 of 5 (38% to 96%)</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td>6 of 20 (15% to 52%)</td><td>9 of 10 (60% to 98%)</td><td>4 of 5 (38% to 96%)</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td>0 of 10 (0% to 28%)</td><td>1 of 10 (2% to 40%)</td><td>3 of 5 (23% to 88%)</td></tr>
+<tr><th scope="row">Kimi K3</th><td>10 of 10 (72% to 100%)</td><td>4 of 7 (25% to 84%)</td><td>4 of 5 (38% to 96%)</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td>18 of 20 (70% to 97%)</td><td>8 of 10 (49% to 94%)</td><td>5 of 5 (57% to 100%)</td></tr>
+</tbody>
+</table></div><h2>The hint, and the v1 settings against v2</h2>
+<p>Differences in pass@1 with 95% Newcombe intervals. An effect is claimed only where the interval excludes zero.</p>
+<div class="scroll"><table id="t-effects">
+<caption>Hint minus baseline, and v2 minus v1</caption>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Comparison</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Difference (95%)</th><th scope="col">Effect claimed</th></tr></thead>
+<tbody>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">v1 to v2, Clark County</td><td>1 of 10</td><td>2 of 20</td><td>+0 points (-31 to +22)</td><td>no</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">v1 to v2, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">v1 to v2, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">v1 to v2, Clark County</td><td>2 of 10</td><td>0 of 10</td><td>-20 points (-51 to +11)</td><td>no</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">v1 to v2, Clark County</td><td>0 of 20</td><td>0 of 10</td><td>+0 points (-16 to +28)</td><td>no</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">v1 to v2, Clark County</td><td>0 of 20</td><td>0 of 10</td><td>+0 points (-16 to +28)</td><td>no</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">v1 to v2, Clark County</td><td>0 of 20</td><td>0 of 10</td><td>+0 points (-16 to +28)</td><td>no</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">v1 to v2, St. Johns County</td><td>0 of 1</td><td>2 of 10</td><td>+20 points (-61 to +51)</td><td>no</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">v1 to v2, St. Johns County</td><td>1 of 2</td><td>10 of 10</td><td>+50 points (+1 to +91)</td><td>yes</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">v1 to v2, St. Johns County</td><td>0 of 2</td><td>3 of 10</td><td>+30 points (-39 to +60)</td><td>no</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">v1 to v2, St. Johns County</td><td>7 of 20</td><td>8 of 10</td><td>+45 points (+7 to +67)</td><td>yes</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">v1 to v2, St. Johns County</td><td>10 of 20</td><td>3 of 10</td><td>-20 points (-48 to +16)</td><td>no</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">v1 to v2, St. Johns County</td><td>18 of 20</td><td>10 of 10</td><td>+10 points (-19 to +30)</td><td>no</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>2 of 10</td><td>+20 points (-11 to +51)</td><td>no</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">hint, Clark County</td><td>2 of 20</td><td>1 of 10</td><td>+0 points (-22 to +31)</td><td>no</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>1 of 10</td><td>+10 points (-19 to +40)</td><td>no</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">hint, Clark County</td><td>10 of 10</td><td>9 of 10</td><td>-10 points (-40 to +19)</td><td>no</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">hint, Clark County</td><td>15 of 19</td><td>9 of 9</td><td>+21 points (-11 to +43)</td><td>no</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">hint, Clark County</td><td>2 of 20</td><td>2 of 10</td><td>+10 points (-15 to +42)</td><td>no</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>1 of 10</td><td>+10 points (-19 to +40)</td><td>no</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">hint, Clark County</td><td>13 of 20</td><td>6 of 10</td><td>-5 points (-38 to +27)</td><td>no</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">hint, Clark County</td><td>16 of 20</td><td>7 of 10</td><td>-10 points (-43 to +19)</td><td>no</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
+</tbody>
+</table></div><h2>Settings and hosts</h2>
+<p>What each model was sent under protocol v2, the hosts that served its scored draws, and the draws re-drawn at a higher output cap after a cut-off.</p>
+<div class="scroll"><table id="t-settings">
+<caption>Settings per model</caption>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Reasoning effort</th><th scope="col">Temperature</th><th scope="col">top_p</th><th scope="col">Re-drawn</th><th scope="col">Hosts</th></tr></thead>
+<tbody>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>10</td><td>Sail Research 16, SiliconFlow 8, Z.AI 4, Inceptron 2, Near AI 2, Parasail 2, BaseTen 1, Novita 1</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>0</td><td>Xiaomi 28, Novita 9, Venice 5, DeepInfra 3</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>AtlasCloud 10, Morph 9, NextBit 9, Sail Research 5, DeepInfra 1, StreamLake 1</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>12</td><td>Alibaba 45</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td>OpenAI 45</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">high</td><td>0.9</td><td>1.0</td><td>0</td><td>GMICloud 28, AtlasCloud 7</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>0</td><td>Xiaomi 29, GMICloud 6</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>1</td><td>AtlasCloud 12, Novita 6, GMICloud 5, StreamLake 1, Venice 1</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">minimal</td><td>lab default</td><td>lab default</td><td>0</td><td>Google 35</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>Baidu 13, NextBit 8, AtlasCloud 3, GMICloud 1</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td>Google 34, Google AI Studio 1</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>10</td><td>Sail Research 19, Morph 1</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">high</td><td>0.7</td><td>0.95</td><td>0</td><td>xAI 25</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td>anthropic 35</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">xhigh</td><td>lab default</td><td>lab default</td><td>0</td><td>Alibaba 23</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td>anthropic 35</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td>OpenAI 25</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>0</td><td>Sail Research 7, Morph 7, Relace 5, InferenceNet 2, Modal 1</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td>anthropic 35</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>OpenInference 19, Baidu 18, StreamLake 3</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">lab default</td><td>0.6</td><td>0.95</td><td>1</td><td>Alibaba 30</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">medium</td><td>1.0</td><td>1.0</td><td>0</td><td>AkashML 9, CoreWeave 6, DeepInfra 4, DekaLLM 4, BaseTen 2, Mancer 2 2, Crusoe 2, Nebius 1</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">lab default</td><td>0.7</td><td>0.8</td><td>0</td><td>Novita 17, Venice 13</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>StreamLake 22, Alibaba 8</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">xhigh</td><td>1.0</td><td>0.95</td><td>1</td><td>Venice 11, StreamLake 9, Phala 8, AtlasCloud 1, Novita 1</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">lab default</td><td>1.0</td><td>1.0</td><td>0</td><td>Novita 30</td></tr>
+</tbody>
+</table></div><h2>GLM-5.3 Flash's calls, by duration</h2>
+<p>Every protocol v2 synthesis call of the model whose hosts closed streams early.</p>
+<div class="scroll"><table id="t-wall">
+<caption>Calls by duration</caption>
+<thead><tr><th scope="col" class="l">Host</th><th scope="col">Seconds</th><th scope="col">Output tokens</th><th scope="col">What happened</th></tr></thead>
+<tbody>
+<tr><th scope="row">Phala</th><td>148</td><td>7294</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>177</td><td>8671</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>219</td><td>8911</td><td>closed by the host</td></tr>
+<tr><th scope="row">BaseTen</th><td>236</td><td>54592</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>247</td><td>39046</td><td>finished</td></tr>
+<tr><th scope="row">Near AI</th><td>255</td><td>9949</td><td>finished</td></tr>
+<tr><th scope="row">Near AI</th><td>255</td><td>9543</td><td>finished</td></tr>
+<tr><th scope="row">AtlasCloud</th><td>301</td><td>37087</td><td>closed by the host</td></tr>
+<tr><th scope="row">AtlasCloud</th><td>301</td><td>39584</td><td>closed by the host</td></tr>
+<tr><th scope="row">Parasail</th><td>314</td><td>55347</td><td>finished</td></tr>
+<tr><th scope="row">Novita</th><td>318</td><td>39479</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>329</td><td>15555</td><td>finished</td></tr>
+<tr><th scope="row">Io Net</th><td>379</td><td>2912</td><td>closed by the host</td></tr>
+<tr><th scope="row">Inceptron</th><td>385</td><td>43236</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>440</td><td>19551</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>442</td><td>23278</td><td>finished</td></tr>
+<tr><th scope="row">Parasail</th><td>472</td><td>52639</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>522</td><td>19432</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>561</td><td>21871</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>593</td><td>32768</td><td>stopped by the host below the cap</td></tr>
+<tr><th scope="row">Phala</th><td>602</td><td>26016</td><td>closed by the host</td></tr>
+<tr><th scope="row">Phala</th><td>602</td><td>24989</td><td>closed by the host</td></tr>
+<tr><th scope="row">Phala</th><td>602</td><td>27341</td><td>closed by the host</td></tr>
+<tr><th scope="row">Phala</th><td>602</td><td>26061</td><td>closed by the host</td></tr>
+<tr><th scope="row">Phala</th><td>602</td><td>26640</td><td>closed by the host</td></tr>
+<tr><th scope="row">GMICloud</th><td>602</td><td>33416</td><td>closed by the host</td></tr>
+<tr><th scope="row">Phala</th><td>602</td><td>26686</td><td>closed by the host</td></tr>
+<tr><th scope="row">GMICloud</th><td>603</td><td>28713</td><td>closed by the host</td></tr>
+<tr><th scope="row">GMICloud</th><td>619</td><td>28686</td><td>closed by the host</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>625</td><td>25683</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>690</td><td>43665</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>718</td><td>30215</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>812</td><td>32768</td><td>stopped by the host below the cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>815</td><td>27210</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>839</td><td>34165</td><td>finished</td></tr>
+<tr><th scope="row">StreamLake</th><td>898</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>969</td><td>40151</td><td>finished</td></tr>
+<tr><th scope="row">Inceptron</th><td>994</td><td>37946</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>1065</td><td>44088</td><td>finished</td></tr>
+<tr><th scope="row">Z.AI</th><td>1069</td><td>39281</td><td>finished</td></tr>
+<tr><th scope="row">StreamLake</th><td>1115</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Phala</th><td>1118</td><td>44249</td><td>finished</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>1183</td><td>53734</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>1192</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">SiliconFlow</th><td>1276</td><td>53880</td><td>finished</td></tr>
+<tr><th scope="row">Z.AI</th><td>1308</td><td>41964</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>1329</td><td>58249</td><td>finished</td></tr>
+<tr><th scope="row">Z.AI</th><td>1404</td><td>51933</td><td>finished</td></tr>
+<tr><th scope="row">unknown</th><td>1416</td><td>0</td><td>failed with no output</td></tr>
+<tr><th scope="row">StreamLake</th><td>1435</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">StreamLake</th><td>1452</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Novita</th><td>1499</td><td>64410</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>1555</td><td>58803</td><td>finished</td></tr>
+<tr><th scope="row">Novita</th><td>1616</td><td>49350</td><td>finished</td></tr>
+<tr><th scope="row">Phala</th><td>1702</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Z.AI</th><td>1746</td><td>57768</td><td>finished</td></tr>
+<tr><th scope="row">Io Net</th><td>1801</td><td>34938</td><td>closed by the host</td></tr>
+<tr><th scope="row">Io Net</th><td>1801</td><td>46083</td><td>closed by the host</td></tr>
+<tr><th scope="row">Sail Research</th><td>1937</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>1954</td><td>40134</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>1978</td><td>61452</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>1989</td><td>68505</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2019</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>2080</td><td>45052</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2137</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>2266</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>2398</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>2432</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>2489</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>2525</td><td>56009</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2622</td><td>71398</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2627</td><td>57498</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2688</td><td>52786</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2707</td><td>77163</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2806</td><td>60542</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2834</td><td>55345</td><td>finished</td></tr>
+<tr><th scope="row">Sail Research</th><td>2890</td><td>64000</td><td>reached the output cap</td></tr>
+<tr><th scope="row">Sail Research</th><td>3081</td><td>62876</td><td>finished</td></tr>
+<tr><th scope="row">unknown</th><td>3600</td><td>0</td><td>failed with no output</td></tr>
+<tr><th scope="row">unknown</th><td>3601</td><td>0</td><td>failed with no output</td></tr>
+<tr><th scope="row">unknown</th><td>3601</td><td>0</td><td>failed with no output</td></tr>
+<tr><th scope="row">unknown</th><td>3601</td><td>0</td><td>failed with no output</td></tr>
+<tr><th scope="row">unknown</th><td>3615</td><td>0</td><td>failed with no output</td></tr>
 </tbody>
 </table></div>
 </body>

@@ -24,7 +24,8 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 from permits import infer                                     # noqa: E402
 from permits.cells import DrawRecord, Outcome                 # noqa: E402
-from permits.stats import failure_mode, pctile, wilson       # noqa: E402
+from permits.stats import (                                  # noqa: E402
+    failure_mode, newcombe, pctile, wilson)
 
 STATS = os.path.join(ROOT, "data", "infer", "model_stats.json")
 
@@ -43,6 +44,20 @@ class TestEstimators(unittest.TestCase):
             lo, hi = wilson(x, n)
             self.assertGreaterEqual(lo, 0.0)
             self.assertLessEqual(hi, 1.0)
+
+    def test_newcombe_matches_the_published_example(self):
+        """Newcombe (1998), Table II, example (a), method 10: 56/70 against
+        48/80 gives 0.0524 to 0.3339."""
+        d, lo, hi = newcombe(56, 70, 48, 80)
+        self.assertAlmostEqual(d, 0.2)
+        self.assertAlmostEqual(lo, 0.0524, places=4)
+        self.assertAlmostEqual(hi, 0.3339, places=4)
+
+    def test_newcombe_at_zero_against_zero_is_symmetric_and_bounded(self):
+        d, lo, hi = newcombe(0, 10, 0, 10)
+        self.assertEqual(d, 0.0)
+        self.assertAlmostEqual(lo, -hi)
+        self.assertLess(hi, 0.3)
 
     def test_pctile_returns_an_observed_value_never_an_invented_one(self):
         vs = [1.0, 2.0, 3.0, 100.0]

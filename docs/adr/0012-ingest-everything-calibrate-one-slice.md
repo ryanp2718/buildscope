@@ -1,10 +1,10 @@
 # ADR-0012: Ingest everything, normalize everything, calibrate one slice
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
-*Back-fill. The decision is D2 in `DESIGN.md` and predates this directory.*
+*Back-fill. The decision is D2 in `docs/design/history.md` and predates this directory.*
 
 ## Context
 
@@ -95,7 +95,7 @@ breadth is nearly free and the discard is not.
 
 ## References
 
-- `DESIGN.md` §D2, §1 (the differentiating claim), §5 (work-class ontology)
+- `docs/design/history.md` §D2, §1 (the differentiating claim), §5 (work-class ontology)
 - [`docs/evidence/2026-09-20-spike-b-bps-reconciliation.md`](../evidence/2026-09-20-spike-b-bps-reconciliation.md)
   — the 726% Austin sub-permit error
 - [`docs/evidence/2026-09-20-step1-stjohns-reconciliation.md`](../evidence/2026-09-20-step1-stjohns-reconciliation.md)

@@ -50,13 +50,13 @@ they are.
 - **Agreement is not accuracy.** The 1.0000 figure is agreement with a hand-written adapter, chosen as the
   reference precisely because its mistakes are uncorrelated with a model's. Both implementations can
   misread the same column heading the same way. There is no record-level ground truth anywhere in this
-  project yet; the golden set is specified in
-  [ADR-0014](docs/adr/0014-the-golden-set-precedes-the-pipeline.md) and unbuilt.
+  project yet; a hand-labelled golden set is planned and unbuilt.
 - **n is small where it matters most.** The frontier-model cell in the v1 cost comparison is three
   draws. With intervals on both rates, the Clark ranking of Opus 5 over Haiku on cost per success is
   60–77% likely, not settled; the inversion that does hold is the St. Johns one in the table above
-  ([intervals report](docs/evidence/2026-09-27-cost-per-success-intervals.md)). The v2 run re-asks the
-  Clark question at n = 10 to 20 per model.
+  ([intervals report](docs/evidence/2026-09-27-cost-per-success-intervals.md)). The v2 run re-asked the
+  Clark question at 10 to 20 draws per model, for 19 models under one configuration
+  ([results, in review](docs/evidence/2026-10-01-v2-run-results.md)).
 - **Two platforms is not a difficulty axis.** "Page difficulty decides which model is cheaper" is the
   natural reading of two points. It is not a measurement.
 - **Nothing is measured on small jurisdictions**, which are the population this project claims to serve.
@@ -72,19 +72,21 @@ the build if one is missing.
 
 ```
 permits/      the library: capture, strip, identity, vocabulary, adapters,
-              emit, inference, model registry, telemetry, statistics.
-              18 modules, 5,905 lines.
-scripts/      seven maintained tools.  conformance.py is the experiment harness;
+              emit, inference, model registry, telemetry, statistics,
+              and the agentic extractor (permits/agent/).
+scripts/      maintained tools.  conformance.py is the experiment harness;
               model_stats.py rolls every measurement into one tidy table;
-              export_results.py builds the results page's data from it;
+              field_audit.py re-scores passing extractors field by field;
+              export_results.py builds the results page's data from both;
+              agent_eval.py runs the agentic extractor's arms;
               three check_*.py validate the docs, the identities and the notes.
-spikes/       the lab notebook.  56 scripts, unmaintained, kept because the
-              published numbers came out of them.  See spikes/README.md.
-tests/        465 tests, replay over stored pages.  No network, no spend;
-              the results page's render checks are opt-in.
+spikes/       the lab notebook.  One-off scripts, unmaintained, kept because
+              the published numbers came out of them.  See spikes/README.md.
+tests/        replay over stored pages.  No network, no spend; the results
+              page's render checks are opt-in.
 docs/         adr/ why a rule exists · design/ how it works · evidence/ what
               was measured, dated and reproducible.
-DESIGN.md     the narrative: thesis, open questions, sequencing, risk register.
+site/         the crawler's public page and the results page (GitHub Pages).
 ```
 
 The direction of dependency is enforced rather than documented: `permits/` imports nothing above it,
@@ -117,8 +119,10 @@ That spread is the point rather than a saving. The project's central claim is th
 cost per token, is what ranks models**. Across the three Claude tiers, a 5× band, the v1 data leans that way
 on Clark without settling it: Haiku needs a 20% success rate to beat Opus 5 per success and measured 5%, but
 Opus 5's rate rests on three draws, and the ranking is 60–77% likely once both rates carry intervals. The
-inversion that holds is between open-weight models on St. Johns. Whether the claim holds across the v2
-roster's 140× band, with every model under one configuration, is what the v2 run measures.
+inversion that holds is between open-weight models on St. Johns. The v2 run tested the claim across a
+19-model roster under one configuration: on Clark, 13 model pairs rank in the opposite order by cost per
+success and by per-token price, with non-overlapping intervals
+([results, in review](docs/evidence/2026-10-01-v2-run-results.md)).
 
 Every call is ledgered before it bills and any call whose worst-case cost would break the configured ceiling
 is refused rather than attempted. Responses are cached under a hash of the request, so a 55-call experiment
@@ -127,9 +131,9 @@ replays end to end for $0.00.
 ## The captured pages are not in this repository
 
 `data/` is deliberately absent. It holds the raw store (captured HTML, the inference cache, the cost
-ledger), and it stays on the machine that fetched it, for the reasons in
-[ADR-0015](docs/adr/0015-the-raw-store-is-permanently-private.md). Everything derived from it is published
-in `docs/evidence/`, with the producing script and input row counts named in each report's front matter.
+ledger), and it stays on the machine that fetched it: the pages are the portals' content, and some carry
+applicants' names. Everything derived from it is published in `docs/evidence/`, with the producing script
+and input row counts named in each report's front matter.
 
 Capture itself is rate-limited, robots-aware, and identifies itself honestly: `permits/capture.py` refuses
 to issue a request at all if no crawler contact is configured, and writes the page and its manifest row in
@@ -138,17 +142,19 @@ public page, which its User-Agent links to, is at <https://ryanp2718.github.io/b
 
 ## Where to read next
 
-- **[`DESIGN.md`](DESIGN.md)**: the full narrative, front to back. Start here if you want the reasoning.
 - **[`docs/evidence/`](docs/evidence/)**: every number, dated, with the command that reproduces it.
-- **[`docs/adr/`](docs/adr/)**: 17 decision records. [ADR-0017](docs/adr/0017-the-inference-layer-uses-the-vendor-sdk.md)
+- **[`docs/design/`](docs/design/)**: how the system works now: the model comparison, testing, entity
+  resolution, and the catalogue of extractor failure cases.
+- **[`docs/adr/`](docs/adr/)**: decision records. [ADR-0017](docs/adr/0017-the-inference-layer-uses-the-vendor-sdk.md)
   is the most recent and the most self-critical: it reverses an earlier rule that had this project
   hand-rolling its own API client.
+- **[`docs/design/history.md`](docs/design/history.md)**: the original planning narrative, frozen. Read it
+  for why the project started where it did, not for its current state.
 
 ## Provenance
 
-This landed as a single commit because it was built in one exploratory session rather than incrementally.
-Reconstructing that history afterwards would have been fiction. `docs/evidence/` is dated and append-only,
-so the order things were actually learned in is recoverable there.
+The work of 2026-09-19 to 2026-09-22 landed as a single initial commit; the commits since are incremental. `docs/evidence/` is
+dated and append-only, so the order things were learned in is recoverable there either way.
 
 ## License
 

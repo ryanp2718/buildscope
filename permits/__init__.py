@@ -1,2 +1,2 @@
 # -*- coding: utf-8 -*-
-"""Permits pipeline library. See DESIGN.md."""
+"""Permits pipeline library. See docs/design/history.md."""

@@ -1,10 +1,10 @@
 # ADR-0009: Adapters first, generic extraction second — and the template-identity premise is withdrawn
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
-*Back-fill. The decision is D8 in `DESIGN.md` and predates this directory. Unlike the other back-fills,
+*Back-fill. The decision is D8 in `docs/design/history.md` and predates this directory. Unlike the other back-fills,
 part of D8's stated rationale has since been **measured and falsified**; this ADR records the decision that
 survives, the premise that did not, and what replaced it.*
 
@@ -56,7 +56,7 @@ renegotiated, and the artifact is cheap: the pages are already on disk and the c
 [Spike C](../evidence/2026-09-20-spike-c-template-collision.md) fingerprinted 25 jurisdictions and found
 **1.00 fingerprints per jurisdiction at every threshold down to Jaccard 0.60.** Nothing merged. "~20,000
 sites collapse to a few hundred templates" is dead, and every cost figure that rested on it has been
-withdrawn from `DESIGN.md` §§5–6.
+withdrawn from `docs/design/history.md` §§5–6.
 
 [Measurements A and B](../evidence/2026-09-20-measurement-ab-results.md) supply the replacement:
 
@@ -155,7 +155,7 @@ constraint.
 
 ## References
 
-- `DESIGN.md` §D8, §1 (the core technical claim), §9 obligations 1–3, §10 (adapter-crowd-out risk)
+- `docs/design/history.md` §D8, §1 (the core technical claim), §9 obligations 1–3, §10 (adapter-crowd-out risk)
 - [`docs/evidence/2026-09-20-spike-c-template-collision.md`](../evidence/2026-09-20-spike-c-template-collision.md)
   — 1.00 fingerprints per jurisdiction
 - [`docs/evidence/2026-09-20-measurement-ab-results.md`](../evidence/2026-09-20-measurement-ab-results.md)

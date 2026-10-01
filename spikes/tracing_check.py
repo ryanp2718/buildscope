@@ -30,8 +30,6 @@ from permits.agent import graph as G                          # noqa: E402
 from permits.agent import tools as T                          # noqa: E402
 
 PROJECT = "buildscope-agent-dev"
-FIELDS = ["native_id", "issued_date", "address", "permit_type", "status",
-          "structure_code", "contractor"]
 PAGE = ("<html><body><table><tr><th>Permit</th><th>Issued</th>"
         "<th>Address</th><th>Type</th></tr>%s</table></body></html>" % "".join(
             "<tr><td>B-%d</td><td>01/0%d/2026</td><td>%d Main St</td>"
@@ -91,7 +89,7 @@ def main():
     ep = G.Episode(client=ScriptedModel(STEPS), model="fake/scripted",
                    system="Write an extractor for this portal.",
                    user="Write extract(html).",
-                   workspace=T.Workspace([page], FIELDS, os.path.join(d, "w")),
+                   workspace=T.Workspace([page], os.path.join(d, "w")),
                    run_id=run_id, episode=0, call_class="agent",
                    tag="%s/agent/e00" % run_id, limits=G.Limits())
     summary = G.run(ep, "agent", project=PROJECT)

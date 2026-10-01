@@ -1,10 +1,10 @@
 # ADR-0008: Time is recorded twice — valid time and transaction time, and neither overwrites the other
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
-*Back-fill. The decision is D7 in `DESIGN.md` and predates this directory. It is the least-implemented of
+*Back-fill. The decision is D7 in `docs/design/history.md` and predates this directory. It is the least-implemented of
 the back-filled decisions and this ADR says so plainly rather than describing an intention as a mechanism.*
 
 ## Context
@@ -91,7 +91,7 @@ justification would need to be withdrawn rather than left standing.
 
 ## References
 
-- `DESIGN.md` §D7, §D1, §D4 (cadence), §D6 (milestones as rows), §9 (step 6 unlocks the lag finding)
+- `docs/design/history.md` §D7, §D1, §D4 (cadence), §D6 (milestones as rows), §9 (step 6 unlocks the lag finding)
 - [ADR-0006](0006-the-observation-log-is-the-source-of-truth.md) — the log that carries both clocks
 - [`docs/evidence/2026-09-20-step1-stjohns-reconciliation.md`](../evidence/2026-09-20-step1-stjohns-reconciliation.md)
   — what a valid-time-denominated comparison does and does not contain

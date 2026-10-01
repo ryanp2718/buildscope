@@ -30,7 +30,7 @@ different mechanisms and only one of them is what section 6 prices:
   **Arm S - synthesis.** One call sees one page and returns *Python source*.
   That program then runs over every other page of the same template for zero
   further calls. Cost is per template. This is the arm D8 describes and the
-  schema at DESIGN.md line 651 stores (`extractor_program`, `synthesis_cost`).
+  schema in docs/design/history.md section 4 stores (`extractor_program`, `synthesis_cost`).
 
   **Arm D - direct extraction.** Every page goes to the model and records come
   back. Cost is per page, forever. This is what synthesis has to beat, and
@@ -43,7 +43,7 @@ Within one comparison both arms use the **same model**, or the arm and the
 model tier are confounded and neither number means anything. The model tier is
 a *second axis*, run as a second pass over the same pages.
 
-**That second axis is something DESIGN.md section 6 says cannot be measured
+**That second axis is something docs/design/history.md section 6 says cannot be measured
 yet, and section 6 is wrong about it.** Lever 6 defers model tiering until the
 golden set exists, "because before step 2 there is no way to tell a cost
 saving from a quality regression". That is correct about **accuracy** and does

@@ -1,10 +1,10 @@
 # ADR-0014: The golden set precedes the pipeline, and is labelled blind from the rendered page
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
-*Back-fill. The decision is D9 in `DESIGN.md`, already dated there and carrying its own rationale. What
+*Back-fill. The decision is D9 in `docs/design/history.md`, already dated there and carrying its own rationale. What
 this ADR adds is what step 1 changed about the cost of building one.*
 
 ## Context
@@ -99,7 +99,7 @@ the size target once per-record labelling time is measured rather than estimated
 
 ## References
 
-- `DESIGN.md` §D9, §5 (metrics), §9 (sequencing)
+- `docs/design/history.md` §D9, §5 (metrics), §9 (sequencing)
 - [ADR-0009](0009-adapters-first-generic-extraction-second.md) — the conformance test this gates
 - [ADR-0006](0006-the-observation-log-is-the-source-of-truth.md) — why the set is drawn from the raw store
 - [ADR-0016](0016-tests-are-replay-over-the-raw-store.md) — the regression set, and why it is not this

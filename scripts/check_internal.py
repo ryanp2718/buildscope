@@ -154,7 +154,6 @@ def check_tests():
     if n is None:
         return
     targets = [*internal_files(),
-               os.path.join(ROOT, "DESIGN.md"),
                os.path.join(ROOT, "docs", "design", "testing.md")]
     for path in targets:
         if not os.path.exists(path):

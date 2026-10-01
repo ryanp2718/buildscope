@@ -1,5 +1,11 @@
 # BuildScope — Municipal Building Permits Pipeline — Design
 
+> **Historical record, frozen 2026-10-01.** This was the project's planning document from
+> 2026-09-19 to 2026-09-29, kept for the order in which things were decided. It is not maintained, and
+> its status lines, test counts and plans are as of the dates they carry. For the current picture,
+> start at the [README](../../README.md); for how the system works now, read [`docs/design/`](./);
+> for what was measured, read [`docs/evidence/`](../evidence/).
+
 **Status:** Design resolved through branch 8. Three blocking spikes not yet run. No code written.
 **Last updated:** 2026-09-19
 
@@ -45,19 +51,19 @@ question in section 11 is now decided rather than deferred. Everything changed i
 **Revision 2026-09-20.** All three spikes have been run, the tier-2 classification has been re-run, and
 step 1 is underway with three adapters. Two changes to how this document should be read:
 
-- **`docs/` now carries the load.** [`docs/adr/`](docs/adr/) is *why a rule exists* (immutable),
-  [`docs/design/`](docs/design/) is *how the system works today* (living), and
-  [`docs/evidence/`](docs/evidence/) is *what was measured, and when* (append-only, dated). **Every number
+- **`docs/` now carries the load.** [`docs/adr/`](../adr/) is *why a rule exists* (immutable),
+  [`docs/design/`](./) is *how the system works today* (living), and
+  [`docs/evidence/`](../evidence/) is *what was measured, and when* (append-only, dated). **Every number
   quoted below should be traceable to a dated report there**; where one is not, treat it as a
   recollection. Decisions D1, D3, D7 and D8 have been back-filled as
-  [ADR-0006](docs/adr/0006-the-observation-log-is-the-source-of-truth.md),
-  [ADR-0007](docs/adr/0007-office-identity-is-the-bps-office-id.md),
-  [ADR-0008](docs/adr/0008-time-is-recorded-twice.md) and
-  [ADR-0009](docs/adr/0009-adapters-first-generic-extraction-second.md); for those four the ADR is
+  [ADR-0006](../adr/0006-the-observation-log-is-the-source-of-truth.md),
+  [ADR-0007](../adr/0007-office-identity-is-the-bps-office-id.md),
+  [ADR-0008](../adr/0008-time-is-recorded-twice.md) and
+  [ADR-0009](../adr/0009-adapters-first-generic-extraction-second.md); for those four the ADR is
   authoritative and the D section carries a dated pointer to it.
 - **Section 8 is no longer "your actual job."** The spikes are done. The work is step 1 - the
   reconciliation number, now produced from both the open-data and the crawled-HTML paths - and the
-  **named-office list**, which [ADR-0005](docs/adr/0005-a-bucket-is-demonstrated-not-inferred-from-the-search-form.md)
+  **named-office list**, which [ADR-0005](../adr/0005-a-bucket-is-demonstrated-not-inferred-from-the-search-form.md)
   makes the only thing that can *clear* the gate rather than merely fail to fire it.
 
 **Revision 2026-09-21.** The ADR back-fill is complete, bucket 4 is resolved, and the project has tests.
@@ -69,14 +75,14 @@ step 1 is underway with three adapters. Two changes to how this document should 
 - **The gate metric moved down, on evidence.** Unit-weighted reachability is **69.5%**, not 73.1%,
   because Bowling Green KY turned out to publish no permit records at all. Bucket 4 - the cell section 8
   said the whole figure rested on - is now **2.3% of units**, down from 33.9% two days ago. See
-  [the bucket-4 report](docs/evidence/2026-09-21-bucket4-resolution.md).
+  [the bucket-4 report](../evidence/2026-09-21-bucket4-resolution.md).
 - **There is a test suite**, 465 tests, offline and free, run with `python scripts/run_tests.py`. The part
   that matters for this document: **every headline figure quoted below is recomputed from its source
   artifact by `tests/test_artifacts.py`.** Editing a number here without the artifact, or the artifact
-  without the number, now fails. [ADR-0016](docs/adr/0016-tests-are-replay-over-the-raw-store.md),
-  [`docs/design/testing.md`](docs/design/testing.md).
+  without the number, now fails. [ADR-0016](../adr/0016-tests-are-replay-over-the-raw-store.md),
+  [`docs/design/testing.md`](testing.md).
 - **Refactoring is scheduled rather than pending**, in
-  [`docs/design/refactoring.md`](docs/design/refactoring.md), with a ratchet in
+  [`docs/design/refactoring.md`](refactoring.md), with a ratchet in
   `tests/test_structure.py` that stops the known mess growing while it waits.
 
 Spend to date: **$0, zero model calls.** Everything measured so far came from stdlib HTTP.
@@ -104,12 +110,12 @@ measurable as a ratio.
 jurisdiction at every threshold down to J = 0.60 - nothing collapses across jurisdictions. The
 amortization unit is the **tenancy**, not the vendor and not the DOM skeleton, and **no amortization
 multiple may be quoted** until the drift a synthesized extractor tolerates is measured against the golden
-set in step 2. See [ADR-0009](docs/adr/0009-adapters-first-generic-extraction-second.md). Step 1 adds a
+set in step 2. See [ADR-0009](../adr/0009-adapters-first-generic-extraction-second.md). Step 1 adds a
 reason to doubt the framing itself: per-record cost varies **95x between platforms**, so a cost model
 denominated in templates or adapters may be measuring the wrong thing.
 
 **[2026-09-21] The conversion is MEASURED, once, within a template.** The
-[extractor conformance test](docs/evidence/2026-09-21-extractor-conformance.md) synthesized an
+[extractor conformance test](../evidence/2026-09-21-extractor-conformance.md) synthesized an
 extractor from one stripped page and ran it over the rest of the corpus for zero further calls.
 Against the hand-written adapters it scored **1.0000 recall, 1.0000 precision and 1.0000 on every
 field** - 4,188 records over 71 pages and two platforms, from two calls costing $0.33.
@@ -147,9 +153,9 @@ for a project of this kind and is the single strongest thing in the plan.
 
 **[2026-09-20] No longer unvalidated, on both paths.** Spike B produced **~2-6% low-density error** over
 9 jurisdiction-months from open data
-([report](docs/evidence/2026-09-20-spike-b-bps-reconciliation.md)); step 1 produced **1.0% / 4.4% /
+([report](../evidence/2026-09-20-spike-b-bps-reconciliation.md)); step 1 produced **1.0% / 4.4% /
 4.1%** over 3 months from a crawled HTML portal
-([report](docs/evidence/2026-09-20-step1-stjohns-reconciliation.md)), qualified because that county's
+([report](../evidence/2026-09-20-step1-stjohns-reconciliation.md)), qualified because that county's
 units are implied rather than stated. Two limits survive and belong next to the claim wherever it is
 made: **multifamily is not comparable monthly** - 5+ error is unusable at this granularity - and the
 validation exists only for the *collected* tier, which is by construction the tier the claim is not
@@ -316,7 +322,7 @@ re-crawling.
 point-in-time correctness irrecoverably, and the observation log is nearly free given raw bytes are being
 retained regardless.
 
-**[2026-09-20] Back-filled as [ADR-0006](docs/adr/0006-the-observation-log-is-the-source-of-truth.md)**,
+**[2026-09-20] Back-filled as [ADR-0006](../adr/0006-the-observation-log-is-the-source-of-truth.md)**,
 which adds what three replays taught: a manifest verdict of `ok` means *the fetch succeeded*, not *the
 content is complete*, so **completeness is an adapter question** — only an adapter can read a vendor's
 truncation banner. Replay has now paid for itself three times at zero requests.
@@ -350,7 +356,7 @@ exposed as a column.
 on separating new construction from alteration and 1-unit from 5+. These are the hardest extraction
 targets and the most valuable.
 
-**[2026-09-21] Back-filled as [ADR-0012](docs/adr/0012-ingest-everything-calibrate-one-slice.md)**,
+**[2026-09-21] Back-filled as [ADR-0012](../adr/0012-ingest-everything-calibrate-one-slice.md)**,
 which records that the sub-permit rule is the largest error this project has measured — Austin's 726% —
 and names the part that is still only an intention: nothing yet maps two sources' vocabularies onto each
 other, so "real ontology alignment" remains unbuilt. It also notes that breadth is what made the St. Johns
@@ -375,11 +381,11 @@ towns sit differently in the FIPS hierarchy, and annexation moves territory mid-
 share a vendor tenant or migrate platforms, and migration is common. Domain is a good discovery signal
 and a bad identity.
 
-**[2026-09-20] Back-filled as [ADR-0007](docs/adr/0007-office-identity-is-the-bps-office-id.md)**, which
+**[2026-09-20] Back-filled as [ADR-0007](../adr/0007-office-identity-is-the-bps-office-id.md)**, which
 resolves a discrepancy between D3 as written and what the project does. D3 specifies an internal surrogate
 with `bps_office_id` as a crosswalk attribute; in practice the **office** — the frame row — is the unit of
-account and `(state_fips, bps_id)` *is* its identity, as [ADR-0003](docs/adr/0003-jurisdiction-identity-is-bps-scoped.md)
-and [`docs/design/entity-resolution.md`](docs/design/entity-resolution.md) already assume. No surrogate is
+account and `(state_fips, bps_id)` *is* its identity, as [ADR-0003](../adr/0003-jurisdiction-identity-is-bps-scoped.md)
+and [`docs/design/entity-resolution.md`](entity-resolution.md) already assume. No surrogate is
 minted while there is exactly one source of rows. **The rule that earned its own ADR: the frame is the
 only assigner.** The St. Johns adapter was built with `bps_id = "633000"` copied from a Spike A probe
 script — that is **Okeechobee County**, 0 units in 0 of 24 months, where St. Johns is `803000` with 3,637
@@ -402,7 +408,7 @@ tier is **volume-driven**. Keying promotion on volume would merely re-derive the
 *Rejected:* uniform cadence. Either wastes fetches on a village issuing four permits a month or
 under-resolves Houston.
 
-**[2026-09-21] Back-filled as [ADR-0013](docs/adr/0013-crawl-cadence-is-temporal-resolution.md)**, which
+**[2026-09-21] Back-filled as [ADR-0013](../adr/0013-crawl-cadence-is-temporal-resolution.md)**, which
 says plainly that none of this is implemented — nothing has been crawled twice, so every `observed_at` is
 within hours of every other and a lag figure would be quoting the crawl schedule. One thing has changed
 since D4 was written: churn detection now has a mechanism, because the capture layer stores a structural
@@ -435,7 +441,7 @@ identity error washes out in monthly unit counts. The surrogate earns its keep i
 where a false merge fabricates a status change and a false split hides one. It is justified only because
 D6's lifecycle view is a committed deliverable.
 
-**[2026-09-21] Back-filled as [ADR-0010](docs/adr/0010-permit-identity-has-two-levels.md)**, which keeps
+**[2026-09-21] Back-filled as [ADR-0010](../adr/0010-permit-identity-has-two-levels.md)**, which keeps
 D5's own caveat as the honest framing: for aggregate BPS reconciliation *alone* the simple composite key
 would do, and **the surrogate is justified only because D6's lifecycle view is a committed deliverable.**
 If that is cut, this decision should be reopened rather than kept from habit. Step 1 implements the
@@ -502,7 +508,7 @@ quietly corrupts the dataset.
 **Exclusion flag required:** some jurisdictions never distinguish issue date from application date. Those
 cannot participate in BPS reconciliation and need an explicit flag, not a silent guess.
 
-**[2026-09-21] Back-filled as [ADR-0011](docs/adr/0011-milestones-are-rows-with-a-fixed-vocabulary.md)**,
+**[2026-09-21] Back-filled as [ADR-0011](../adr/0011-milestones-are-rows-with-a-fixed-vocabulary.md)**,
 which records that the closed vocabulary caught a real bug *by refusing*: the Clark County adapter emitted
 a milestone name outside the four and 20 of 371 records were rejected at the boundary rather than written
 with a meaningless lifecycle. It also names the cost of dropping undatable milestones — a date-parsing bug
@@ -516,7 +522,7 @@ overwrites the other.
 The gap between them is the **reporting-lag metric** — simultaneously a pipeline health check and one of
 the more publishable findings in the dataset (jurisdictional reporting lag, p50/p95, nationally).
 
-**[2026-09-20] Back-filled as [ADR-0008](docs/adr/0008-time-is-recorded-twice.md)**, which states plainly
+**[2026-09-20] Back-filled as [ADR-0008](../adr/0008-time-is-recorded-twice.md)**, which states plainly
 that this is the least-implemented decision in the document: every permit has been observed exactly once,
 so there is no lag distribution, no transition interval and no lifecycle view — only `observed_at` on each
 record. It buys nothing today and is justified entirely by the option it preserves, because transaction
@@ -549,13 +555,13 @@ curve should *bend* as coverage grows rather than rise linearly. **Measure cross
 reuse as a headline number.**
 
 **[2026-09-20] MEASURED, and the paragraph above is false as written.** Do not build from it.
-[Spike C](docs/evidence/2026-09-20-spike-c-template-collision.md) fingerprinted 25 jurisdictions and
+[Spike C](../evidence/2026-09-20-spike-c-template-collision.md) fingerprinted 25 jurisdictions and
 found **1.00 fingerprints per jurisdiction at every threshold down to Jaccard 0.60** - nothing merged.
 "~20,000 sites collapse to a few hundred templates" is dead, and every cost figure that rested on it has
 been withdrawn from sections 5 and 6.
 
 What replaces it, from
-[Measurements A and B](docs/evidence/2026-09-20-measurement-ab-results.md):
+[Measurements A and B](../evidence/2026-09-20-measurement-ab-results.md):
 
 - **The cache key is vendor + version + configuration, discovered by clustering - not pure DOM
   structure, and not the vendor name.** Two CivicPlus sites of matched type score 0.255; two Accela
@@ -573,7 +579,7 @@ What replaces it, from
 The instruction to *measure cross-jurisdiction template reuse as a headline number* was right and is
 kept. It is what killed the claim above.
 
-**[2026-09-20] Back-filled as [ADR-0009](docs/adr/0009-adapters-first-generic-extraction-second.md)**,
+**[2026-09-20] Back-filled as [ADR-0009](../adr/0009-adapters-first-generic-extraction-second.md)**,
 which records the decision that survived, the premise that did not, and **sets the written trigger D8
 required and never got** — the silent slippage D8 itself predicted. The trigger is an artifact, not a
 date: **the fourth adapter is the last one built before a measured generic-versus-adapter comparison
@@ -611,7 +617,7 @@ now spent (open-data, Accela, WATS). Two further consequences from step 1 that b
 LLM-as-judge may be used to *triage* which records deserve human attention. It must not produce headline
 numbers — its errors correlate with the extractor's, so it flatters exactly where the pipeline is wrong.
 
-**[2026-09-21] Back-filled as [ADR-0014](docs/adr/0014-the-golden-set-precedes-the-pipeline.md)**, which
+**[2026-09-21] Back-filled as [ADR-0014](../adr/0014-the-golden-set-precedes-the-pipeline.md)**, which
 adds the distinction that matters now that a test suite exists: `tests/test_adapters.py` replays adapters
 over stored pages and is a **regression** set, not a golden set. It checks that behaviour has not
 *changed*; it says nothing about whether the behaviour is *correct*. Letting the free one stand in for the
@@ -641,7 +647,7 @@ unrecoverable once distributed.
 
 ---
 
-**[2026-09-21] Back-filled as [ADR-0015](docs/adr/0015-the-raw-store-is-permanently-private.md)**, which
+**[2026-09-21] Back-filled as [ADR-0015](../adr/0015-the-raw-store-is-permanently-private.md)**, which
 records that this has now been confirmed live rather than reasoned about: the St. Louis bucket-4 probe
 returned a parcel table carrying **owner names against residential addresses**, from a portal that
 publishes no permit records at all. The PII arrives while *classifying a portal*, before any extraction
@@ -775,7 +781,7 @@ Standing instruction from the owner: keep it low, justify anything non-trivial. 
 input on the same footing as the scale figures.
 
 **The cap is not the binding constraint, and it is worth saying so plainly.** Modelled against the actual
-gate scope (`cost_model.py` in the project root, assumptions stated inline and editable in one
+gate scope (`spikes/cost_model.py`, assumptions stated inline and editable in one
 place; the scratchpad copy is session-temporary and will vanish):
 
 | Scenario | Cost of the October gate |
@@ -850,7 +856,7 @@ in/out; Sonnet 5 $2/$10; Haiku 4.5 $1/$5. Prompt-cache reads bill at 0.1x input;
    Where the money actually is, measured over the same 67 calls: **output tokens are 51-75% of spend
    in every call class.** A lever that only touches input cannot be the top of this list. Lever 2 is,
    and it is worth restating that **lever 2 has never been implemented** - there is no Batch code path
-   in `permits/` or `scripts/`, so all 67 calls were billed at full rate, while `cost_model.py` prices
+   in `permits/` or `scripts/`, so all 67 calls were billed at full rate, while `spikes/cost_model.py` prices
    the entire project with `batch=True` as its default argument. Every planned figure in this section
    is a batched number and every measured figure is not.
 4. **Do not send raw HTML to the model.** Strip scripts, styles, comments, and attribute noise before
@@ -871,7 +877,7 @@ in/out; Sonnet 5 $2/$10; Haiku 4.5 $1/$5. Prompt-cache reads bill at 0.1x input;
    Stripping deleted all 42 markers on a Clark County page and left the rows in place, so the page
    still looked complete with its only row signal gone. Same silent-instrument family as the
    fixed-width date slice and the substring field classifier. `class` is kept by default now
-   ([`permits/strip.py`](permits/strip.py), pinned by `tests/test_infer.py`), which costs **24% of the
+   ([`permits/strip.py`](../../permits/strip.py), pinned by `tests/test_infer.py`), which costs **24% of the
    stripped Accela index page, 46% of a detail page and 5% of a WATS page**, taking the reduction to
    **6.7x / 4.3x / 2.9x**. The original list is frozen as `LEGACY_KEEP` because the published token
    figures were measured with it.
@@ -900,7 +906,7 @@ way to tell a cost saving from a quality regression. Levers 1-5 are safe now; le
 The committed scope already sequences these correctly - do not reorder them to save money sooner.
 
 **[2026-09-21] MEASURED, and the deferral above was wrong.** The
-[extractor conformance test](docs/evidence/2026-09-21-extractor-conformance.md) evaluated lever 6 for
+[extractor conformance test](../evidence/2026-09-21-extractor-conformance.md) evaluated lever 6 for
 $1.2751 without a golden set. The reasoning that blocked it holds for *accuracy* and does not apply to
 a *comparison between two models*: the reference is a hand-written parser, so its errors are
 **uncorrelated** with any model's - which is exactly the property an LLM-as-judge lacks, and exactly
@@ -934,7 +940,7 @@ It was invented and should not be repeated. A later draft replaced it with a "re
 range" of **20–60×**, dominated almost entirely by fallback fraction.
 
 **[2026-09-20] The 20–60× range is withdrawn.** It rested entirely on D8's claim that ~20,000 sites
-collapse onto a few hundred templates, and [Spike C](docs/evidence/2026-09-20-spike-c-template-collision.md)
+collapse onto a few hundred templates, and [Spike C](../evidence/2026-09-20-spike-c-template-collision.md)
 measured **fingerprints ÷ jurisdictions = 1.00** at every clustering threshold down to Jaccard 0.60,
 median cluster size 1. **There is now no supportable cost-reduction multiple anywhere in this document.**
 Do not quote one — not 340×, not 20–60×, and not the ~3× single-jurisdiction figure, which is a floor
@@ -1114,13 +1120,13 @@ Three separate entity-resolution problems live in this project - office identity
 permit identity - with different keys and different error tolerances. The catalog sweep conflated them
 and produced a wrong number twice as a result.
 
-**Moved to [`docs/design/entity-resolution.md`](docs/design/entity-resolution.md)**, which carries the
+**Moved to [`docs/design/entity-resolution.md`](entity-resolution.md)**, which carries the
 linkage method, the many-to-one structural finding (Mecklenburg/Charlotte, the five NYC boroughs,
 Memphis, Fulton County), the recurring county/municipality trap, and the full `source` /
 `source_office_link` schema. The decisions behind that schema are fixed in
-[ADR-0001](docs/adr/0001-source-office-link-is-an-evidence-bearing-relation.md),
-[ADR-0002](docs/adr/0002-no-mirror-relation.md) and
-[ADR-0003](docs/adr/0003-jurisdiction-identity-is-bps-scoped.md).
+[ADR-0001](../adr/0001-source-office-link-is-an-evidence-bearing-relation.md),
+[ADR-0002](../adr/0002-no-mirror-relation.md) and
+[ADR-0003](../adr/0003-jurisdiction-identity-is-bps-scoped.md).
 
 Two consequences are load-bearing here and repeated so this section stands alone:
 
@@ -1155,7 +1161,7 @@ field names.
 
 **Buckets 1–6 are an ordered ladder of acquisition difficulty. Buckets 0 and 7 are off-ladder terminal
 states** — do not read 0 as "worse than 6" or 7 as "worse than 6". Both were added by measurement; see
-[ADR-0004](docs/adr/0004-bucket-taxonomy-gains-a-no-record-and-an-access-gated-cell.md).
+[ADR-0004](../adr/0004-bucket-taxonomy-gains-a-no-record-and-an-access-gated-cell.md).
 
 **Report the distribution in three aggregates, never one number:** enumerable (1–3), acquirable with work
 (4–5), blocked (6, 7) — and bucket 0 *separately from all three*, because it shrinks the denominator.
@@ -1223,7 +1229,7 @@ stated:
    unreachable."* What it caught is *"the smallest issuing bodies in America have no software"* — true,
    already known, and nearly weightless in any metric a user cares about.
 2. **Its denominator counts records that do not exist.** Bucket 0 — no permit is issued at all — was
-   discovered after this rule was written ([ADR-0004](docs/adr/0004-bucket-taxonomy-gains-a-no-record-and-an-access-gated-cell.md)).
+   discovered after this rule was written ([ADR-0004](../adr/0004-bucket-taxonomy-gains-a-no-record-and-an-access-gated-cell.md)).
    Eastbrook ME issues no permits and its single BPS unit is *imputed*. A denominator that treats
    non-existent documents as uncovered can be driven arbitrarily low by sampling more small towns, and
    no amount of engineering moves it.
@@ -1277,7 +1283,7 @@ it.
 answered.** Step 1 pulled **St. Johns County FL** — classified bucket 4 by Spike A from its rendered
 search form — and enumerated the entire county from a date range alone: **3,627 records in 28 requests,
 zero truncations, zero bisections.** That is the bucket-3 definition. Full report:
-[`docs/evidence/2026-09-20-step1-stjohns-reconciliation.md`](docs/evidence/2026-09-20-step1-stjohns-reconciliation.md).
+[`docs/evidence/2026-09-20-step1-stjohns-reconciliation.md`](../evidence/2026-09-20-step1-stjohns-reconciliation.md).
 
 St. Johns is 3,637 of bucket 4's 4,386 units — **83% of the bucket.** Recomputed over the same 28-office
 sample, bucket 0 excluded from the denominator (n=27, 12,931 units):
@@ -1311,14 +1317,14 @@ of this revision.
    enumerate can look like one that does not, but not the reverse. So 28.5% was a lower bound — and 56.7%
    is one too.
 
-[ADR-0005](docs/adr/0005-a-bucket-is-demonstrated-not-inferred-from-the-search-form.md) makes this
+[ADR-0005](../adr/0005-a-bucket-is-demonstrated-not-inferred-from-the-search-form.md) makes this
 binding. A bucket read off a form is **provisional**; only a demonstrated pull **confirms** one. And the
 unit-weighted metric **may fire the gate but may not clear it** — at this n it is precise enough to catch
 a domain that is obviously unreachable and nowhere near precise enough to certify one that is reachable.
 Clearing still requires the named-office test.
 
 **[2026-09-21] Bucket 4 is resolved, and the number went down.** Both remaining bucket-4 offices were
-probed. Full report: [`docs/evidence/2026-09-21-bucket4-resolution.md`](docs/evidence/2026-09-21-bucket4-resolution.md).
+probed. Full report: [`docs/evidence/2026-09-21-bucket4-resolution.md`](../evidence/2026-09-21-bucket4-resolution.md).
 
 - **Bowling Green KY** (458 units) is **not bucket 4, and never was a permit-record source at all.** Its
   portal is Tyler eSuite at `esuites.bgky.org` — not the unreachable `www2.bgky.org` the classification
@@ -1370,7 +1376,7 @@ cap, walk pagination, and record per-field index-vs-detail availability. That is
 **Deliverable:** a table of 25–30 rows with the fields above, the bucket distribution reported all three
 ways, and a one-paragraph recommendation.
 
-### [2026-09-20] Spike A has been RUN. n=28. Full report: [`docs/evidence/2026-09-20-spike-a-portal-enumerability.md`](docs/evidence/2026-09-20-spike-a-portal-enumerability.md)
+### [2026-09-20] Spike A has been RUN. n=28. Full report: [`docs/evidence/2026-09-20-spike-a-portal-enumerability.md`](../evidence/2026-09-20-spike-a-portal-enumerability.md)
 
 Cost: **$0** - every step is scripted HTTP, no model calls. 77 HTML pages saved (8.9 MB); Spike C's input
 now exists.
@@ -1421,7 +1427,7 @@ and three supporting ones:
 approaching the gate. Half a day, $0, and it either overturns the 0% or confirms it with the systematic
 bias removed.
 
-### [2026-09-20] The tier-2 rerun HAS BEEN RUN. Full report: [`docs/evidence/2026-09-20-tier2-issuing-level-rerun.md`](docs/evidence/2026-09-20-tier2-issuing-level-rerun.md)
+### [2026-09-20] The tier-2 rerun HAS BEEN RUN. Full report: [`docs/evidence/2026-09-20-tier2-issuing-level-rerun.md`](../evidence/2026-09-20-tier2-issuing-level-rerun.md)
 
 Cost: **$0**. Every tier-2 row was re-probed at the body that actually issues its permits.
 
@@ -1541,7 +1547,7 @@ for it. Treat it as a one-sided test and state it that way.
 **Time budget:** two to three hours, entirely offline. **Deliverable:** the ratio, the cluster size
 distribution, the vendor cross-tab, and a go / re-derive / re-plan verdict on step 4.
 
-### [2026-09-20] Spike C has been RUN. Verdict: **RE-PLAN step 4.** Full report: [`docs/evidence/2026-09-20-spike-c-template-collision.md`](docs/evidence/2026-09-20-spike-c-template-collision.md)
+### [2026-09-20] Spike C has been RUN. Verdict: **RE-PLAN step 4.** Full report: [`docs/evidence/2026-09-20-spike-c-template-collision.md`](../evidence/2026-09-20-spike-c-template-collision.md)
 
 Cost: **$0** - offline, stdlib only, no fetching and no model calls.
 
@@ -1590,9 +1596,9 @@ measurements should precede the re-plan: **fetch result and detail pages from th
 (~20-40 requests) and **measure Accela cohort size** across more tenancies, since that single number
 carries most of the amortization estimate.
 
-### [2026-09-20] Measurements A and B have been RUN. Full report: [`docs/evidence/2026-09-20-measurement-ab-results.md`](docs/evidence/2026-09-20-measurement-ab-results.md)
+### [2026-09-20] Measurements A and B have been RUN. Full report: [`docs/evidence/2026-09-20-measurement-ab-results.md`](../evidence/2026-09-20-measurement-ab-results.md)
 
-Rules fixed in advance: [pre-registration](docs/evidence/2026-09-20-measurement-ab-preregistration.md).
+Rules fixed in advance: [pre-registration](../evidence/2026-09-20-measurement-ab-preregistration.md).
 Cost: **$0 inference**, 42 HTTP requests against a pre-registered ceiling of 60.
 
 **Spike C's 1.00 does not generalise to the page types an extractor actually sees.** Spike C ran on
@@ -1742,7 +1748,7 @@ If Spike B returns *dead*, promote D7 to the headline and keep going. Do not re-
 **Time budget:** half a day. **Deliverable:** 5 jurisdictions × 3 months of error figures, the per-field
 availability notes, and a clear go / reframe / dead verdict.
 
-### [2026-09-20] Spike B has been RUN. Verdict: **GO, with the claim scoped to structure type.** Full report: [`docs/evidence/2026-09-20-spike-b-bps-reconciliation.md`](docs/evidence/2026-09-20-spike-b-bps-reconciliation.md)
+### [2026-09-20] Spike B has been RUN. Verdict: **GO, with the claim scoped to structure type.** Full report: [`docs/evidence/2026-09-20-spike-b-bps-reconciliation.md`](../evidence/2026-09-20-spike-b-bps-reconciliation.md)
 
 Cost: **$0 inference**, 57 HTTP requests. Step 0 is now complete.
 
@@ -1989,18 +1995,18 @@ October misses that cycle. Verify actual dates for target companies rather than 
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Portals not enumerable | **Critical** | Spike A. Re-plan around query partitioning if needed. **[2026-09-20]** Partitioning now runs in production - St. Johns, 3,627 records in 28 requests, zero bisections - and the bucket-4 fallback floor is 67.3% rather than 39.2%. Downgraded in practice, not in principle: the two genuinely hard bucket-4 rows are still untested. **[2026-09-21]** Both now tested. Bucket 4 is **2.3% of units and one office**, so the risk is retired *as a gate dependency* - but neither was cracked, so the underlying capability question is still unanswered and simply no longer load-bearing. |
-| **The bucket distribution is 26/28 provisional** `[2026-09-20]` | **High** | Buckets read off a rendered form can only *under*-classify, and one row of 28 carrying 28% of units swung the fallback floor by 28pp. [ADR-0005](docs/adr/0005-a-bucket-is-demonstrated-not-inferred-from-the-search-form.md): a form-read bucket is provisional, only a pull confirms, and the metric **may fire the gate but may not clear it**. Cheapest mitigation is to demonstrate the two remaining bucket-4 rows. **[2026-09-21] Downgraded to Medium.** `classification.csv` now carries `status`; five offices are confirmed and they are **62.4% of the denominator**, including *all* of the enumerable mass. The 23 provisional rows all sit in unreachable buckets, so provisional error can only move the number up. Residual risk is that 23 rows still rest on a form read. |
+| **The bucket distribution is 26/28 provisional** `[2026-09-20]` | **High** | Buckets read off a rendered form can only *under*-classify, and one row of 28 carrying 28% of units swung the fallback floor by 28pp. [ADR-0005](../adr/0005-a-bucket-is-demonstrated-not-inferred-from-the-search-form.md): a form-read bucket is provisional, only a pull confirms, and the metric **may fire the gate but may not clear it**. Cheapest mitigation is to demonstrate the two remaining bucket-4 rows. **[2026-09-21] Downgraded to Medium.** `classification.csv` now carries `status`; five offices are confirmed and they are **62.4% of the denominator**, including *all* of the enumerable mass. The 23 provisional rows all sit in unreachable buckets, so provisional error can only move the number up. Residual risk is that 23 rows still rest on a form read. |
 | **A reconciliation figure built on implied units gets quoted bare** `[2026-09-20]` | **High** | St. Johns states no unit count; its 4.1% is derived from the BPS taxonomy and tests the implication rule rather than measuring extraction. The alarm marks it `qualified` (distinct from `tripped`), the reconciler keeps it out of the headline median and prints it separately. The residual risk is a human quoting it from the table. |
 | **Apply-and-pay portals read as permit portals** `[2026-09-21]` | **High** | Both bucket-4 offices probed run modern transactional portals - Tyler eSuite, a custom ASP.NET app - that publish **no permit records at all**. Vendor detection, form detection and every automated signal Spike A used score them as healthy portals. Any coverage figure built from portal *detection* rather than a demonstrated record query is inflated by an unknown amount. ADR-0004's bucket 7 does not distinguish this case and needs revising. |
 | **An office identity is silently substituted** `[2026-09-21]` | **High** | All 28 office ids in `portals.csv` were wrong and **7 resolved to a real, different office** - `12|633000` is Okeechobee County, not St. Johns. An existence check passes on every one. Mitigation is `scripts/check_identity.py`, which checks the key *against the name recorded beside it* and runs in the test suite; known-wrong keys in dated captures are registered in `data/corrections.csv` rather than rewritten. |
-| **The regression suite is mistaken for a golden set** `[2026-09-21]` | Medium | 465 tests assert that behaviour has not *changed*; none asserts it is *correct*. D9's 500-1,000 blind-labelled records remain unstarted and unmeasured, and the cheap suite makes deferring the expensive one feel safer than it is. See [ADR-0014](docs/adr/0014-the-golden-set-precedes-the-pipeline.md). |
+| **The regression suite is mistaken for a golden set** `[2026-09-21]` | Medium | 465 tests assert that behaviour has not *changed*; none asserts it is *correct*. D9's 500-1,000 blind-labelled records remain unstarted and unmeasured, and the cheap suite makes deferring the expensive one feel safer than it is. See [ADR-0014](../adr/0014-the-golden-set-precedes-the-pipeline.md). |
 | **The capture layer is untested** `[2026-09-21, closed 2026-09-22]` | Closed | `permits/capture.py` writes the provenance log everything downstream trusts and had **no tests**. `tests/test_capture.py` now covers robots handling, the per-host pause, the budget ceiling, schema migration and the verdict rules against a loopback HTTP server - no mock, real `urllib`. It failed on its first run against the one invariant the module exists to enforce: `fetch()` wrote the page and then the row, so a refused schema migration left an unrecorded page on disk, which is the Spike C failure reintroduced inside the code written to prevent it. Fixed by writing the row first and promoting the page only afterwards. **Residual:** the ASP.NET postback path - viewstate, the CSRF headers, the session cookie across a paged grid - is still only exercised by replay. |
 | BPS reconciliation infeasible | **Critical** | Spike B. **[2026-09-19]** Fall back to D7 reporting lag as the validation spine; do not re-plan from scratch. |
 | **Templates do not collapse across jurisdictions** `[2026-09-19]` | **Critical** | **Spike C**, run before step 4 is built. Untested until now. Kills the amortization claim, i.e. the stated reason the architecture exists. |
 | **Easy jurisdictions are the ones that don't need us** `[2026-09-19]` | High | Structural, not fixable - manage by reporting every figure tier-2 count-weighted as well as unit-weighted. See section 2. |
 | **Steps 0-2 foreclose steps 3-4** `[2026-09-19]` | High | Shared emit interface, raw retention, and fingerprinting all binding from step 1. See section 9. |
 | **Raw store is unpublishable, so external replay is impossible** `[2026-09-19]` | Medium | D10. Document the limit in the dataset docs rather than implying a reproducibility guarantee. |
-| Adapters crowd out generic path | High | Cap at 5, written trigger date, shared emit interface. **[2026-09-20]** The trigger D8 required was never written; [ADR-0009](docs/adr/0009-adapters-first-generic-extraction-second.md) now sets it as an artifact rather than a date - **the fourth adapter is the last one built before a measured generic-versus-adapter comparison exists.** Three of five are spent. |
+| Adapters crowd out generic path | High | Cap at 5, written trigger date, shared emit interface. **[2026-09-20]** The trigger D8 required was never written; [ADR-0009](../adr/0009-adapters-first-generic-extraction-second.md) now sets it as an artifact rather than a date - **the fourth adapter is the last one built before a measured generic-versus-adapter comparison exists.** Three of five are spent. |
 | Attachment bytes explode storage | High | Metadata only in v1. Hard boundary. |
 | Time overrun past October | High | Layered sequencing; every boundary is a valid stopping point |
 | Template drift silently nulls fields | Medium | Per-field null rate per template as a monitored alarm |

@@ -9,9 +9,10 @@ reading the body, whether a document is allowed to be out of date.
 | [`design/`](design/) | **How** the system works today | Living; edited in place | Fix it in place |
 | [`evidence/`](evidence/) | **What we measured**, and when | Append-only, dated | Re-run and add a new dated report |
 
-`DESIGN.md` at the repository root is the narrative: the project thesis, the open questions, the
-sequencing, and the risk register. It links into all three directories. It is the document you read
-first and the only one meant to be read front to back.
+One file in `design/` is the exception to its lifecycle: [`design/history.md`](design/history.md) is
+the original planning narrative (thesis, open questions, sequencing, risk register), frozen on
+2026-10-01 and kept as a record of the order things were decided in. Start from the repository
+[README](../README.md) instead.
 
 ## The three-way split, and why it is not the usual two
 
@@ -37,7 +38,7 @@ artifact. A claim with no named producer is not evidence, it is a recollection.
 - **Evidence reports are date-prefixed**, `YYYY-MM-DD-slug.md`, so the directory sorts chronologically
   and a stale report is visibly stale in `ls`.
 - **ADRs are zero-padded four digits**, never renumbered, never reused.
-- **Nothing lives at the repository root but `DESIGN.md` and code.** Working notes, audits, and drafts go
+- **Nothing lives at the repository root but the README, the license and project configuration.** Working notes, audits, and drafts go
   in the scratchpad or in `evidence/`; they do not accumulate at the top level.
 - **Cross-references are relative links**, so they survive the directory being moved or browsed on disk.
 

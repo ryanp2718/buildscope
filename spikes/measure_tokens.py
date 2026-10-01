@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Measure the token cost of a real portal page, raw and stripped.
 
-Section 6 of DESIGN.md prices every inference call off two constants:
+Section 6 of docs/design/history.md prices every inference call off two constants:
 
     PAGE = 3000      # one permit page AFTER stripping (~30k raw)
 
@@ -132,7 +132,7 @@ def main():
     if key in by:
         med = stats(by[key]["attrs-stripped"])[0]
         rawmed = stats(by[key]["raw"])[0]
-        print("DESIGN.md section 6 assumes PAGE = 3000 tokens stripped, ~30k raw.")
+        print("docs/design/history.md section 6 assumes PAGE = 3000 tokens stripped, ~30k raw.")
         print("An Accela index page measures %s tokens stripped, %s raw."
               % (tok(med).strip(), tok(rawmed).strip()))
     if "accela-detail (per-record)" in by:

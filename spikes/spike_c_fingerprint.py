@@ -3,10 +3,10 @@
 
 D8 claims that keying the extractor cache on DOM structure rather than domain
 "collapses the amortization denominator from ~20,000 sites to plausibly a few
-hundred distinct vendor templates". Every cost figure in DESIGN.md section 6
+hundred distinct vendor templates". Every cost figure in docs/design/history.md section 6
 rests on it and nothing had tested it.
 
-Fingerprint, per the protocol in DESIGN.md:
+Fingerprint, per the protocol in docs/design/history.md:
   1. normalized DOM skeleton - all text, attribute VALUES and ids stripped
   2. shingle over root-to-leaf tag paths
   3. hash

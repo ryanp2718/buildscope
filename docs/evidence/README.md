@@ -68,6 +68,8 @@ the distinction is exactly what a reader needs.
 | [2026-09-29 v2 stage 1 check and re-projection](2026-09-29-v2-stage1-check-and-reprojection.md) | Did a host close any model's streams early besides glm-5.3-flash's, and does the rest of the run fit the $45 cap? | Draft |
 | [2026-09-29 Agentic extractor plan](2026-09-29-agentic-extractor-plan.md) | Can a check with no reference pick working extractors, and does a tool-using agent beat sampling, a scripted loop and a human hint at the same spend? | Draft plan |
 | [2026-09-29 v2 stage 3 plan](2026-09-29-v2-stage3-plan.md) | How is the top tier sized, ordered and routed so that it fits the cap and the clock, and loses the right draws if it does not? | Plan |
+| [2026-10-01 v2 run results](2026-10-01-v2-run-results.md) | Under a fair configuration, what does each of 26 models pass on three portals, does cost per success rank them differently from price, and do the rates carry over to a held-out portal? | Draft |
+| [2026-10-01 Agent run pre-registration](2026-10-01-agent-run-preregistration.md) | Does a tool-using agent beat best-of-5 at best-of-5's spend, and does it add anything over a scripted loop? | Draft for review |
 
 ## Naming
 

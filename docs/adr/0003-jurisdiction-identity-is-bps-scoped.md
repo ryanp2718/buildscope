@@ -1,6 +1,6 @@
 # ADR-0003: Jurisdiction identity is BPS-scoped, with forward compatibility bought by a view
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
@@ -78,7 +78,7 @@ authority. One real instance justifies `jurisdiction_other` and the `UNION`; zer
 
 ## References
 
-- `DESIGN.md` §D3 (BPS ID as identity), catalog sweep composition table (9 publishers were real
+- `docs/design/history.md` §D3 (BPS ID as identity), catalog sweep composition table (9 publishers were real
   government bodies with no BPS office at their level)
 - [`docs/design/entity-resolution.md`](../design/entity-resolution.md) - the `office` view
 - [ADR-0001](0001-source-office-link-is-an-evidence-bearing-relation.md)

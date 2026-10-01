@@ -82,7 +82,7 @@ The 95x per-record byte spread between platforms
 synthesis cost per record**. Platform, not method, is the dominant term in
 both.
 
-## The model-tier finding, and a correction to DESIGN.md §6
+## The model-tier finding, and a correction to docs/design/history.md §6
 
 §6 lever 6 proposes "a strong model for *synthesis* (few calls, hard
 reasoning, high leverage — an error here propagates to every page that template
@@ -246,6 +246,6 @@ they should and leave the others alone, 18 checks across the two targets.
   set this does not replace
 - [ADR-0016](../adr/0016-tests-are-replay-over-the-raw-store.md) — replay is
   why the corpus was free to score against
-- `DESIGN.md` §1 (amortization), §5, §6 (levers 4 and 6), §9 obligations
+- `docs/design/history.md` §1 (amortization), §5, §6 (levers 4 and 6), §9 obligations
 - [Spike C](2026-09-20-spike-c-template-collision.md) — why the cohort size
   this does not measure is the remaining unknown

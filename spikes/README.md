@@ -1,14 +1,14 @@
 # spikes/ — the lab notebook
 
-Forty-nine scripts. None of them are maintained, none of them are imported by
+One-off scripts. None of them are maintained, none of them are imported by
 `permits/`, and nothing in `scripts/` depends on them — `tests/test_structure.py`
 enforces both of those. They are here for one reason: **every number published
 in [`docs/evidence/`](../docs/evidence/) came out of this directory**, and a
 result whose instrument has been deleted is a claim, not a measurement.
 
 If you are evaluating this repo, this is not the code to read. Read
-[`permits/`](../permits) (the library, ~3,700 lines) and
-[`scripts/`](../scripts) (six maintained tools). This directory is the
+[`permits/`](../permits) (the library) and
+[`scripts/`](../scripts) (the maintained tools). This directory is the
 provenance chain behind the reports, kept deliberately, at the cost of looking
 untidy.
 
@@ -43,6 +43,10 @@ a notebook and would not be acceptable anywhere else in this repo.
 | `cost_per_success_intervals` | 1 | How sure can we be which model is cheaper per working extractor? | [cost-per-success-intervals](../docs/evidence/2026-09-27-cost-per-success-intervals.md) |
 | `tracing_check` | 1 | Before the agent's smoke run: does an agent episode's trace reach LangSmith, with each model call's tokens and cost? A scripted fake model, $0 | [agentic-extractor-plan](../docs/evidence/2026-09-29-agentic-extractor-plan.md) |
 | `v2_stage1_audit` | 1 | After stage 1 of the step 6 run: did a host close any other model's streams early, and does the rest of the run fit the cap? | [v2-stage1-check-and-reprojection](../docs/evidence/2026-09-29-v2-stage1-check-and-reprojection.md) |
+| `v2_results`, `v2_label_check` | 2 | After the step 6 run: every table of the results report, and which stored replies change label when `extract_block` requires `def extract(` | [v2-run-results](../docs/evidence/2026-10-01-v2-run-results.md) |
+| `heldout_selfcheck` | 1 | Before the agent run uses Polk County and Oregon: does the scorer, the excerpt and the verifier's row count hold on the two held-back portals? | [agent-run-preregistration](../docs/evidence/2026-10-01-agent-run-preregistration.md) |
+| `v2_drift` | 1 | Which of the v2 run's working extractors break under each template mutation: the starting pool for the repair-under-drift experiment | backlog; no report yet |
+| `cost_model` | 1 | Before any measurement: what would the October decision gate cost, from stated assumptions? Superseded by the ledgered runs; its rates are from 2026-06-24 | [design history](../docs/design/history.md), section 6 |
 | `backfill_fingerprints`, `fix_portal_identity` | 2 | — | One-shot data migrations, run once against the private store. |
 
 The inference experiments — variance, drift, conformance — are **not** here.
@@ -66,8 +70,9 @@ measurement it was first written for, reached by twenty-three siblings through a
 
 ## Running one
 
-From the repository root, and expect most of them to need the private data
-store described in [ADR-0015](../docs/adr/0015-the-raw-store-is-permanently-private.md):
+From the repository root. Expect most of them to need the private raw store
+(`data/`, captured pages and the inference cache), which is not in this
+repository:
 
 ```
 python spikes/spike_b_compare.py

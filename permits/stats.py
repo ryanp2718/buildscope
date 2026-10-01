@@ -33,6 +33,20 @@ def wilson(x: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return (max(0.0, c - h), min(1.0, c + h))
 
 
+def newcombe(k1: int, n1: int, k2: int, n2: int
+             ) -> tuple[float, float, float]:
+    """The difference p1 - p2 with its 95% interval, from the two Wilson
+    intervals (Newcombe 1998, method 10). The v2 pre-registration's interval
+    for a configuration or hint effect: it stays inside [-1, 1] and behaves
+    at 0/n and n/n, where the normal interval collapses to a point."""
+    p1, p2 = k1 / n1, k2 / n2
+    l1, u1 = wilson(k1, n1)
+    l2, u2 = wilson(k2, n2)
+    d = p1 - p2
+    return (d, d - math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2),
+            d + math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2))
+
+
 def pctile(values: Iterable[float | None], q: float) -> float | None:
     """Nearest-rank percentile. No interpolation, no numpy.
 

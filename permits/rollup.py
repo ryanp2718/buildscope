@@ -17,12 +17,43 @@ from permits import infer
 from permits.cells import draws_of
 from permits.stats import failure_mode, pctile, wilson
 
-__all__ = ["FIELDS", "aggregate", "cell_name", "condition", "draws_of",
-           "failure_mode", "label", "pick", "purchases", "rows_from_drift",
+__all__ = ["EXCLUDED", "FIELDS", "aggregate", "cell_name", "condition",
+           "draws_of", "failure_mode", "field_perfect", "field_verdicts",
+           "label", "pick", "purchases", "rows_from_drift",
            "rows_from_ledger", "rows_from_variance", "short", "unclaimed"]
 
 FIELDS = ["experiment", "target", "model", "condition", "unit", "unit_id",
           "metric", "value"]
+
+# Draws stored in `variance.json` that no figure counts, by (cell key, draw),
+# with the rule that leaves them out. Kept in the file, because they were
+# bought and are reported beside their cell; emitted as `attempted=0,
+# excluded=1`, so they are outside n and outside the cell's cost.
+EXCLUDED = {
+    # v2 pre-registration, deviation 5: glm-5.3's relaunch ran 53 minutes
+    # past the stage 3 cutoff (2026-09-30 05:57:47Z). The cell is reported
+    # at the draws completed by then; draw 2's required re-draw finished at
+    # 06:08:26Z, so draws 2-4 are out.
+    ("stjohns|z-ai/glm-5.3|v2", 2): "after the stage 3 cutoff",
+    ("stjohns|z-ai/glm-5.3|v2", 3): "after the stage 3 cutoff",
+    ("stjohns|z-ai/glm-5.3|v2", 4): "after the stage 3 cutoff",
+}
+
+
+def field_perfect(entry):
+    """Whether a field-audit entry (`scripts/field_audit.py`) passes on
+    every field: its re-run still matches every permit number, and no field
+    of any matched record disagrees. None when the re-run failed."""
+    if "error" in entry:
+        return None
+    return bool(entry["ids_still_perfect"]
+                and not any(entry["disagree"].values()))
+
+
+def field_verdicts(audit):
+    """`field_perfect` per (cell key, draw), from the field audit's
+    entries."""
+    return {(e["cell"], e["draw"]): field_perfect(e) for e in audit}
 
 
 def short(model):
@@ -127,7 +158,7 @@ def unclaimed(v, ledger):
             if _is_variance_purchase(r) and i not in used]
 
 
-def rows_from_variance(v, ledger=()):
+def rows_from_variance(v, ledger=(), fields=None):
     """One row per draw per metric. Draws that were never attempted are
     emitted as `attempted=0` rather than dropped: a cell that stopped on
     budget has a different denominator from one that ran out of successes,
@@ -142,6 +173,12 @@ def rows_from_variance(v, ledger=()):
     `purchase_unknown=1` instead. Tokens per second is output tokens over
     the time after the first token, so queueing and thinking that the host
     does not stream are not counted as slow generation.
+
+    A draw in `EXCLUDED` is emitted as `attempted=0, excluded=1`. With
+    `fields` (`field_verdicts`), each scored draw also gets `field_perfect`:
+    1 for a perfect draw that agrees on every field, 0 for any other; a
+    perfect draw the audit has no verdict for gets none, and its cell then
+    has no field-level rate.
     """
     bought = purchases(v, ledger)
     out = []
@@ -150,7 +187,9 @@ def rows_from_variance(v, ledger=()):
         for d in draws_of(cell):
             mode = failure_mode(d)
             uid = "d%02d" % d.draw
-            if mode == "not_attempted":
+            if (key, d.draw) in EXCLUDED:
+                metrics = [("attempted", 0), ("excluded", 1)]
+            elif mode == "not_attempted":
                 metrics = [("attempted", 0)]
             elif mode == "infra_error":
                 metrics = [("attempted", 0), ("infra_error", 1)]
@@ -167,6 +206,11 @@ def rows_from_variance(v, ledger=()):
                     ("redrawn", 1 if d.redraw_max_tokens else 0),
                     ("reasoning_tokens", d.reasoning_tokens),
                 ]
+                if fields is not None:
+                    fp = (fields.get((key, d.draw)) if mode == "perfect"
+                          else False)
+                    if fp is not None:
+                        metrics.append(("field_perfect", 1 if fp else 0))
                 i = bought.get((key, d.draw))
                 redrawn = d.truncated_output_tokens is not None
                 cut = bought.get((key, d.draw, "cut"))
@@ -268,6 +312,10 @@ def aggregate(rows):
         silent = var("silent_failure")
         n, k = len(perf), sum(perf)
         fails = n - k
+        # Field-level pass@1 (v2 pre-registration, deviation 4): stated only
+        # when every scored draw has a verdict.
+        fperf = var("field_perfect")
+        kf = sum(fperf) if n and len(fperf) == n else None
         n_silent = sum(silent)
         infra = sum(var("infra_error"))
         # A draw cut off at the cap is a harness failure and a v2 draw is
@@ -306,12 +354,18 @@ def aggregate(rows):
                 if r["experiment"] == "drift" and r["target"] == target
                 and r["model"].startswith("draw %s " % tag)]
         lo, hi = wilson(k, n)
+        flo, fhi = wilson(kf, n) if kf is not None else (None, None)
         e = {
             "target": target, "model": model, "condition": cond,
             "draws_attempted": sum(att), "draws_scored": n,
             "perfect": k,
             "success_rate": (float(k) / n) if n else None,
             "success_ci95": [round(lo, 4), round(hi, 4)],
+            "field_perfect": kf,
+            "field_success_rate": (float(kf) / n) if kf is not None else None,
+            "field_success_ci95": ([round(flo, 4), round(fhi, 4)]
+                                   if kf is not None else None),
+            "draws_excluded": sum(var("excluded")),
             "failures": fails, "silent_failures": n_silent,
             "usd_total": round(usd, 6),
             "usd_this_run": round(usd_run, 6),
@@ -325,6 +379,9 @@ def aggregate(rows):
             # a partial bill understates the cost.
             "usd_per_success": (round(usd / k, 6)
                                 if k and usd and not unknown else None),
+            "usd_per_field_success": (round(usd / kf, 6)
+                                      if kf and usd and not unknown
+                                      else None),
             # True when some of the draws were scored from the cache, so the
             # spend above was paid by earlier runs rather than this one.
             "usd_is_replayed": bool(usd and usd_run < usd),

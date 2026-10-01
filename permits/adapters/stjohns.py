@@ -2,7 +2,7 @@
 """Adapter for St. Johns County FL's WATS permit search - the best source yet.
 
 Spike A filed this portal in bucket 4, "search-only, needs a known address,
-parcel or permit number", and DESIGN.md's 73.1% unit-weighted reachability
+parcel or permit number", and docs/design/history.md's 73.1% unit-weighted reachability
 rests on bucket 4 being acquirable. It was misclassified. The form renders
 `TextBoxFromDt`/`TextBoxToDt`, a date range is not an address, and a
 date-bounded POST returns the whole result set in one request.

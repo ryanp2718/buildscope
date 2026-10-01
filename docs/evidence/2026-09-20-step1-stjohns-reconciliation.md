@@ -142,7 +142,7 @@ over the same 28-office sample with bucket 0 excluded from the denominator (n = 
 | **Enumerable without bucket 4 (1–3 + 5)** | 11.1% / **39.2%** | 14.8% / **67.3%** |
 
 **The gate metric itself does not move** — a row travelling from 4 to 3 stays inside "reachable". What
-moves is the **fallback floor**: DESIGN.md's revised gate names 39.2% as what reachability collapses to if
+moves is the **fallback floor**: docs/design/history.md's revised gate names 39.2% as what reachability collapses to if
 bucket-4 partitioning fails, and 39.2% is below the 50% halting line. That floor is now **67.3%**, above
 the line. The stated bucket-4 dependency is discharged.
 

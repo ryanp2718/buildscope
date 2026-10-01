@@ -7,7 +7,7 @@ silently, which is `docs/design/testing.md`'s bar for writing a test at all:
 - **The stripper deleted the only marker that identifies an Accela data row.**
   `class` was not on the keep-list, so `class="ACA_TabRow_Odd"` vanished from
   all 42 rows while the rows themselves stayed. The page still looked whole.
-  DESIGN.md section 6 lever 4 claims an order-of-magnitude token reduction
+  docs/design/history.md section 6 lever 4 claims an order-of-magnitude token reduction
   "against identical extraction quality"; the reduction was measured and the
   quality was not.
 - **The synthesis window twice landed on a part of the page with no permit
@@ -48,7 +48,7 @@ def page(p):
 class TestPricing(unittest.TestCase):
 
     def test_prices_match_the_design_document(self):
-        """The rates are quoted from DESIGN.md section 6. If they are edited
+        """The rates are quoted from docs/design/history.md section 6. If they are edited
         here without editing there, a cost figure and its stated source
         disagree - which is the re-quoting failure in its cheapest form."""
         self.assertEqual(infer.price("claude-opus-5"), (5.0, 25.0))

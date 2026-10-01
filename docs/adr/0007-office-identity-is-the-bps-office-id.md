@@ -1,10 +1,10 @@
 # ADR-0007: Office identity is `(state_fips, bps_id)`, assigned from the frame and never from a name, a domain, or a probe artifact
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
-*Back-fill. The decision is D3 in `DESIGN.md` and predates this directory;
+*Back-fill. The decision is D3 in `docs/design/history.md` and predates this directory;
 [ADR-0003](0003-jurisdiction-identity-is-bps-scoped.md) already builds on it and settles its **scope**.
 This ADR records the base decision — what the key is, and where it is allowed to come from — and resolves
 a discrepancy between D3 as written and what the project actually does.*
@@ -106,7 +106,7 @@ frame check above should be built rather than considered.
 
 ## References
 
-- `DESIGN.md` §D3, §2 (frame composition), §8 (Spike A method note on name matching)
+- `docs/design/history.md` §D3, §2 (frame composition), §8 (Spike A method note on name matching)
 - [`docs/design/entity-resolution.md`](../design/entity-resolution.md) — "Problem 1 is solved and closed",
   the `source_office_link` schema, and the `office` view
 - [`docs/evidence/2026-09-20-step1-stjohns-reconciliation.md`](../evidence/2026-09-20-step1-stjohns-reconciliation.md)

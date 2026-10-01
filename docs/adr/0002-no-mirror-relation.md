@@ -1,6 +1,6 @@
 # ADR-0002: No mirror relation; cross-portal duplication is an ordering plus observation-layer dedup
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-20
 
@@ -83,4 +83,4 @@ superseded rather than amended.
 
 - [ADR-0001](0001-source-office-link-is-an-evidence-bearing-relation.md) - the link relation
 - [`docs/design/entity-resolution.md`](../design/entity-resolution.md) - `fetch_precedence`
-- `DESIGN.md` §D5 (`observation_key` versus surrogate `permit_id`), §D7, Spike B protocol
+- `docs/design/history.md` §D5 (`observation_key` versus surrogate `permit_id`), §D7, Spike B protocol

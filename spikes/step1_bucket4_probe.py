@@ -2,7 +2,7 @@
 """Is bucket 4 really bucket 4? Probing the address-keyed portals by date.
 
 Spike A put three portals in bucket 4 - "search-only, needs a known address,
-parcel or permit number" - and DESIGN.md's 73.1% unit-weighted reachability
+parcel or permit number" - and docs/design/history.md's 73.1% unit-weighted reachability
 rests entirely on that bucket turning out to be acquirable. The Accela probes
 settled bucket *3*, not this. Accela was never in bucket 4.
 

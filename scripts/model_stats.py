@@ -36,8 +36,8 @@ sys.path.insert(0, ROOT)
 
 from permits import fileio, infer                           # noqa: E402
 from permits.rollup import (                                 # noqa: E402
-    FIELDS, aggregate, rows_from_drift, rows_from_ledger, rows_from_variance,
-    short, unclaimed)
+    FIELDS, aggregate, field_verdicts, rows_from_drift, rows_from_ledger,
+    rows_from_variance, short, unclaimed)
 
 OUT = os.path.join(ROOT, "data", "infer")
 
@@ -89,8 +89,10 @@ def main():
     rows = []
     ledger = read_ledger(os.path.join(OUT, "ledger.jsonl"))
     v = load("variance.json")
+    audit = load(os.path.join("verifier", "field_audit.json"))
     if v:
-        rows += rows_from_variance(v, ledger)
+        rows += rows_from_variance(
+            v, ledger, field_verdicts(audit) if audit is not None else None)
     dr = load("drift.json")
     if dr:
         rows += rows_from_drift(dr)

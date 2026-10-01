@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """The identity this project presents to the servers it fetches from.
 
-DESIGN.md section 11 commits to identifying the crawler with a real contact
+docs/design/history.md section 11 commits to identifying the crawler with a real contact
 address. That commitment was previously honoured by a literal string copied
 into eight scripts, which made the contact address the one value in the
 project that could not be changed in one place - and which put a personal
@@ -69,6 +69,6 @@ def user_agent():
             "present and no request will be made.\n"
             "Set %s, or write one line into %s.\n"
             "A contact URL or role address is preferred over a personal "
-            "mailbox - see DESIGN.md section 11."
+            "mailbox - see docs/design/history.md section 11."
             % (CONTACT_ENV, CONTACT_FILE))
     return "%s/%s (%s; contact: %s)" % (NAME, VERSION, PURPOSE, c)

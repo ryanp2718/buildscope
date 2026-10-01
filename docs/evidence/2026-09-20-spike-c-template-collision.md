@@ -19,7 +19,7 @@ Cost:      $0 inference. Offline, stdlib only; no fetching, no model calls.
 
 D8 claims that keying the extractor cache on DOM structure rather than domain
 "collapses the amortization denominator from ~20,000 sites to plausibly a few hundred distinct vendor
-templates". Every cost figure in `DESIGN.md` section 6 and the headline amortization ratio in section 5
+templates". Every cost figure in `docs/design/history.md` section 6 and the headline amortization ratio in section 5
 rest on that sentence, and nothing had tested it. Do jurisdictions actually collapse onto shared
 templates?
 
@@ -163,4 +163,4 @@ not supported by anything measured.
 - [Spike A](2026-09-20-spike-a-portal-enumerability.md) - the corpus this ran over, and the 75%
   pattern-probe false-positive rate that made the trust filter necessary
 - [Tier-2 rerun](2026-09-20-tier2-issuing-level-rerun.md) - the bucket distribution behind finding 4
-- `DESIGN.md` D8, section 5 amortization ratio, section 6 cost model - all three depend on this result
+- `docs/design/history.md` D8, section 5 amortization ratio, section 6 cost model - all three depend on this result

@@ -16,7 +16,7 @@ leaked into the cache key and silently orphaned $0.60 of paid responses. The
 SDK supplies retry, backoff and streaming; what stays here is the part it does
 not have.
 
-**Every call is logged before it is billed.** DESIGN.md section 6: "Log spend
+**Every call is logged before it is billed.** docs/design/history.md section 6: "Log spend
 per call class from the first call so the tripwire is readable." The tripwire
 is the fallback fraction - if spend starts tracking the high rows of the
 section 6 table, the finding is that D8 is not working, and that is only

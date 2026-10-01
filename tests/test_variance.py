@@ -374,6 +374,16 @@ class TestTheHarnessDoesNotDecideTheAnswer(unittest.TestCase):
         self.assertIn("def extract", src)
         self.assertNotIn("rows = extract(page)", src)
 
+    def test_a_reply_without_the_contract_has_no_code(self):
+        """grok-4.7 announced a plan and ended its turn; the sentence went to
+        the static audit and was recorded as a refusal."""
+        for text in ("The grid is an Accela result table; I'll key off that "
+                     "template's row markup.",
+                     "```python\nrows = parse(page)\n```\n"):
+            self.assertEqual(
+                self.C.extract_block(text, self.C.CODEBLOCK, "def extract("),
+                "")
+
     def test_unbalanced_fences_do_not_walk_out_of_phase(self):
         """The real failure: nine fences, one of them opening where a close
         was due, which reassigned the answer's closing fence to a sketch."""

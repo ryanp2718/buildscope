@@ -1,6 +1,6 @@
 # ADR-0016: Tests are replay over the raw store, published numbers are pinned, and the package boundary ratchets
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
@@ -58,7 +58,7 @@ where it is.
   caught four defects at zero request cost.
 - **Every published figure is recomputed from the artifact that produced it.**
   `tests/test_artifacts.py` derives the gate metric from `classification.csv` and asserts the exact
-  numbers the evidence reports and `DESIGN.md` quote. **These assertions are supposed to fail when a
+  numbers the evidence reports and `docs/design/history.md` quote. **These assertions are supposed to fail when a
   measurement changes** — the failure is the reminder to write a new dated report and update the prose,
   which is the only mechanism that has ever been proposed for the re-quoting failure above.
 - **A test corresponds to a defect or to an invariant a published number depends on.** Coverage is not the
@@ -133,7 +133,7 @@ collaborator.
 
 ## References
 
-- `DESIGN.md` §9 (obligations), §5 (the drift alarm)
+- `docs/design/history.md` §9 (obligations), §5 (the drift alarm)
 - [ADR-0006](0006-the-observation-log-is-the-source-of-truth.md) — replay is why the corpus is a test set
 - [ADR-0014](0014-the-golden-set-precedes-the-pipeline.md) — the golden set this does not replace
 - [`docs/design/testing.md`](../design/testing.md) — what each file covers

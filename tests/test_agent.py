@@ -29,9 +29,6 @@ from permits import infer                                     # noqa: E402
 from permits.agent import graph as G                          # noqa: E402
 from permits.agent import tools as T                          # noqa: E402
 
-FIELDS = ["native_id", "issued_date", "address", "permit_type", "status",
-          "structure_code", "contractor"]
-
 
 def _page(ids):
     rows = "".join(
@@ -68,7 +65,7 @@ def _workspace():
         with io.open(p, "w", encoding="utf-8") as fh:
             fh.write(_page(ids))
         paths.append(p)
-    return T.Workspace(paths, FIELDS, os.path.join(d, "work"))
+    return T.Workspace(paths, os.path.join(d, "work"))
 
 
 class Crash(Exception):
@@ -336,13 +333,13 @@ class TestTheWorkspace(unittest.TestCase):
         self.assertTrue(out.startswith("REJECT: refused before running"))
         self.assertIn("imports os", out)
 
-    def test_notes_do_not_decide_acceptance(self):
-        """Fields the pages do not print are null by contract, so an empty
-        column is a note, not a failure."""
+    def test_a_column_empty_on_every_row_is_not_mentioned(self):
+        """Fields the pages do not print are null by contract. The note that
+        said so fired on every correct Clark module and was removed
+        (2026-10-01)."""
         out = _workspace().check(GOOD)
         self.assertTrue(out.startswith("ACCEPT"))
-        self.assertIn("empty on every row: status, structure_code, "
-                      "contractor", out)
+        self.assertNotIn("empty on every row", out)
 
     def test_stray_brackets_are_noted(self):
         edgy = GOOD.replace('"native_id": cells[0]',

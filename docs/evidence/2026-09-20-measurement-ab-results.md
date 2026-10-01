@@ -102,7 +102,7 @@ pre-registration said detail governs if the two disagree; they do not disagree.
 **1. Index and detail are different templates - C3 is 0.19, not 0.9.** Within a single portal, the result
 grid and the record page share almost no structure. This is the confound check, and it passes, but it
 also means **each tenancy needs at least two synthesized extractors, not one.** No cost estimate in
-`DESIGN.md` has ever counted that factor. It is a straight multiplier on synthesis cost.
+`docs/design/history.md` has ever counted that factor. It is a straight multiplier on synthesis cost.
 
 **2. Cross-jurisdiction template reuse is real - inside a statewide tenancy.** The weakest C2 pair,
 0.863, is `oregon_detail1_TALENT` vs `oregon_detail2_MARION_CO`: two records belonging to **two different
@@ -194,7 +194,7 @@ optimistic.
 **That C1 is the right clustering threshold - or that 0.80 is.** This is the central unresolved
 parameter and the reason B returns a curve rather than a number.
 
-**Anything about bucket 4, 5, 6 or 7 portals.** The revised gate in `DESIGN.md` section 8 turns on
+**Anything about bucket 4, 5, 6 or 7 portals.** The revised gate in `docs/design/history.md` section 8 turns on
 whether bucket-4 portals can be enumerated by partitioned querying within budget. Neither measurement
 here touches that question, and it is now the most decision-relevant unknown in the project.
 

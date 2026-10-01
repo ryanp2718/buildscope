@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Spike A, step 1: draw the stratified portal-enumerability sample.
 
-Per the Spike A protocol in DESIGN.md:
+Per the Spike A protocol in docs/design/history.md:
   - ~10 from the top BPS unit-volume decile (tier-1 / 'collected')
   - ~10 mid-volume tier-1
   - ~8 tier-2 ('imputed_tier', low average annual units)

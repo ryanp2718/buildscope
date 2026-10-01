@@ -3,7 +3,7 @@ name: CI
 # The suite replays over stored pages and makes no network calls, so this
 # needs no secrets and cannot spend money. What it cannot do is run the ~28
 # tests that read the private raw store; those skip here and run locally.
-# See tests/__init__.py and ADR-0015.
+# See tests/__init__.py.
 
 on:
   push:

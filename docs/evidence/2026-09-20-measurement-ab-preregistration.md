@@ -143,7 +143,7 @@ score licenses *trying* a shared extractor, not asserting one works; that requir
 set.
 
 **Anything about bucket 4, 5, 6 or 7 portals**, which is now the gate-relevant unknown. The revised gate
-in DESIGN.md section 8 turns on whether bucket-4 portals can be enumerated by partitioned querying
+in docs/design/history.md section 8 turns on whether bucket-4 portals can be enumerated by partitioned querying
 within budget. Neither measurement here touches that question.
 
 **That the discovered tenancy list is representative.** Tenancies that are publicly linked and reachable

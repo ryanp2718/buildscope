@@ -1,10 +1,10 @@
 # ADR-0010: Permit identity has two levels — a deterministic observation key and a resolved permit id
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
-*Back-fill. The decision is D5 in `DESIGN.md` and predates this directory. It is the most load-bearing of
+*Back-fill. The decision is D5 in `docs/design/history.md` and predates this directory. It is the most load-bearing of
 the remaining back-fills because the headline reconciliation metric is computed downstream of it.*
 
 ## Context
@@ -106,7 +106,7 @@ carrying an unbuilt second level would then be cargo.
 
 ## References
 
-- `DESIGN.md` §D5, §D6, §4 (data model sketch)
+- `docs/design/history.md` §D5, §D6, §4 (data model sketch)
 - [ADR-0006](0006-the-observation-log-is-the-source-of-truth.md) — why a derived view may not be written
   into the log
 - [ADR-0002](0002-no-mirror-relation.md) — cross-portal duplication as observation-layer dedup

@@ -1,10 +1,10 @@
 # ADR-0015: The raw store is permanently private; only derived tables are releasable
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
-*Back-fill. The decision is D10 in `DESIGN.md`, dated 2026-09-19 there and carrying its own rationale.
+*Back-fill. The decision is D10 in `docs/design/history.md`, dated 2026-09-19 there and carrying its own rationale.
 This ADR records it in the permanent series and adds what has been observed since.*
 
 ## Context
@@ -17,7 +17,7 @@ every downstream stage a pure function of them, so extraction improves by replay
 re-crawling. That is the property the whole architecture is built around, and it argues for keeping the
 raw store forever.
 
-`DESIGN.md` §11 separately establishes that owner-builder permits carry an individual's name attached to
+`docs/design/history.md` §11 separately establishes that owner-builder permits carry an individual's name attached to
 their home address. **Those names are in the raw HTML.** Not in a field this project chose to extract — in
 the bytes, whether or not anything ever reads them.
 
@@ -88,7 +88,7 @@ added, because the copy policy does not exist and would need to.
 
 ## References
 
-- `DESIGN.md` §D10, §D1, §11 (legal and ethical constraints)
+- `docs/design/history.md` §D10, §D1, §11 (legal and ethical constraints)
 - [ADR-0006](0006-the-observation-log-is-the-source-of-truth.md) — the replay property this constrains
 - [ADR-0014](0014-the-golden-set-precedes-the-pipeline.md) — labelling from the raw store
 - [`docs/evidence/2026-09-21-bucket4-resolution.md`](../evidence/2026-09-21-bucket4-resolution.md)

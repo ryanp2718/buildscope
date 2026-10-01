@@ -211,4 +211,4 @@ read on 2026-09-20 and were not re-read later, so revision drift is unmeasured.
 - `data/spike_b/manifest.csv` - append-only provenance, 58 rows over 35 pages
 - [Spike A](2026-09-20-spike-a-portal-enumerability.md) - the bucket-1 figures
   this qualifies
-- `DESIGN.md` section 8 Spike B protocol; section 9 claim 6
+- `docs/design/history.md` section 8 Spike B protocol; section 9 claim 6

@@ -144,6 +144,68 @@
   details.data th.l, details.data td.l { text-align: left; }
   details.data thead th { font-weight: 600; border-bottom-color: var(--ink); }
 
+  /* section 1: how a draw works */
+  .how { margin: 1.4rem auto 2rem; }
+  .how-grid { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: .8rem;
+              align-items: stretch; }
+  .how-panel { background: var(--panel); border: 1px solid var(--rule); padding: .8rem .9rem;
+               display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
+  .how-head { font: 600 13px/1.35 var(--sans); margin: 0; }
+  .how-arrow { align-self: center; font: 600 22px/1 var(--sans); color: var(--faint); }
+  .mock-bar { height: 7px; background: var(--rule); margin: 0 0 6px; }
+  .mock-bar.short { width: 45%; }
+  .mock-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .mock-grid i { display: block; height: 7px; background: var(--faint); opacity: .55; }
+  .mock-grid i.h { background: var(--ink); opacity: .8; }
+  pre.mock-code { margin: 0; font: 12px/1.5 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+                  white-space: pre; overflow-x: auto; color: var(--ink); }
+  table.mock-rows { border-collapse: collapse; font: 11.5px/1.3 var(--sans); width: 100%; }
+  table.mock-rows th { text-align: left; font-weight: 600; border-bottom: 1px solid var(--ink);
+                       padding: 0 .4rem .2rem 0; }
+  table.mock-rows td { padding: .25rem .4rem .25rem 0; border-bottom: 1px solid var(--rule); }
+  table.mock-rows td i { display: block; height: 7px; background: var(--pass); opacity: .7; }
+  .how figcaption { font: 13px/1.45 var(--sans); color: var(--mut); margin-top: .7rem; }
+  @media (max-width: 720px) {
+    .how-grid { grid-template-columns: 1fr; }
+    .how-arrow { transform: rotate(90deg); justify-self: center; }
+  }
+
+  /* section 4: the caption table */
+  .explain { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1.6rem;
+             align-items: center; margin: 1.2rem auto 1.5rem; }
+  pre.markup { margin: 0; background: var(--panel); border: 1px solid var(--rule); padding: .9rem 1rem;
+               font: 12.5px/1.55 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+               white-space: pre; overflow-x: auto; color: var(--mut); }
+  pre.markup .inner { background: var(--hilite); color: var(--ink); }
+  pre.markup .row { color: var(--pass); }
+  pre.markup .cut { color: var(--silent); font-weight: 700; }
+  .big { font: 800 2.6rem/1 var(--sans); letter-spacing: -.02em; margin: 0 0 .4rem; }
+  .big-sub { font: 15px/1.45 var(--sans); color: var(--mut); margin: 0; }
+  .tag { display: inline-block; font: 600 11px/1 var(--sans); letter-spacing: .06em;
+         text-transform: uppercase; color: var(--mut); border: 1px solid var(--rule);
+         padding: .3rem .45rem; margin-bottom: .8rem; }
+  @media (max-width: 720px) { .explain { grid-template-columns: 1fr; } }
+  @media (max-width: 480px) { pre.markup { font-size: 9.5px; padding: .7rem .6rem; } }
+
+  /* sections 5-7: dot, arrow and duration charts */
+  .chart { margin: 1rem auto .4rem; }
+  .p-lbl { font-size: 12px; }
+  .p-ci { stroke-width: 1.4; }
+  .ef-arrow { fill: none; stroke: var(--faint); stroke-width: 1.6; }
+  .ef-arrow.claimed { stroke: var(--ink); stroke-width: 2.4; }
+  .ef-head { fill: var(--faint); }
+  .ef-head.claimed { fill: var(--ink); }
+  .ef-zero { fill: var(--faint); }
+  .ef-panel { font-size: 12px; font-weight: 600; }
+  .ref-line { stroke: var(--silent); stroke-dasharray: 3 3; }
+  .ref-lbl { font-size: 11px; fill: var(--silent); font-weight: 600; }
+  .key { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font: 13px/1.3 var(--sans);
+         color: var(--mut); margin: .2rem 0 .6rem; }
+  .key span { display: inline-flex; align-items: center; gap: .35rem; }
+  .key svg { display: inline-block; }
+  ul.next { padding-left: 1.1rem; }
+  ul.next li { margin-bottom: .8rem; }
+
   .note { font: 13px/1.5 var(--sans); color: var(--mut); }
   footer { border-top: 1px solid var(--rule); margin-top: 4rem; padding-block: 1.2rem 3rem; }
   noscript p { font: 15px/1.5 var(--sans); border: 1px solid var(--rule); padding: .8rem 1rem; }
@@ -154,19 +216,51 @@
 </head>
 <body>
 
-<p class="preview" id="preview">Preview built from stage 1 of the run. Top- and mid-tier models
-have one draw each until stages 2 and 3; every chart updates when the data does.
+<p class="preview" id="preview">Protocol v2 model comparison, run 28-30 September 2026.
 <span id="asof"></span></p>
 
 <header class="top col">
   <p class="kicker">Language models writing web scrapers</p>
   <h1>The price of a program that works</h1>
   <p class="dek">We asked 19 language models to write the same scraper for a county permit portal,
-  again and again, and checked every attempt against a hand-written one. Cheap tokens bought
-  the working programs.</p>
+  again and again, and checked every attempt against a hand-written one. Price per token turned
+  out to be a poor guide to what a working program costs.</p>
 </header>
 
 <main>
+<figure class="wide how" aria-label="How one draw works: a permit portal's search results page goes to a language model, which writes a Python extractor; the extractor's rows are checked against a hand-written reference.">
+  <div class="how-grid">
+    <div class="how-panel">
+      <p class="how-head">A county's permit search results</p>
+      <div><div class="mock-bar"></div><div class="mock-bar short"></div></div>
+      <div class="mock-grid"><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="how-arrow" aria-hidden="true">&rarr;</div>
+    <div class="how-panel">
+      <p class="how-head">A language model writes an extractor</p>
+<pre class="mock-code">def extract(html):
+    rows = []
+    for tr in grid_rows(html):
+        rows.append({...})
+    return rows</pre>
+    </div>
+    <div class="how-arrow" aria-hidden="true">&rarr;</div>
+    <div class="how-panel">
+      <p class="how-head">Its rows, checked against a hand-written extractor</p>
+      <table class="mock-rows" aria-hidden="true">
+        <tr><th>permit</th><th>address</th><th>status</th></tr>
+        <tr><td><i></i></td><td><i></i></td><td><i></i></td></tr>
+        <tr><td><i></i></td><td><i></i></td><td><i></i></td></tr>
+        <tr><td><i></i></td><td><i></i></td><td><i></i></td></tr>
+      </table>
+    </div>
+  </div>
+  <figcaption><span class="num" data-q="nModels">26</span> models,
+  <span class="num" data-q="nTargets">3</span> county and city permit portals, the same page and the
+  same instructions for every model, and every attempt checked on every saved page of the portal.</figcaption>
+</figure>
+
 <section class="col" id="what">
   <p>Each attempt, or <em>draw</em>, is one request: the model gets a sample of a portal's search
   results page and must write a Python extractor that returns every permit on it as rows. The
@@ -248,6 +342,120 @@ have one draw each until stages 2 and 3; every chart updates when the data does.
   <details class="data wide"><summary>Show the data</summary><div data-table="t-draws"></div></details>
 </section>
 
+<section id="caption">
+  <div class="col">
+    <h2>One table inside a table</h2>
+    <p>Most of the extractors that returned nothing on Clark County share one cause. Clark's results
+    grid carries a small table
+    inside its first row: the bar that reads "Showing 1-10 of 100+". An extractor that finds the
+    grid and reads up to the first closing table tag stops inside that bar, before any permit, and
+    returns nothing.</p>
+  </div>
+  <div class="explain wide">
+<pre class="markup" aria-label="Simplified markup of Clark County's results grid. Inside the grid's first row sits a small table holding the 'Showing 1-10 of 100+' bar; the permit rows come after it."><span>&lt;table class="ACA_GridView"&gt;</span>
+  <span>&lt;caption&gt;Record list&lt;/caption&gt;</span>
+  <span>&lt;tr&gt;&lt;td&gt;&lt;div class="aca_gridview_caption"&gt;</span>
+    <span class="inner">&lt;table&gt; Showing 1-10 of 100+ | Export &lt;/table&gt;</span>
+    <span class="cut">                                  ^ stops here</span>
+  <span>&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;</span>
+  <span class="row">&lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</span>
+  <span class="row">&lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</span>
+  <span>...</span>
+<span>&lt;/table&gt;</span></pre>
+    <div>
+      <p class="tag">Exploratory</p>
+      <p class="big"><span data-q="capBack">84</span> of <span data-q="capEmpty">112</span></p>
+      <p class="big-sub">Clark extractors that returned nothing on some page return the right rows once
+      that one small table is removed. <span data-q="capPass">18</span> of them then pass outright;
+      the rest also stumble on something else.</p>
+    </div>
+  </div>
+  <div class="col">
+    <p class="note">Santa Barbara's grid carries the same small table, but the sample of the page
+    each model was shown there starts just after it, at the grid's header row. Exploratory: this
+    re-ran the stored extractors on edited pages after the results were in, and is not part of the
+    pre-registered analysis.</p>
+  </div>
+</section>
+
+<section id="ports">
+  <div class="col">
+    <h2>Pass here, fail there</h2>
+    <p>Clark County was the portal the instructions were developed on. St. Johns County, Florida, is
+    a different vendor's grid, and Santa Barbara, California, the same vendor as Clark on a
+    different template, was held out: nobody looked at a model's output on it until the run.
+    <span data-q="portsLead"></span></p>
+  </div>
+  <figure class="wide chart">
+    <p class="fig-title">pass@1 on three portals</p>
+    <p class="fig-sub">One row per model, ordered by its Clark rate. Lines are 95% Wilson intervals.</p>
+    <div class="key" id="ports-key"></div>
+    <div id="ports-chart" role="img" aria-label="For each model, its pass rate on Clark County, St. Johns County and Santa Barbara, with intervals."></div>
+  </figure>
+  <details class="data wide"><summary>Show the data</summary><div data-table="t-ports"></div></details>
+</section>
+
+<section id="effects">
+  <div class="col">
+    <h2>Instructions and settings barely moved the needle</h2>
+    <p>Two changes were tested on the same models. A one-paragraph hint about Clark's row layout,
+    written from the failures, was added to the prompt; and seven models from an earlier run were
+    re-run with this run's fairer settings. Each arrow runs from before to after. A dark arrow is a
+    change the data can tell from chance; a pale one is not.
+    <span data-q="effectsLead"></span></p>
+  </div>
+  <figure class="wide chart">
+    <div id="effects-chart" role="img" aria-label="Arrows from each model's pass rate before a change to its rate after: the hint on Clark County, and the earlier settings against this run's on Clark County and St. Johns County."></div>
+  </figure>
+  <details class="data wide"><summary>Show the data</summary><div data-table="t-effects"></div></details>
+  <div class="col">
+    <p class="note">With ten draws a side, only a difference of about 60 points or more is
+    reliably detectable, so a pale arrow means "not shown", not "no effect".</p>
+  </div>
+</section>
+
+<section id="fair">
+  <div class="col">
+    <h2>How the test was kept fair</h2>
+    <p>Every model got the same prompt, a 64,000-token output budget, its lab's default reasoning
+    level and its model card's sampling settings, and was served only by hosts running the weights
+    at the lab's own precision. A draw cut off at the budget was re-drawn once at a higher cap
+    (<span class="num" data-q="nRedrawn">35</span> draws), so a long answer counts as a cost
+    rather than a failure.</p>
+    <p>Failures of the host are not the model's. Some hosts close long streams at fixed times, and
+    an early version of the harness scored those half-finished answers as the model's failures.
+    <span data-q="wallLead"></span> Now such a call is retried, and a draw whose host fails twice
+    is left out of the rate rather than counted against the model.</p>
+  </div>
+  <figure class="wide chart">
+    <p class="fig-title">GLM-5.3 Flash: every call, by how long it ran</p>
+    <p class="fig-sub">Dashed lines at 301 and 602 seconds, where hosts closed streams.</p>
+    <div id="wall-chart" role="img" aria-label="Each of GLM-5.3 Flash's calls as a dot on a time axis, grouped by how the call ended. Calls closed by the host cluster at 301 and 602 seconds."></div>
+  </figure>
+  <details class="data wide"><summary>Show the data</summary><div data-table="t-wall"></div></details>
+  <details class="data wide"><summary>Settings and hosts per model</summary><div data-table="t-settings"></div></details>
+</section>
+
+<section class="col" id="next">
+  <h2>Scope and next steps</h2>
+  <ul class="next">
+    <li><b>More portals.</b> Three portals, one of them held out at five draws per model, already
+    rank models differently. Two more held-out portals, Polk County and Oregon's statewide system,
+    are collected and checked, and kept unused for the next test.</li>
+    <li><b>Letting the model run its program.</b> Every draw here is one attempt with no feedback.
+    A check that needs no reference picks a working extractor out of five draws almost as well as
+    an oracle; the next experiment gives a model tools to run and repair its own extractor, and
+    compares it with that at the same spend.</li>
+    <li><b>Every field, not just every record.</b> A pass here means the right permits came out. On
+    St. Johns, <span class="num" data-q="sjFieldMiss">39 of 160</span> passing extractors got some
+    field wrong, most often by leaving a whole column empty; field-level pass rates are reported
+    beside pass@1 in the full report.</li>
+    <li><b>Effort and the flagships.</b> Each model ran at its lab's default reasoning level. An
+    effort sweep, and the two most expensive flagship models left out for cost, are the obvious
+    additions.</li>
+  </ul>
+</section>
+
 <noscript><div class="col"><p>The charts on this page need JavaScript. Every figure behind them
 is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">data.json</a>.</p></div></noscript>
 </main>
@@ -257,6 +465,8 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
   not accuracy against the portal itself. Costs are what each draw cost to buy, in US dollars;
   prices are list prices. Intervals are 95% Wilson score intervals; cost-per-success ranges combine
   a Beta posterior on the pass rate with a bootstrap of the cost per draw.</p>
+  <p>The full report, with every pre-registered answer, interval and deviation:
+  <a href="https://github.com/ryanp2718/buildscope/blob/main/docs/evidence/2026-10-01-v2-run-results.md">2026-10-01 v2 run results</a>.</p>
   <p>Data: <a href="tables.html">the figures as tables</a>, <a href="data.json">data.json</a>. Source:
   <a href="https://github.com/ryanp2718/buildscope">github.com/ryanp2718/buildscope</a>.</p>
 </footer>
@@ -347,8 +557,9 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     var pmin = d3.min(prices), pmax = d3.max(prices);
     fill("priceSpan", Math.round(pmax / pmin));
     fill("priceMin", price(pmin)); fill("priceMax", price(pmax));
+    // The best record, and among equals the cheapest per token.
     var best = pts.filter(function (p) { return p.c.n >= 10; })
-                  .sort(function (a, b) { return b.c.rate - a.c.rate || b.c.n - a.c.n; })[0];
+                  .sort(function (a, b) { return b.c.rate - a.c.rate || a.m.price_out - b.m.price_out; })[0];
     if (best) {
       fill("bestName", name(best.m.id));
       fill("bestK", best.c.k + " of " + best.c.n);
@@ -363,6 +574,10 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     slopeChart(document.getElementById("slope-chart"), pts, held);
     unitChart(document.getElementById("unit-chart"), data, models, cellOf, drawsOf);
     legend();
+    fillCounts(data, cellOf, drawsOf);
+    portsChart(document.getElementById("ports-chart"), data, cellOf);
+    effectsChart(document.getElementById("effects-chart"), data);
+    wallChart(document.getElementById("wall-chart"), data.wall || []);
     // Label columns are measured, so measure again once the web fonts are in.
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { slopeChart(document.getElementById("slope-chart"), pts, held); });
@@ -390,6 +605,9 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
         priceFig.redraw();
         slopeChart(document.getElementById("slope-chart"), pts, held);
         unitChart(document.getElementById("unit-chart"), data, models, cellOf, drawsOf);
+        portsChart(document.getElementById("ports-chart"), data, cellOf);
+        effectsChart(document.getElementById("effects-chart"), data);
+        wallChart(document.getElementById("wall-chart"), data.wall || []);
       }, 150);
     });
   }
@@ -477,7 +695,7 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
         sg.append("line").attr("class", "shelf-line").attr("x1", M.l).attr("x2", W - M.r)
           .attr("y1", shelfY + 8).attr("y2", shelfY + 8);
         sg.append("text").attr("class", "shelf-lbl").attr("x", M.l).attr("y", shelfY - 2)
-          .text("NO PASSING DRAW YET");
+          .text("NO PASSING DRAW");
         var named = pts.filter(function (p) { return !ok(p) && p.c.n > 1; })
                        .sort(function (a, b) { return a.m.price_out - b.m.price_out; })
                        .map(function (p) { return name(p.m.id) + " (0 of " + p.c.n + ")"; });
@@ -529,16 +747,30 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
       var labelled = pts.filter(function (p) {
         return visible(p) && !single(p) && !(cost && !ok(p));
       });
-      var ys = nudge(labelled.map(function (p) { return { id: p.m.id, y: yOf(p), x: X(p.m.price_out) }; }), 13);
+      // Each label's horizontal extent, measured: on the dot's right, or on
+      // its left where the right would run past the edge. The de-overlap
+      // compares extents, so a flipped label is not stacked against labels
+      // on the other side of the plot.
+      var meas = svg.append("text").attr("class", "lbl").style("visibility", "hidden");
+      var flip = {};
+      var items = labelled.map(function (p) {
+        var w = meas.text(name(p.m.id)).node().getComputedTextLength();
+        var x = X(p.m.price_out), f = x + 9 + w > W - 2;
+        flip[p.m.id] = f;
+        return { id: p.m.id, y: yOf(p), x0: f ? x - 9 - w : x + 9, x1: f ? x - 9 : x + 9 + w };
+      });
+      meas.remove();
+      var ys = nudge(items, 13);
       var lab = svg.select(".labels").selectAll("text").data(labelled, function (p) { return p.m.id; });
       lab.exit().remove();
       lab = lab.enter().append("text").attr("class", "lbl").attr("dy", "0.32em")
         .attr("x", function (p) { return X(p.m.price_out) + 9; })
         .attr("y", function (p) { return ys[p.m.id]; })
         .merge(lab);
-      lab.classed("dim", dim).text(function (p) { return name(p.m.id); })
+      lab.classed("dim", dim).text(function (p) { return name(p.m.id); });
+      lab.attr("text-anchor", function (p) { return flip[p.m.id] ? "end" : "start"; })
         .transition(t)
-        .attr("x", function (p) { return X(p.m.price_out) + 9; })
+        .attr("x", function (p) { return X(p.m.price_out) + (flip[p.m.id] ? -9 : 9); })
         .attr("y", function (p) { return ys[p.m.id]; });
     }
 
@@ -550,7 +782,7 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
         "Cost per draw " + usd(c.usd_per_draw) + "<br>" +
         (c.usd_per_success != null
           ? "Cost per success " + usd(c.usd_per_success) + (r ? " (95% " + usd(r.jeffreys[0]) + "&ndash;" + usd(r.jeffreys[2]) + ")" : "")
-          : "No passing draw yet");
+          : "No passing draw");
     }
 
     draw();
@@ -560,8 +792,9 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     };
   }
 
-  // Greedy vertical de-overlap of labels that share an x neighbourhood,
-  // working up from the bottom so labels at 0% stay above the axis.
+  // Greedy vertical de-overlap of labels whose horizontal extents
+  // [x0, x1] overlap, working up from the bottom so labels at 0% stay above
+  // the axis.
   function nudge(items, gap) {
     var out = {};
     items.sort(function (a, b) { return b.y - a.y; });
@@ -569,11 +802,13 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     items.forEach(function (it) {
       var y = it.y;
       for (var k = 0; k < 40; k++) {
-        var clash = placed.find(function (p) { return Math.abs(p.x - it.x) < 120 && Math.abs(p.y - y) < gap; });
+        var clash = placed.find(function (p) {
+          return p.x0 < it.x1 + 4 && it.x0 < p.x1 + 4 && Math.abs(p.y - y) < gap;
+        });
         if (!clash) break;
         y = clash.y - gap;
       }
-      placed.push({ x: it.x, y: y });
+      placed.push({ x0: it.x0, x1: it.x1, y: y });
       out[it.id] = y;
     });
     return out;
@@ -637,7 +872,7 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     };
     var headL = narrow ? "Price per token" : "By price per token";
     var headR = narrow ? "Cost per success" : "By cost per working extractor";
-    var shelfText = "NO PASSING DRAW YET";
+    var shelfText = "NO PASSING DRAW";
 
     var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
     // Label columns as wide as their longest label, measured, so nothing
@@ -692,7 +927,7 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     var c = p.c;
     return "<b>" + name(p.m.id) + "</b><br>List price " + price(p.m.price_out) + " / M output tokens<br>" +
       c.k + " of " + c.n + " draws passed<br>" +
-      (c.usd_per_success != null ? "Cost per success " + usd(c.usd_per_success) : "No passing draw yet");
+      (c.usd_per_success != null ? "Cost per success " + usd(c.usd_per_success) : "No passing draw");
   }
 
   // ---- Section 3: one square per draw ----
@@ -704,7 +939,9 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
       { t: "stjohns", head: "St. Johns", sub: "10 draws", per: 10, slots: 10 },
       { t: "santabarbara", head: "Santa Barbara", sub: "5 draws", per: 5, slots: 5 }
     ];
-    var labelW = W < 560 ? 104 : 190;
+    var labelW = W < 560
+      ? Math.min(W * 0.45, widestText(el, "row-lbl", data.models.map(function (m) { return name(m.id); })) + 8)
+      : 190;
     var gapCol = W < 560 ? 12 : 26;
     var units = 25;
     var s = Math.max(6, Math.min(15, Math.floor((W - labelW - 2 * gapCol - 60) / units / 1.2)));
@@ -781,6 +1018,217 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
         });
       });
       row.append("text").attr("class", "row-k").attr("x", kX).attr("y", s * 0.85).text(ks.join("  "));
+    });
+  }
+
+  // ---- Sections 1, 4, 7, 8: counts quoted in the prose ----
+  function fillCounts(data, cellOf, drawsOf) {
+    fill("nModels", data.models.length);
+    fill("nTargets", Object.keys(data.targets).length);
+    var cap = data.exploratory && data.exploratory.caption;
+    if (cap) { fill("capBack", cap.rows_back); fill("capEmpty", cap.silent_empty); fill("capPass", cap.pass); }
+    fill("nRedrawn", d3.sum(data.cells.filter(function (c) { return c.protocol === "v2"; }),
+                            function (c) { return c.draws_redrawn; }));
+    var sj = data.draws.filter(function (d) {
+      return d.cell.indexOf("stjohns|") === 0 && /\|v2$/.test(d.cell) && d.cell.indexOf("|hint|") < 0 &&
+             d.outcome === "perfect";
+    });
+    var miss = sj.filter(function (d) { return d.field_perfect === false; }).length;
+    fill("sjFieldMiss", miss + " of " + sj.length);
+  }
+
+  // The width of the widest of `strings` in class `cls`, measured in a
+  // throwaway SVG, so a label column fits its labels at any width.
+  function widestText(el, cls, strings) {
+    var svg = d3.select(el).append("svg").attr("width", 1).attr("height", 1);
+    var tx = svg.append("text").attr("class", cls), m = 0;
+    strings.forEach(function (s) { tx.text(s); m = Math.max(m, tx.node().getComputedTextLength()); });
+    svg.remove();
+    return m;
+  }
+  function shortTarget(data, t) { return data.targets[t].split(",")[0].replace(/ County$/, ""); }
+
+  var PORTS = [
+    { t: "clarkco", label: "Clark County", shape: d3.symbolCircle, color: "var(--ink)" },
+    { t: "stjohns", label: "St. Johns", shape: d3.symbolSquare, color: "var(--faint)" },
+    { t: "santabarbara", label: "Santa Barbara (held out)", shape: d3.symbolDiamond, color: "var(--pass)" }
+  ];
+
+  function keySwatch(shape, color) {
+    return '<svg width="12" height="12" viewBox="-6 -6 12 12" aria-hidden="true"><path d="' +
+      d3.symbol(shape, 52)() + '" fill="' + color + '"></path></svg>';
+  }
+
+  // ---- Section 5: three portals per model ----
+  function portsChart(el, data, cellOf) {
+    el.innerHTML = "";
+    document.getElementById("ports-key").innerHTML = PORTS.map(function (p) {
+      return "<span>" + keySwatch(p.shape, p.color) + p.label + "</span>";
+    }).join("");
+    var roster = data.models.filter(function (m) { return m.group === "roster"; });
+    var rows = roster.map(function (m) {
+      return { m: m, c: PORTS.map(function (p) { return cellOf[p.t + "|" + m.id + "|v2"]; }) };
+    }).filter(function (r) { return r.c[0]; });
+    rows.sort(function (a, b) { return b.c[0].rate - a.c[0].rate || a.m.price_out - b.m.price_out; });
+
+    // The lead: a model that passes Clark reliably and fails the held-out
+    // portal every time, and one that does the reverse.
+    var fwd = rows.find(function (r) { return r.c[0].ci95[0] >= 0.5 && r.c[2] && r.c[2].k === 0; });
+    var rev = rows.find(function (r) { return r.c[0].k === 0 && r.c[2] && r.c[2].ci95[0] >= 0.5; });
+    var lead = [];
+    if (fwd) lead.push(name(fwd.m.id) + " passed " + fwd.c[0].k + " of " + fwd.c[0].n + " on Clark and " +
+                       fwd.c[2].k + " of " + fwd.c[2].n + " on Santa Barbara");
+    if (rev) lead.push(name(rev.m.id) + " did the reverse, " + rev.c[0].k + " of " + rev.c[0].n + " and " +
+                       rev.c[2].k + " of " + rev.c[2].n);
+    fill("portsLead", lead.length ? lead.join("; ") + ". A rate on one portal says little about the next." : "");
+
+    var W = Math.max(el.clientWidth || 600, 320);
+    var labelW = Math.min(W * 0.5, widestText(el, "p-lbl", rows.map(function (r) { return name(r.m.id); })) + 14);
+    var M = { t: 22, r: 14, b: 30 };
+    var rowH = 20, H = M.t + rows.length * rowH + M.b;
+    var X = d3.scaleLinear().domain([0, 1]).range([labelW, W - M.r]);
+    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+    svg.append("g").attr("class", "grid").attr("transform", "translate(0," + (H - M.b) + ")")
+      .call(d3.axisBottom(X).ticks(5).tickSize(-(H - M.b - M.t + 6)).tickFormat(""))
+      .select(".domain").remove();
+    svg.append("g").attr("class", "axis").attr("transform", "translate(0," + (H - M.b) + ")")
+      .call(d3.axisBottom(X).ticks(5).tickFormat(d3.format(".0%")).tickSizeOuter(0));
+    var g = svg.append("g").selectAll("g").data(rows).join("g")
+      .attr("transform", function (r, i) { return "translate(0," + (M.t + i * rowH + rowH / 2) + ")"; });
+    g.append("text").attr("class", "p-lbl").attr("x", 0).attr("dy", "0.32em").text(function (r) { return name(r.m.id); });
+    PORTS.forEach(function (p, j) {
+      var off = (j - 1) * 5;
+      var has = g.filter(function (r) { return r.c[j]; });
+      has.append("line").attr("class", "p-ci").attr("stroke", p.color)
+        .attr("x1", function (r) { return X(r.c[j].ci95[0]); }).attr("x2", function (r) { return X(r.c[j].ci95[1]); })
+        .attr("y1", off).attr("y2", off).attr("opacity", 0.55);
+      has.append("path").attr("class", "p-mark")
+        .attr("d", d3.symbol(p.shape, 46))
+        .attr("fill", p.color).attr("stroke", "var(--bg)").attr("stroke-width", 1)
+        .attr("transform", function (r) { return "translate(" + X(r.c[j].rate) + "," + off + ")"; })
+        .on("mousemove", function (ev, r) {
+          var c = r.c[j];
+          showTip(ev, "<b>" + name(r.m.id) + "</b>, " + p.label + "<br>" + c.k + " of " + c.n + " passed (95% " +
+            pct(c.ci95[0]) + "&ndash;" + pct(c.ci95[1]) + ")");
+        }).on("mouseleave", hideTip);
+    });
+  }
+
+  // ---- Section 6: before and after ----
+  function effectsChart(el, data) {
+    el.innerHTML = "";
+    var cs = data.contrasts || [];
+    var hint = cs.filter(function (q) { return q.kind === "hint"; });
+    var conf = cs.filter(function (q) { return q.kind === "config"; });
+    var claimed = function (xs) { return xs.filter(function (q) { return q.claimed; }); };
+    var parts = [];
+    parts.push(claimed(hint).length ? claimed(hint).length + " of " + hint.length + " models changed detectably with the hint"
+                                    : "None of the " + hint.length + " models changed detectably with the hint");
+    var cc = claimed(conf);
+    parts.push(cc.length ? cc.length + " of " + conf.length + " re-run comparisons did with the new settings (" +
+      cc.map(function (q) {
+        return name(q.model) + " on " + shortTarget(data, q.target) +
+          (q.from[1] < 5 ? ", against an earlier figure of only " + q.from[1] + " draws" : "");
+      }).join("; ") + ")"
+      : "and none of the " + conf.length + " re-run comparisons did");
+    fill("effectsLead", parts.join("; ") + ".");
+
+    var W = Math.max(el.clientWidth || 600, 320);
+    var rowH = 17, M = { r: 14 };
+    var byName = function (a, b) { return d3.ascending(name(a.model), name(b.model)); };
+    var panels = [
+      { title: "A one-paragraph hint, Clark County", rows: hint.slice().sort(byName),
+        label: function (q) { return name(q.model); } },
+      { title: "Earlier settings to this run's", rows: conf.slice().sort(function (a, b) {
+          return d3.ascending(a.target, b.target) || byName(a, b); }),
+        label: function (q) { return name(q.model) + ", " + shortTarget(data, q.target); } }
+    ];
+    var labelW = Math.min(W * 0.55, widestText(el, "p-lbl", panels[0].rows.map(panels[0].label)
+      .concat(panels[1].rows.map(panels[1].label))) + 14);
+    var y = 0, layout = [];
+    panels.forEach(function (p) { layout.push({ title: p.title, y: y + 14 }); y += 24;
+      p.rows.forEach(function (q) { layout.push({ q: q, p: p, y: y + rowH / 2 }); y += rowH; }); y += 14; });
+    var H = y + 26;
+    var X = d3.scaleLinear().domain([0, 1]).range([labelW, W - M.r]);
+    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+    var nt = W - M.r - labelW < 220 ? 2 : 5;
+    svg.append("g").attr("class", "grid").attr("transform", "translate(0," + (H - 26) + ")")
+      .call(d3.axisBottom(X).ticks(nt).tickSize(-(H - 26)).tickFormat("")).select(".domain").remove();
+    svg.append("g").attr("class", "axis").attr("transform", "translate(0," + (H - 26) + ")")
+      .call(d3.axisBottom(X).ticks(nt).tickFormat(d3.format(".0%")).tickSizeOuter(0));
+    layout.forEach(function (L) {
+      if (L.title) { svg.append("text").attr("class", "ef-panel").attr("x", 0).attr("y", L.y).text(L.title); return; }
+      var q = L.q, a = q.from[0] / q.from[1], b = q.to[0] / q.to[1];
+      var g = svg.append("g").attr("class", "ef-row").attr("tabindex", 0)
+        .on("mousemove", function (ev) {
+          showTip(ev, "<b>" + name(q.model) + "</b>, " + (q.kind === "hint" ? "hint" : "v1 to v2") + ", " +
+            shortTarget(data, q.target) + "<br>" + q.from[0] + " of " + q.from[1] + " &rarr; " +
+            q.to[0] + " of " + q.to[1] + "<br>Difference " + Math.round(q.diff[0] * 100) + " points (95% " +
+            Math.round(q.diff[1] * 100) + " to " + Math.round(q.diff[2] * 100) + ")");
+        }).on("mouseleave", hideTip);
+      g.append("text").attr("class", "p-lbl").attr("x", 0).attr("y", L.y).attr("dy", "0.32em").text(L.p.label(q));
+      g.append("title").text(L.p.label(q));
+      var cls = q.claimed ? " claimed" : "";
+      if (Math.abs(X(b) - X(a)) < 4) {
+        g.append("circle").attr("class", "ef-zero").attr("cx", X(a)).attr("cy", L.y).attr("r", 3);
+        return;
+      }
+      var dir = b > a ? 1 : -1;
+      g.append("line").attr("class", "ef-arrow" + cls).attr("x1", X(a)).attr("x2", X(b) - dir * 5)
+        .attr("y1", L.y).attr("y2", L.y);
+      g.append("path").attr("class", "ef-head" + cls)
+        .attr("d", "M" + X(b) + "," + L.y + " l" + (-dir * 7) + ",-4 l0,8 z");
+    });
+  }
+
+  // ---- Section 7: the wall ----
+  function wallChart(el, wall) {
+    el.innerHTML = "";
+    var n = wall.length;
+    var cut = wall.filter(function (w) { return w.what === "closed by the host"; }).length;
+    var fixed = wall.filter(function (w) {
+      return w.what === "closed by the host" && (Math.abs(w.seconds - 301) < 3 || Math.abs(w.seconds - 602) < 3);
+    }).length;
+    fill("wallLead", "Of GLM-5.3 Flash's " + n + " calls, " + cut + " ended with the host closing the stream mid-answer, " +
+      fixed + " of them at almost exactly 301 or 602 seconds.");
+    var cats = ["finished", "reached the output cap", "stopped by the host below the cap",
+                "closed by the host", "failed with no output"];
+    var color = { "finished": "var(--pass)", "reached the output cap": "var(--ink)",
+                  "stopped by the host below the cap": "var(--silent)", "closed by the host": "var(--silent)",
+                  "failed with no output": "var(--loud)" };
+    cats = cats.filter(function (c) { return wall.some(function (w) { return w.what === c; }); });
+    var W = Math.max(el.clientWidth || 600, 320);
+    var narrow = W < 560;
+    var labelW = narrow ? 12 : 200, rowH = narrow ? 44 : 30, M = { t: 8, r: 18, b: 30 };
+    var H = M.t + cats.length * rowH + M.b;
+    var X = d3.scaleLinear().domain([0, 3700]).range([labelW + 6, W - M.r]);
+    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+    svg.append("g").attr("class", "axis").attr("transform", "translate(0," + (H - M.b) + ")")
+      .call(d3.axisBottom(X).tickValues([0, 600, 1200, 1800, 2400, 3000, 3600])
+        .tickFormat(function (v) { return v / 60 + " min"; }).tickSizeOuter(0));
+    [301, 602].forEach(function (s) {
+      svg.append("line").attr("class", "ref-line").attr("x1", X(s)).attr("x2", X(s))
+        .attr("y1", M.t).attr("y2", H - M.b);
+    });
+    cats.forEach(function (c, i) {
+      var y0 = M.t + i * rowH;
+      if (narrow) svg.append("text").attr("class", "col-sub lbl").attr("x", 0).attr("y", y0 + 10).text(c);
+      else svg.append("text").attr("class", "p-lbl").attr("x", 0).attr("y", y0 + rowH / 2).attr("dy", "0.32em").text(c);
+      var pts = wall.filter(function (w) { return w.what === c; });
+      // Stack dots that would overlap, so a cluster shows as a column.
+      var placed = [];
+      pts.forEach(function (w) {
+        var x = X(w.seconds), k = 0;
+        while (placed.some(function (p) { return Math.abs(p.x - x) < 6 && p.k === k; })) k++;
+        placed.push({ x: x, k: k });
+        var cy = narrow ? y0 + 26 + (k % 3) * 6 - 6 : y0 + rowH / 2 + ((k % 2) ? 1 : -1) * Math.ceil(k / 2) * 6;
+        svg.append("circle").attr("cx", x).attr("cy", cy).attr("r", 2.8)
+          .attr("fill", color[c]).attr("opacity", 0.85)
+          .on("mousemove", function (ev) {
+            showTip(ev, "<b>" + (w.host || "host unknown") + "</b><br>" + Math.round(w.seconds) + " s, " +
+              d3.format(",")(w.output_tokens || 0) + " output tokens<br>" + c);
+          }).on("mouseleave", hideTip);
+      });
     });
   }
 

@@ -17,7 +17,7 @@ After St. Johns moved from bucket 4 to bucket 3, two offices remained in bucket 
 Bowling Green KY, 749 units and 5.8% of the gate denominator between them. Neither had ever been sent a
 query. Does either of them enumerate?
 
-Bucket 4 mattered out of proportion to its size. `DESIGN.md` §8 said the 73.1% reachability figure
+Bucket 4 mattered out of proportion to its size. `docs/design/history.md` §8 said the 73.1% reachability figure
 "rests entirely on that bucket turning out to be acquirable", and ADR-0005 named probing these two rows
 as the cheapest remaining measurement that could still move the number.
 
@@ -105,7 +105,7 @@ Five offices are now `confirmed` (Clark County, McMinnville, St. Johns, St. Loui
 ## What this establishes
 
 - **The gate does not fire, and no longer depends on an unexamined cell.** Bucket 4 was 33.9% of units two
-  days ago and is 2.3% now. The proposition `DESIGN.md` §8 said the metric rested on has been retired by
+  days ago and is 2.3% now. The proposition `docs/design/history.md` §8 said the metric rested on has been retired by
   measurement rather than by argument.
 - **69.5% is a real decrease and it is the honest direction.** The headline fell 3.6 points because an
   office was demoted on evidence. A revision process that only ever revises upward is not measuring.

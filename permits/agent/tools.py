@@ -68,8 +68,8 @@ TOOLS: list[dict[str, Any]] = [
                     "any answer key: the row count on each page against the "
                     "rows the page's grid shows, ids present and unique, no "
                     "markup in values, dates that look like dates. Also "
-                    "notes values with stray angle brackets and fields empty "
-                    "on every row. Says ACCEPT or REJECT.",
+                    "notes values with stray angle brackets. Says ACCEPT or "
+                    "REJECT.",
      "parameters": _schema({"code": CODE}, ["code"])},
     {"name": "submit",
      "description": "Submit the final module. Ends the task.",
@@ -95,7 +95,6 @@ class Result:
 @dataclass
 class Workspace:
     pages: list[str]
-    fields: list[str]
     workdir: str
     timeout: int = RUN_TIMEOUT
     expected: list[int] = field(default_factory=list)
@@ -158,9 +157,10 @@ class Workspace:
         edges = [v for rows in rows_ok for v in verify.edge_values(rows)]
         if edges:
             notes["edges"] = edges[:5]
-        empty = verify.empty_fields(rows_ok, self.fields)
-        if empty:
-            notes["empty"] = empty
+        # No note for a field empty on every row (decided 2026-10-01). It
+        # fired on every correct Clark and Santa Barbara module, whose grids
+        # print no structure code or contractor, and in the smoke runs it
+        # sent the agent on after an ACCEPT.
         return Result([], None, pages, failed, notes)
 
     # -------------------------------------------------------------- tools
@@ -261,10 +261,6 @@ class Workspace:
         if "edges" in res.notes:
             lines.append("note: values with a stray angle bracket, e.g. %s"
                          % json.dumps(res.notes["edges"], ensure_ascii=False))
-        if "empty" in res.notes:
-            lines.append("note: empty on every row: %s. Right if the pages "
-                         "do not print them; if they do, extract them."
-                         % ", ".join(res.notes["empty"]))
         return _cap("\n".join(lines))
 
 

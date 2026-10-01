@@ -1,10 +1,10 @@
 # ADR-0013: Crawl cadence is temporal resolution, so it is chosen, not configured
 
-Status: Accepted
+Status: Proposed
 
 Date: 2026-09-21
 
-*Back-fill. The decision is D4 in `DESIGN.md` and predates this directory. It is unimplemented — nothing
+*Back-fill. The decision is D4 in `docs/design/history.md` and predates this directory. It is unimplemented — nothing
 has been crawled twice — and this ADR says so rather than describing a scheduler that does not exist.*
 
 ## Context
@@ -89,7 +89,7 @@ finding, because that would make daily cadence a requirement rather than a tier.
 
 ## References
 
-- `DESIGN.md` §D4, §D7, §9 (step 6), §6 (scale estimates)
+- `docs/design/history.md` §D4, §D7, §9 (step 6), §6 (scale estimates)
 - [ADR-0008](0008-time-is-recorded-twice.md) — the lag metric this cadence bounds
 - [ADR-0011](0011-milestones-are-rows-with-a-fixed-vocabulary.md) — why coarse cadence does not corrupt
   the milestone model

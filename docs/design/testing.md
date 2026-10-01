@@ -3,7 +3,7 @@
 **How it runs**
 
 ```
-python scripts/run_tests.py           # everything: 527 tests, no network
+python scripts/run_tests.py           # everything, offline and free
 python scripts/run_tests.py emit      # one file
 python scripts/run_tests.py -q        # quiet
 ```
@@ -54,8 +54,8 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, every model that reasons is asked to at its lab's default level, and the protocol v2 efforts, caps, sampling, host filters and excluded endpoints against the catalogue and endpoint snapshots | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
 | `test_transport.py` | streaming on both providers, the read timeout and wall-clock limit, the fatal/transient error split with one retry per draw, time to first token, and infra errors reported beside the pass rate | a 900 s per-read timeout that let one call run 65,161 s, and a timeout, a revoked key and a budget refusal all stopping the cell as one outcome |
 | `test_fileio.py` | atomic writes of the cache and the roll-ups, `variance.json` merged under a lock, one run per cell, whole ledger lines under concurrent appends; the races are run between real processes | a truncated cache entry that failed on every later hit, a corrupt `variance.json` read as empty, and two processes that both bought draw 1 of one cell |
-| `test_export_results.py` | the results page's data: the exported cells equal the stats roll-up's, a re-run writes identical bytes, a cell that never worked gets no cost per success, pairs are compared only within a target, arm and protocol and marked settled only at P ≥ 0.975 under both priors, the tables page lists what the charts draw, and nothing private leaves | a page that could quote a number no report does |
-| `test_render.py` | the results page in a browser, at a desktop and a phone width, light and dark, and with JavaScript off: no script errors, one mark per model and draw counted against `data.json`, no chart text off the screen, no page wider than a phone | labels that ran off the screen and dots drawn invisible, both found only by looking |
+| `test_export_results.py` | the results page's data: the exported cells equal the stats roll-up's, a re-run writes identical bytes, a cell that never worked gets no cost per success, pairs are compared only within a target, arm and protocol and marked settled only at P ≥ 0.975 under both priors, field-level pass@1 counts only perfect draws that agree on every field, an excluded draw is outside n and the cost, contrasts carry the Newcombe interval, the tables page lists what the charts draw, and nothing private leaves | a page that could quote a number no report does |
+| `test_render.py` | the results page in a browser, at a desktop and a phone width, light and dark, and with JavaScript off: no script errors, one mark per model, draw, contrast and call counted against `data.json`, every number in the prose filled in, no chart text off the screen, no page wider than a phone | labels that ran off the screen and dots drawn invisible, both found only by looking |
 | `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
 | `test_converse.py` | conversations with tools on both providers: tool calls assembled from stream fragments, thinking signatures and reasoning details sent back unchanged, tool-less turns, the cache kept inside one run, one episode and one arm, one-shot cache keys unchanged, tracing settings kept out of requests | written with the agentic extractor, before its first paid call |
 | `test_agent.py` | the agent and the scripted loop against a scripted fake model and a real sandbox: routing, the turn and dollar limits, resuming from a SQLite checkpoint without buying turns again, the review interrupt, the behaviour the plan measures (submitting unchecked or after a failed check), the limit on list-priced spend, each turn's spend and latest draft, the agent told its budget after each turn and the scripted loop not told, and the tracing switch staying off without a key | written with the agentic extractor, before its first paid call |
@@ -70,7 +70,7 @@ is a case where the real page differed from that belief. A hand-written St. John
 carried a zero-padded date and the bug would have survived.
 
 **Published-number tests are supposed to fail.** `test_artifacts.py` recomputes the gate metric from
-`classification.csv` and asserts the exact figures the evidence reports and `DESIGN.md` quote. When a
+`classification.csv` and asserts the exact figures the evidence reports and `docs/design/history.md` quote. When a
 measurement changes, these break. That is the mechanism, not a defect: the break is the reminder to write
 a new dated evidence report and update the prose *together*. Editing the artifact without the docs now
 fails the build, and so does the reverse.

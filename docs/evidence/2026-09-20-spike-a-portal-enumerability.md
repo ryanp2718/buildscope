@@ -121,7 +121,7 @@ not be quoted.
 
 **Nothing about result caps beyond Accela's `100+` display limit.** True cap depth, pagination behaviour
 at depth, and index-versus-detail field availability were not measured, so the fetch-amplification factor
-driving the cost model in `DESIGN.md` §6 remains unmeasured.
+driving the cost model in `docs/design/history.md` §6 remains unmeasured.
 
 ## Recommendation
 
@@ -145,6 +145,6 @@ Spike C, which runs over the 77 HTML files saved here at no cost, is the next ch
 
 - `data/spike_a/classification.csv` - all 28 rows with vendor, confidence and the basis for each call
 - `data/spike_a/html/` - 77 saved pages, the input to Spike C
-- `DESIGN.md` Spike A protocol, bucket taxonomy, decision thresholds
+- `docs/design/history.md` Spike A protocol, bucket taxonomy, decision thresholds
 - [ADR-0001](../adr/0001-source-office-link-is-an-evidence-bearing-relation.md) - why the two
   unresolved rows are recorded rather than guessed

@@ -3,7 +3,7 @@
 
 'Bucket 3 is the one people miss. Many nominally search-only portals accept an
 empty criteria set or a broad date range. Test this deliberately on every
-bucket-4 candidate before classifying it as 4.' (DESIGN.md, Spike A)
+bucket-4 candidate before classifying it as 4.' (docs/design/history.md, Spike A)
 
 So: submit the broadest query each portal will accept and see whether it returns
 a result set or demands a specific identifier. Also look for the result cap,

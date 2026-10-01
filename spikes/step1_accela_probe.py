@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Bucket-4 acquisition test: can an Accela tenancy be enumerated by date?
 
-This is the measurement DESIGN.md names as "the single most decision-relevant
+This is the measurement docs/design/history.md names as "the single most decision-relevant
 unknown in this document". Unit-weighted reachability is 73.1% *only* if
 bucket-4 portals can be enumerated by partitioned querying. If they cannot,
 reachable collapses to 39.2% and the gate fires. Nothing in sections 9-10

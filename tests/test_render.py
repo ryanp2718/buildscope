@@ -39,7 +39,8 @@ SHOTS = os.environ.get("RENDER_SHOTS")
 VIEWS = [("desktop", 1280, 860, "light"), ("phone", 390, 844, "dark")]
 
 # Chart text that runs past either edge of the viewport.
-OFF_SCREEN = """() => [...document.querySelectorAll('#price-chart text, #slope-chart text')]
+OFF_SCREEN = """() => [...document.querySelectorAll(`#price-chart text, #slope-chart text,
+    #ports-chart text, #effects-chart text, #wall-chart text`)]
     .map(t => [t.textContent, t.getBoundingClientRect()])
     .filter(([s, r]) => r.width && (r.left < -0.5 || r.right > window.innerWidth + 0.5))
     .map(([s, r]) => s)"""
@@ -62,7 +63,11 @@ def _expected(data):
                 and q["settled"] and q["a"] in points and q["b"] in points
                 and price[q["a"]] > price[q["b"]]):
             held.update((q["a"], q["b"]))
-    return {"points": len(points), "squares": squares, "held": len(held)}
+    ports = sum(1 for m in points for t in ("clarkco", "stjohns", "santabarbara")
+                if "%s|%s|v2" % (t, m) in cells)
+    return {"points": len(points), "squares": squares, "held": len(held),
+            "ports": ports, "contrasts": len(data.get("contrasts", [])),
+            "wall": len(data.get("wall", []))}
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
@@ -137,12 +142,23 @@ class TestResultsPage(unittest.TestCase):
                 self.assertEqual(page.locator("#slope-chart path.sl-line.held").count(),
                                  self.want["held"])
                 self.assertEqual(page.locator("#unit-chart rect").count(), self.want["squares"])
-                self.assertEqual(page.locator("[data-table] table").count(), 3)
+                self.assertEqual(page.locator("#ports-chart path.p-mark").count(), self.want["ports"])
+                self.assertEqual(page.locator("#effects-chart g.ef-row").count(),
+                                 self.want["contrasts"])
+                self.assertEqual(page.locator("#wall-chart circle").count(), self.want["wall"])
+                self.assertEqual(page.locator("[data-table] table").count(), 7)
+                # Every number the prose fills in was filled.
+                self.assertEqual(page.evaluate(
+                    "[...document.querySelectorAll('[data-q]')].filter(e => !e.textContent.trim())"
+                    ".map(e => e.dataset.q)"), [])
                 self.assertEqual(page.evaluate(OFF_SCREEN), [])
                 self.assertFalse(page.evaluate(H_OVERFLOW))
                 self._shot(page, tag + "_top")
                 self._shot(page, tag + "_slope", ".slope-fig")
                 self._shot(page, tag + "_units", "#unit-chart")
+                for sec in ("what", "caption", "ports", "effects", "fair", "next"):
+                    self._shot(page, tag + "_" + sec, "#" + sec)
+                self._shot(page, tag + "_how", "figure.how")
                 self.assertEqual(errors, [])
 
     def test_scrolling_switches_the_price_chart_to_cost_per_success(self):
@@ -173,7 +189,8 @@ class TestResultsPage(unittest.TestCase):
 
     def test_the_tables_page_fits_a_phone(self):
         page, errors = self._open(390, 844, "dark", path="tables.html")
-        for tid in ("t-price", "t-rank", "t-draws"):
+        for tid in ("t-price", "t-rank", "t-draws", "t-ports", "t-effects", "t-settings",
+                    "t-wall"):
             self.assertEqual(page.locator("table#%s" % tid).count(), 1)
         self.assertFalse(page.evaluate(H_OVERFLOW))
         self._shot(page, "phone_tables")

@@ -187,8 +187,13 @@ def extract_block(text: str, pat: re.Pattern[str],
     tier - which is exactly the comparison this experiment exists to make.
 
     `must_contain` selects on the contract the prompt asked for instead of on
-    position, so a trailing usage example does not win for being last.
+    position, so a trailing usage example does not win for being last. A reply
+    that never contains it has no answer, and gets "": a sentence announcing a
+    plan was otherwise handed to the static audit, failed to parse and was
+    recorded as a refusal (grok-4.7, Clark draw 5 of the v2 run).
     """
+    if must_contain and must_contain not in text:
+        return ""
     blocks = fenced_blocks(text)
     if not blocks:
         m = pat.search(text)

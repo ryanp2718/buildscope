@@ -15,11 +15,12 @@ reference-free check in the [agentic extractor plan](../evidence/2026-09-29-agen
 response id finds the call in `data/infer/ledger.jsonl` and in OpenRouter's generation record.
 
 Figures are as of 2026-09-30, stage 3 of the v2 run in progress, over 833 successful v2 synthesis
-calls in the ledger and 780 scored v2 draws.
+calls in the ledger and 780 scored v2 draws, except cases 1, 9 and 10, updated 2026-10-01 over the
+836 scored v2 draws of the finished run (`spikes/v2_label_check.py`).
 
 | # | case | category | frequency |
 |---|---|---|---|
-| 1 | Announces a plan, then ends the turn | model; harness label | 1 of 10 grok-4.7 calls |
+| 1 | Announces a plan, then ends the turn | model; harness label (fixed) | 1 of 10 grok-4.7 calls |
 | 2 | Output past the token cap | provider | 4 of 10 grok-4.7 calls |
 | 3 | Drafts in the answer, scored on the first | harness (fixed) | one draw, found 2026-09-24 |
 | 4 | Hosts cut long streams at fixed durations | host | 8 of 21 glm-5.3-flash calls at the time |
@@ -27,7 +28,8 @@ calls in the ledger and 780 scored v2 draws.
 | 6 | A stray `>` on every value | model; verifier blind spot | 2 of 358 verifier-accepted draws |
 | 7 | An extra blank or duplicate row | scorer and verifier disagree | 3 of 359 perfect draws |
 | 8 | Reasoning length at the output cap | model; design | 3 of 4 glm-5.3 Clark draws |
-| 9 | A regex's quotes close its own string | model | 1 checked; 5 v2 draws refused for not parsing |
+| 9 | A quote closes its own string literal | model | 5 of 5 v2 draws refused for not parsing |
+| 10 | One host, long reasoning and a broken contract | host or model; unresolved | 13 of deepseek-v4-flash's 19 draws on OpenInference; 0 of 817 elsewhere |
 
 ## 1. Announces a plan, then ends the turn
 
@@ -50,8 +52,14 @@ calls in the ledger and 780 scored v2 draws.
   followed by another turn; in a one-shot task there is none. Tests: whether it recurs across
   grok-4.7's remaining draws; the visible-to-reasoning ratio per model; a prompt line asking for the
   module only, in a later protocol.
-- **Consequence.** After stage 3, `extract_block` returns nothing when the reply has no
-  `def extract(`, and the export relabels this draw `no_code`, reported as a label correction.
+- **Consequence.** Since 2026-10-01 `extract_block` returns nothing when the reply has no
+  `def extract(`, so the draw is `no_code`. Re-read with it, 13 of the 836 scored v2 draws move from
+  `refused` to `no_code` and no other draw changes (`spikes/v2_label_check.py`): this one, a
+  mimo-v2.6-flash St. Johns draw whose module trails off into placeholder text without defining
+  `extract`, and 11 deepseek-v4-flash draws that name the function something else or answer in
+  JSON (case 10). Both labels count as a failure to produce a runnable module ("loud" on the page),
+  so no rate and nothing on the page changes; the per-outcome counts in the report use the new
+  labels.
 
 ## 2. Output past the token cap
 
@@ -165,7 +173,7 @@ calls in the ledger and 780 scored v2 draws.
 - **Consequence.** Cost per success carries the re-draw spend. glm-5.3's stage 3 spend limit is at
   risk from it, and any draws lost that way are reported as cut by the ceiling.
 
-## 9. A regex's quotes close its own string
+## 9. A quote closes its own string literal
 
 *Model.*
 
@@ -175,14 +183,55 @@ calls in the ledger and 780 scored v2 draws.
   118. The model wrote an attribute pattern that has to match both quote characters as a raw
   triple-quoted string, and the pattern's own closing `"` ran into the string's closing `"""`,
   which ended the string one character early and opened a new one that never closes.
-- **Frequency.** 5 v2 draws refused because the module does not parse, not counting case 1 (this one; Gemini 3.5 Flash
-  Lite, qwen3.8-flash and two mimo-v2.6-flash on St. Johns). Only this one's mechanism is checked
-  so far. Refused modules are not saved to disk, so the other four need their replies read from the
-  response cache.
-- **Hypothesis (untested).** Regexes over HTML attributes need both quote characters inside a Python
-  string literal, which is where quoting mistakes concentrate; a model that parses HTML with
-  `html.parser` instead of regexes avoids the whole class. Test: read the other four, and compare the
-  parse-failure rate of regex-based and parser-based extractors.
+- **Frequency.** 5 of the 836 scored v2 draws are refused because the module does not parse, and
+  all 5 are this mistake, read from the response cache 2026-10-01 (`spikes/v2_label_check.py`).
+  Each reply has one fenced block, so none is a parsing artifact of the harness. Four are regexes
+  over HTML attributes that need both quote characters: this one; glm-5.3's Santa Barbara draw 1,
+  `r"((?:\"[^"]*\"|...` (in a raw string `\"` keeps its backslash and does not stop the next
+  `"` from closing it); qwen3.8-flash St. Johns draw 9, `r"...(["'])..."`; and mimo-v2.6-flash
+  St. Johns draw 3, `r'...(?:"([^"]*)"|'([^']*)')'`. The fifth, Gemini 3.5 Flash-Lite St. Johns
+  draw 0, quotes HTML in an error message: `"Found <tr class="Row"> but ..."`.
+- **Hypothesis (partly checked).** Quoting mistakes concentrate where a string literal has to hold
+  both quote characters, which regexes over HTML attributes need; a model that parses HTML with
+  `html.parser` instead avoids most of the class. Checked: 4 of the 5 are such regexes. Not
+  checked: the parse-failure rate of regex-based against parser-based extractors.
 - **Consequence.** None to the scoring: a module that does not parse fails, as pre-registered. It is
   the kind of failure a repair turn should fix in one step, since the error message names the line,
   so it is a case for the agentic follow-up.
+
+## 10. One host, long reasoning and a broken contract
+
+*Host or model; unresolved.*
+
+- **Observed.** OpenInference served 19 scored v2 draws, all deepseek-v4-flash: St. Johns draws
+  0-9 and Clark hint draws 1-9. 13 of the 19 broke the output contract. Eleven define the extractor
+  under another name (`extract_records`, `extract_permit_records`, `parse_html_table`, one with a
+  `main()`) or answer with JSON rows instead of code, and two end their turn with no visible reply
+  after 26,301 and 24,085 output tokens (case 1, "Related"). One Clark hint reply opens "I see the
+  confusion - earlier I treated the input as a full page ... but you clarified that the function
+  receives a single row's HTML", answering a turn that never happened. The other 6 passed.
+- **Against the same model elsewhere.** On Baidu and StreamLake, deepseek-v4-flash's 21 scored v2
+  draws (Clark baseline 20, Clark hint draw 0) all define `extract`. On every other host and model,
+  0 of 817 scored v2 draws break the contract this way.
+- **The request arrived whole.** On the Clark hint prompt, OpenInference reports 3,951 input plus
+  5,267 cached tokens, 9,218 in all, the same count StreamLake reports for draw 0, so the prompt was
+  not truncated. What differs is the output: 24,728 to 39,602 tokens a draw on OpenInference
+  against 6,326 on StreamLake for the same prompt, and 2,624 to 13,727 on Baidu for the baseline
+  prompt, over 90% of it reasoning.
+- **Frequency.** 13 of 19 on OpenInference; 0 of 817 on every other host.
+- **Hypotheses (untested).** (a) OpenInference runs the model with more reasoning than the `high`
+  that was sent. The 2026-09-27 effort probe found that it renders `high` and `max` as different
+  prompts (128 and 141 tokens), so the prompt alone does not show Think Max, but the probe reads
+  the prompt, not the sampling or the checkpoint. (b) A chat-template difference that places the
+  system message, which carries the contract, where the model weighs it less. (c) The model
+  itself, at long reasoning lengths, losing the contract; the host is then a proxy for length.
+  Tests, $0: OpenRouter's generation record for the 19 calls (native prompt and reasoning counts)
+  against the other hosts'. Paid, small: the same prompt on OpenInference and on Baidu at a few
+  draws each.
+- **Why it matters.** It is confounded with the cells it landed on. deepseek-v4-flash's Clark hint
+  cell is 1/10 with 9 draws on OpenInference, against a baseline of 2/20 on Baidu and StreamLake,
+  so its hint effect (question 5) is a host comparison as much as a prompt one; its St. Johns
+  cell (5/10) is all OpenInference. deepseek-v4-flash is also one of the agent run's likely models.
+- **Consequence.** Reported, not corrected: the pre-registration has no rule for it and the replies
+  are complete, so the draws stand as scored. The report gives deepseek-v4-flash's cells split by
+  host. Whether to exclude OpenInference for deepseek-v4-flash in later runs is open.

@@ -2,7 +2,7 @@
 """Spike A, step 3: fetch each located permit portal and measure the signals the
 bucket classification turns on.
 
-The bucket taxonomy (DESIGN.md, Spike A) asks four things this script can answer
+The bucket taxonomy (docs/design/history.md, Spike A) asks four things this script can answer
 mechanically:
 
   bucket 5 (JS-gated)   -> is the page's content server-rendered, or is it an

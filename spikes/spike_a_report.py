@@ -3,7 +3,7 @@
 
 'Report the distribution three ways: unit-weighted over the whole sample,
 count-weighted over the whole sample, and count-weighted over tier-2 alone. The
-tier-2 count-weighted figure drives the decision.' (DESIGN.md, Spike A)
+tier-2 count-weighted figure drives the decision.' (docs/design/history.md, Spike A)
 
 Also reconstructs the unconditional office-weighted figure, because the sample
 was deliberately drawn from the 19,886 offices the catalog sweep did NOT
@@ -98,7 +98,7 @@ def main():
     print("  NOTE: that interval is so wide it is not a usable planning number.")
 
     print("\n" + "-" * 78)
-    print("DECISION THRESHOLDS (DESIGN.md), read as directional, not computed")
+    print("DECISION THRESHOLDS (docs/design/history.md), read as directional, not computed")
     print("-" * 78)
     v = pct(t2_enum, len(t2))
     for label, cond in (

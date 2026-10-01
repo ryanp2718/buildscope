@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Reduce a portal page to the part an extractor needs.
 
-DESIGN.md section 6, lever 4: *"Do not send raw HTML to the model. Strip
+docs/design/history.md section 6, lever 4: *"Do not send raw HTML to the model. Strip
 scripts, styles, comments, and attribute noise before the page enters a
 prompt. On municipal portal HTML this is routinely an order-of-magnitude token
 reduction against identical extraction quality."* The reduction is real - a

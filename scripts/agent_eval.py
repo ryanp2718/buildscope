@@ -99,7 +99,6 @@ GRAPH_ARMS = ("agent", "scripted")
 DEV_PROJECT = "buildscope-agent-dev"
 EVAL_PROJECT = "buildscope-agent-eval"
 EVAL_PREFIX = "eval-"
-FIELDS = [role for role, _ in H.ROLES]
 # The one-shot request's excerpt size: `--synth-window`'s default in
 # conformance.py, which every v2 draw was bought with.
 SYNTH_WINDOW = 24000
@@ -491,7 +490,7 @@ def run_episode(client, args, arm, cell, loaded, limits, episode, saver):
     name = _name(cell, arm, episode)
     ep = G.Episode(
         client=client, model=cell.model, system=H.SYNTH_SYSTEM, user=user,
-        workspace=T.Workspace(corpus, FIELDS, os.path.join(
+        workspace=T.Workspace(corpus, os.path.join(
             OUT, "work", args.run_id, name)),
         run_id=args.run_id, episode=episode, call_class=arm,
         tag="%s/%s/%s/e%02d" % (args.run_id, arm, cell.target, episode),
