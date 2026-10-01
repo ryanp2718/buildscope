@@ -66,6 +66,7 @@ the distinction is exactly what a reader needs.
 | [2026-09-27 v2 run pre-registration](2026-09-27-v2-run-preregistration.md) | What will the protocol v2 comparison run, on which targets, at what n, judged how, for how much? | Pre-registered |
 | [2026-09-28 v2 results and visualization plan](2026-09-28-v2-results-and-visualization-plan.md) | How will the v2 results be reported and drawn, and how is each graphic checked before it goes public? | Plan |
 | [2026-09-29 v2 stage 1 check and re-projection](2026-09-29-v2-stage1-check-and-reprojection.md) | Did a host close any model's streams early besides glm-5.3-flash's, and does the rest of the run fit the $45 cap? | Draft |
+| [2026-09-29 v2 stage 3 plan](2026-09-29-v2-stage3-plan.md) | How is the top tier sized, ordered and routed so that it fits the cap and the clock, and loses the right draws if it does not? | Plan |
 
 ## Naming
 
