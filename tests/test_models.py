@@ -221,6 +221,24 @@ class TestSamplingAndRouting(unittest.TestCase):
         self.assertFalse({"atlas-cloud/fp8", "phala/fp8"} & tags)
         self.assertIn("streamlake/fp8", tags)
 
+    def test_glm_5_3_avoids_the_hosts_that_failed_its_flash_model(self):
+        """Stage 3 plan, 2026-09-29: the five hosts that closed glm-5.3-flash
+        streams early or stopped them below the cap are excluded for glm-5.3.
+        Of the 12 hosts its precision and parameter filters leave in the
+        2026-09-27 listing, 8 remain."""
+        bad = {"atlas-cloud", "phala", "gmicloud", "io-net", "siliconflow"}
+        s = R["z-ai/glm-5.3"]
+        self.assertLessEqual(bad, set(s.ignore))
+        eps = _snapshot(ENDPOINTS)
+        if eps is None:
+            return
+        listed = eps[s.id]["data"]["endpoints"]
+        self.assertLessEqual(bad, {e["tag"].split("/")[0] for e in listed})
+        tags = {e["tag"] for e in models.routed(s, listed)}
+        self.assertFalse({t.split("/")[0] for t in tags} & bad)
+        self.assertIn("sail-research/fp8", tags)
+        self.assertEqual(len(tags), 8)
+
     def _routed(self):
         eps = _snapshot(ENDPOINTS)
         if eps is None:

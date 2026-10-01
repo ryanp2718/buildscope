@@ -493,7 +493,13 @@ _SPECS = [
               ReasoningControl.EFFORT, supports_reasoning=True,
               temperature=1.0, top_p=0.95, max_output=943717, effort="max",
               efforts=("max", "high", "low"),
-              quantizations=FROM_FP8),
+              quantizations=FROM_FP8,
+              # The hosts that failed glm-5.3-flash's calls in stage 1: streams
+              # closed early by AtlasCloud, Phala, GMICloud, Io Net and
+              # SiliconFlow, and two SiliconFlow calls stopped at 32,768 tokens
+              # below the cap. Carried over from the flash model, not measured
+              # on this one (docs/evidence/2026-09-29-v2-stage3-plan.md).
+              ignore=("atlas-cloud", "phala", "gmicloud", "io-net", "siliconflow")),
     # The dated snapshot of Qwen3.8 Max (qwen3.8-max-prime, first picked, is a
     # higher-throughput SKU of it). Served by Alibaba only. Reasoning on by
     # default at `xhigh`; no sampling published, so none is sent.
