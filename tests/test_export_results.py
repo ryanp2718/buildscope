@@ -176,6 +176,129 @@ class TestExport(unittest.TestCase):
         self.assertNotIn("private", text)
 
 
+M2 = "xiaomi/mimo-v2.6-flash"
+
+
+def _pair_store():
+    """Three priced cells on one target and arm: M, cheap and always right;
+    M2, dearer and right a third of the time; and V1 under v2, cheap and
+    right at 2 of 3. One v1 cell of V1 (another protocol), one M hint cell
+    that never worked, and one M2 cell of 2 draws."""
+    v, ledger = {"cells": {}}, []
+
+    def add(key, model, outcomes, usd, target="clarkco", hint=False,
+            protocol="v2"):
+        v["cells"][key] = _cell(
+            [_draw(i, 100 + i, ok, model=model, target=target)
+             for i, ok in enumerate(outcomes)],
+            model=model, target=target, hint=hint, protocol=protocol)
+        ledger.extend(_buy(i, 100 + i, usd, model=model, target=target)
+                      for i in range(len(outcomes)))
+
+    add("clarkco|%s|v2" % M, M, [True] * 6, 0.01)
+    add("clarkco|%s|v2" % M2, M2, [True, False, False] * 2, 0.05)
+    add("clarkco|%s|v2" % V1, V1, [True, True, False], 0.01)
+    add("clarkco|%s" % V1, V1, [True, True, True], 0.01, protocol="v1")
+    add("clarkco|%s|hint|v2" % M, M, [False] * 3, 0.01, hint=True)
+    add("stjohns|%s|v2" % M2, M2, [True, True], 0.01, target="stjohns")
+    return v, ledger
+
+
+class TestPairs(unittest.TestCase):
+
+    def setUp(self):
+        self.v, self.ledger = _pair_store()
+        self.pairs = export_results.build(self.v, self.ledger)["pairs"]
+        self.by = {(p["a"], p["b"]): p for p in self.pairs}
+
+    def test_only_cells_with_a_cost_per_success_are_paired(self):
+        """Same target, arm and protocol; no cell that never worked, and
+        none under the report's 3 draws."""
+        self.assertEqual(sorted(self.by), sorted([(M, M2), (M, V1), (V1, M2)]))
+        self.assertTrue(all((p["target"], p["arm"], p["protocol"])
+                            == ("clarkco", "baseline", "v2")
+                            for p in self.pairs))
+
+    def test_the_cheaper_at_the_point_estimate_comes_first(self):
+        for p in self.pairs:
+            for prior in ("jeffreys", "uniform"):
+                self.assertGreaterEqual(p["p_a_cheaper"][prior], 0.5)
+                self.assertGreaterEqual(p["ratio"][prior][1], 1.0)
+
+    def test_settled_needs_both_priors(self):
+        for p in self.pairs:
+            self.assertEqual(p["settled"],
+                             min(p["p_a_cheaper"].values()) >= 0.975)
+        # Fifteen times cheaper per success at the point estimate, on 6 and 6
+        # draws: settled. 1.5 times, on 6 and 3: not.
+        self.assertTrue(self.by[(M, M2)]["settled"])
+        self.assertFalse(self.by[(M, V1)]["settled"])
+
+    def test_the_ratio_range_brackets_its_median(self):
+        for p in self.pairs:
+            for prior in ("jeffreys", "uniform"):
+                lo, mid, hi = p["ratio"][prior]
+                self.assertLess(lo, mid)
+                self.assertLess(mid, hi)
+
+    def test_a_new_cell_does_not_move_an_existing_pair(self):
+        v, ledger = _pair_store()
+        m3 = "openai/gpt-6-luna"
+        v["cells"]["clarkco|%s|v2" % m3] = _cell(
+            [_draw(i, 900 + i, True, model=m3) for i in range(3)], model=m3)
+        ledger.extend(_buy(i, 900 + i, model=m3) for i in range(3))
+        more = {(p["a"], p["b"]): p
+                for p in export_results.build(v, ledger)["pairs"]}
+        self.assertEqual(len(more), 6)
+        self.assertEqual(more[(M, M2)], self.by[(M, M2)])
+
+
+class TestTables(unittest.TestCase):
+    """tables.html: the page without JavaScript, and the source of its
+    "Show the data" tables, which the page finds by id."""
+
+    def setUp(self):
+        self.v, self.ledger = _pair_store()
+        self.data = export_results.build(self.v, self.ledger)
+        self.html = export_results.render_tables(self.data)
+
+    def test_every_model_on_the_run_has_a_display_name(self):
+        self.assertEqual(set(export_results.NAMES),
+                         set(export_results.ROSTER) | set(export_results.V1_RERUN))
+
+    def test_the_page_finds_each_table_by_id(self):
+        for tid in ("t-price", "t-rank", "t-draws"):
+            self.assertEqual(self.html.count('<table id="%s">' % tid), 1)
+
+    def test_one_price_row_per_roster_cell_on_clark(self):
+        price = self.html.split('id="t-price"')[1].split("</table>")[0]
+        self.assertEqual(price.count("<tr>") - 1, 2)      # header + M, M2
+        self.assertIn("6 of 6", price)
+
+    def test_a_cell_that_never_worked_is_listed_without_a_cost(self):
+        v, ledger = _pair_store()
+        for d in v["cells"]["clarkco|%s|v2" % M2]["detail"]:
+            d["outcome"], d["recall_min"] = "imperfect", 0.0
+        html = export_results.render_tables(export_results.build(v, ledger))
+        row = html.split('<th scope="row">MiMo V2.6 Flash</th>')[1].split("</tr>")[0]
+        self.assertIn("0 of 6", row)
+        self.assertIn("none passed", row)
+
+    def test_only_settled_rankings_are_listed(self):
+        rank = self.html.split('id="t-rank"')[1].split("</table>")[0]
+        settled = [p for p in self.data["pairs"] if p["settled"]
+                   and p["a"] != V1 and p["b"] != V1]
+        self.assertEqual(rank.count("<tr>") - 1, len(settled))
+
+    def test_a_rerun_writes_identical_bytes(self):
+        again = export_results.render_tables(export_results.build(*_pair_store()))
+        self.assertEqual(self.html, again)
+
+    def test_no_source_or_local_path_leaves(self):
+        self.assertNotIn("private", self.html)
+        self.assertIsNone(re.search(r"[A-Za-z]:\\\\|/Users/|/home/", self.html))
+
+
 @unittest.skipUnless(os.path.exists(DATA), "no exported data.json")
 class TestTheExportedFile(unittest.TestCase):
     """The file that would be published, whatever run it came from."""
@@ -197,6 +320,15 @@ class TestTheExportedFile(unittest.TestCase):
     def test_every_cell_is_of_a_model_on_the_run(self):
         ids = {m["id"] for m in self.data["models"]}
         self.assertTrue(all(c["model"] in ids for c in self.data["cells"]))
+
+    def test_every_pair_is_of_two_exported_cells_that_worked(self):
+        cells = {(c["target"], c["arm"], c["protocol"], c["model"]): c
+                 for c in self.data["cells"]}
+        for p in self.data.get("pairs", []):
+            g = (p["target"], p["arm"], p["protocol"])
+            a, b = cells[(*g, p["a"])], cells[(*g, p["b"])]
+            self.assertTrue(a["k"] and b["k"])
+            self.assertLessEqual(a["usd_per_success"], b["usd_per_success"])
 
     def test_draw_counts_match_their_cells(self):
         scored = {}

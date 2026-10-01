@@ -11,6 +11,11 @@ Writes `site/results/data.json`:
            Wilson interval, cost per draw and per success, a simulated 95%
            range for cost per success, re-draws, host failures, hosts
   draws    one record per draw: outcome, tokens, what it cost to buy, host
+  pairs    one record per pair of comparable cells: which is cheaper per
+           success, by how much, how likely, and whether that is settled
+
+and, beside it, `tables.html`: the same figures as plain tables, the page's
+fallback without JavaScript and the source of its "Show the data" tables.
 
 Every rate and cost comes from `permits/rollup.py` (`aggregate`, and the
 per-draw rows it is derived from), the functions `scripts/model_stats.py`
@@ -30,6 +35,7 @@ No model calls. Reads only what is already on disk.
 """
 import argparse
 import collections
+import html
 import io
 import json
 import os
@@ -63,6 +69,27 @@ V1_RERUN = [
     "moonshotai/kimi-k2-thinking", "openai/gpt-oss-120b",
     "qwen/qwen3.5-flash-02-23", "qwen/qwen3-coder",
 ]
+# Display names, the page's and the tables'. Every id on the run has one
+# (`tests/test_export_results.py`).
+NAMES = {
+    "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5": "Claude Sonnet 5",
+    "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
+    "openai/gpt-6-sol": "GPT-6 Sol", "openai/gpt-6-luna": "GPT-6 Luna",
+    "google/gemini-3.8-flash": "Gemini 3.8 Flash",
+    "google/gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
+    "x-ai/grok-4.7": "Grok 4.7", "moonshotai/kimi-k3": "Kimi K3",
+    "z-ai/glm-5.3": "GLM-5.3", "z-ai/glm-5.3-flash": "GLM-5.3 Flash",
+    "qwen/qwen3.8-max-0902": "Qwen3.8 Max", "qwen/qwen3.8-flash": "Qwen3.8 Flash",
+    "deepseek/deepseek-v4-pro-0813": "DeepSeek V4 Pro",
+    "deepseek/deepseek-v4.1-flash": "DeepSeek V4.1 Flash",
+    "xiaomi/mimo-v2.6-pro": "MiMo V2.6 Pro", "xiaomi/mimo-v2.6-flash": "MiMo V2.6 Flash",
+    "minimax/minimax-m3": "MiniMax M3", "tencent/hy3": "Hunyuan 3",
+    "z-ai/glm-5.2": "GLM-5.2", "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro (Apr)",
+    "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+    "moonshotai/kimi-k2-thinking": "Kimi K2 Thinking",
+    "openai/gpt-oss-120b": "gpt-oss-120b", "qwen/qwen3.5-flash-02-23": "Qwen3.5 Flash",
+    "qwen/qwen3-coder": "Qwen3 Coder",
+}
 TARGETS = {
     "clarkco": "Clark County, NV",
     "stjohns": "St. Johns County, FL",
@@ -72,6 +99,10 @@ TARGETS = {
 N_SIM = 20000
 SEED = 20260928
 PRIORS = (("jeffreys", 0.5), ("uniform", 1.0))
+# The intervals report's thresholds: a ranking is settled at P >= 0.975
+# under both priors, over cells of at least 3 scored draws.
+SETTLED = 0.975
+PAIR_MIN_N = 3
 
 
 def _r(x, places=6):
@@ -104,8 +135,10 @@ def quantile(xs, f):
     return xs[int(f * (len(xs) - 1))]
 
 
-def cost_per_success_range(key, k, n, costs):
-    """Median and 95% range of cost per success for one cell, per prior.
+def simulate(key, k, n, costs):
+    """Simulated cost per success for one cell, per prior, in the order
+    drawn: the pass rate from its Beta posterior, the mean cost per draw from
+    a bootstrap of the cell's draws.
 
     None when the cell never succeeded (no finite cost per success exists)
     or when any draw's purchase is unknown (a partial bill understates it).
@@ -121,9 +154,57 @@ def cost_per_success_range(key, k, n, costs):
             p = rng.betavariate(k + a0, n - k + a0)
             mean = sum(rng.choice(costs) for _ in costs) / len(costs)
             sims.append(mean / p)
-        sims.sort()
-        out[prior] = [_r(quantile(sims, .025)), _r(quantile(sims, .5)),
-                      _r(quantile(sims, .975))]
+        out[prior] = sims
+    return out
+
+
+def cost_per_success_range(sims):
+    """Median and 95% range of a cell's simulated cost per success, per
+    prior."""
+    if sims is None:
+        return None
+    out = {}
+    for prior, _ in PRIORS:
+        xs = sorted(sims[prior])
+        out[prior] = [_r(quantile(xs, .025)), _r(quantile(xs, .5)),
+                      _r(quantile(xs, .975))]
+    return out
+
+
+def pairs(cells, sims):
+    """Every pair of cells on the same target, arm and protocol that both
+    have a cost per success, with how sure the data is which is cheaper.
+
+    The method of docs/evidence/2026-09-27-cost-per-success-intervals.md:
+    `a` is the cheaper per success at the point estimate, `ratio` is how
+    many times cheaper (b's cost per success over a's, median and 95%
+    range), `p_a_cheaper` the share of simulations in which a is cheaper.
+    The two cells' simulations are independent, so pairing them draw for
+    draw samples the ratio. A ranking is `settled` when a is cheaper with
+    probability at least 0.975 under both priors. Cells with fewer than
+    `PAIR_MIN_N` draws are left out, as the report left them out."""
+    groups = collections.defaultdict(list)
+    for c in cells:
+        if sims.get(c["key"]) is not None and c["n"] >= PAIR_MIN_N:
+            groups[(c["target"], c["arm"], c["protocol"])].append(c)
+    out = []
+    for (target, arm, protocol), members in sorted(groups.items()):
+        members.sort(key=lambda c: (c["usd_per_success"], c["model"]))
+        for i, a in enumerate(members):
+            for b in members[i + 1:]:
+                sa, sb = sims[a["key"]], sims[b["key"]]
+                p, ratio = {}, {}
+                for prior, _ in PRIORS:
+                    rs = [y / x for x, y in zip(sa[prior], sb[prior], strict=True)]
+                    p[prior] = _r(sum(1 for r in rs if r > 1) / len(rs), 4)
+                    rs.sort()
+                    ratio[prior] = [_r(quantile(rs, f), 4) for f in (.025, .5, .975)]
+                out.append({
+                    "target": target, "arm": arm, "protocol": protocol,
+                    "a": a["model"], "b": b["model"],
+                    "p_a_cheaper": p, "ratio": ratio,
+                    "settled": min(p.values()) >= SETTLED,
+                })
     return out
 
 
@@ -140,7 +221,7 @@ def build(v, ledger):
                                         r["condition"])
             per_draw[(key, r["unit_id"])][r["metric"]] = r["value"]
 
-    out_cells, out_draws = [], []
+    out_cells, out_draws, sims = [], [], {}
     for key in sorted(cells):
         cell = cells[key]
         e = agg[key]
@@ -152,6 +233,7 @@ def build(v, ledger):
                  for d in draws if d.scored()]
         n, k = e["draws_scored"], e["perfect"]
         known = [c for c in costs if c is not None]
+        sims[key] = simulate(key, k, n, costs)
         out_cells.append({
             "key": key, "target": cell["target"], "model": cell["model"],
             "arm": arm, "protocol": protocol,
@@ -162,7 +244,7 @@ def build(v, ledger):
             "usd_per_draw": (_r(sum(known) / n)
                              if n and len(known) == n else None),
             "usd_per_success": _r(e["usd_per_success"]),
-            "usd_per_success_range": cost_per_success_range(key, k, n, costs),
+            "usd_per_success_range": cost_per_success_range(sims[key]),
             "draws_unpriced": e["draws_unpriced"],
             "draws_redrawn": e["draws_redrawn"],
             "draws_truncated": e["draws_truncated"],
@@ -191,7 +273,8 @@ def build(v, ledger):
     for mid in ROSTER + V1_RERUN:
         s = models.get(mid)
         out_models.append({
-            "id": mid, "short": s.short, "lab": s.lab, "tier": str(s.tier),
+            "id": mid, "name": NAMES[mid], "short": s.short, "lab": s.lab,
+            "tier": str(s.tier),
             "group": "roster" if mid in ROSTER else "v1_rerun",
             "price_in": s.list_price[0], "price_out": s.list_price[1],
         })
@@ -209,11 +292,15 @@ def build(v, ledger):
                                        "bootstrap of cost per draw, "
                                        "2.5/50/97.5 percentiles"),
             "priors": [p for p, _ in PRIORS], "n_sim": N_SIM, "seed": SEED,
+            "pairs": ("same target, arm and protocol, n >= %d; settled when "
+                      "P(a cheaper per success) >= %.3f under both priors"
+                      % (PAIR_MIN_N, SETTLED)),
         },
         "targets": TARGETS,
         "models": out_models,
         "cells": out_cells,
         "draws": out_draws,
+        "pairs": pairs(out_cells, sims),
     }
 
 
@@ -221,6 +308,171 @@ def render(data):
     """Bytes as written: sorted keys, one level of indent, a final newline,
     so a re-run with nothing new is byte-identical and a diff is readable."""
     return json.dumps(data, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+# ---- tables.html: the charts' figures as plain tables -----------------------
+# The page's fallback without JavaScript, and the source of the "Show the
+# data" tables under each chart, which the page lifts from this file by id.
+# Written from the same dict as data.json, so the two cannot disagree.
+
+OUTCOME_COLUMNS = [
+    ("perfect", "Passed"),
+    ("silent", "Wrong or no rows, no error"),
+    ("loud", "Raised an error or wrote no program"),
+    ("infra_error", "Host failed (not counted)"),
+]
+
+TABLES_CSS = """
+  :root { --bg: #f6f7f5; --ink: #17191c; --mut: #62666d; --rule: #d9dcd8;
+          --sans: "Libre Franklin", "Helvetica Neue", Arial, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; --bg: #121416; --ink: #e7e9ea;
+                                      --mut: #a0a5ab; --rule: #2e3236; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; --bg: #121416; --ink: #e7e9ea;
+                             --mut: #a0a5ab; --rule: #2e3236; }
+  body { margin: 0 auto; max-width: 62rem; padding: 1.5rem 16px 3rem; background: var(--bg);
+         color: var(--ink); font: 15px/1.5 var(--sans); }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1.1rem; margin: 2.2rem 0 .3rem; }
+  p { color: var(--mut); margin: 0 0 .8rem; max-width: 44rem; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13.5px; }
+  caption { text-align: left; color: var(--mut); padding-bottom: .4rem; }
+  th, td { padding: .3rem .7rem .3rem 0; border-bottom: 1px solid var(--rule); text-align: right;
+           white-space: nowrap; vertical-align: top; }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  thead th { font-weight: 600; border-bottom-color: var(--ink); }
+  a { color: inherit; }
+"""
+
+
+def _usd(x):
+    """As the page formats money: more places the smaller it is."""
+    if x is None:
+        return "n/a"
+    return "$%.2f" % x if x >= 0.1 else "$%.3f" % x if x >= 0.01 else "$%.4f" % x
+
+
+def _price(x):
+    return "$%.2f" % x if x < 1 or x % 1 else "$%d" % x
+
+
+def _pct(x):
+    return "%d%%" % round(x * 100)
+
+
+def _times(x):
+    sign = chr(0xD7)                  # the multiplication sign
+    return ("%d" % round(x) if x >= 10 else "%.1f" % x) + sign
+
+
+def _table(tid, caption, head, rows, left=1):
+    """One table; the first `left` columns are text, the rest figures."""
+    esc = html.escape
+    th = "".join('<th scope="col"%s>%s</th>' % (' class="l"' if i < left else "", esc(h))
+                 for i, h in enumerate(head))
+    body = []
+    for r in rows:
+        tds = ['<th scope="row">%s</th>' % esc(str(r[0]))]
+        tds += ['<td%s>%s</td>' % (' class="l"' if i + 1 < left else "", esc(str(c)))
+                for i, c in enumerate(r[1:])]
+        body.append("<tr>%s</tr>" % "".join(tds))
+    return ('<div class="scroll"><table id="%s">\n<caption>%s</caption>\n'
+            "<thead><tr>%s</tr></thead>\n<tbody>\n%s\n</tbody>\n</table></div>"
+            % (tid, esc(caption), th, "\n".join(body)))
+
+
+def render_tables(data):
+    models_ = {m["id"]: m for m in data["models"]}
+    cells = {(c["target"], c["model"], c["arm"], c["protocol"]): c for c in data["cells"]}
+    roster = sorted((m for m in data["models"] if m["group"] == "roster"),
+                    key=lambda m: (m["price_out"], m["name"]))
+    by_price = roster + sorted((m for m in data["models"] if m["group"] != "roster"),
+                               key=lambda m: (m["price_out"], m["name"]))
+
+    price_rows = []
+    for m in roster:
+        c = cells.get(("clarkco", m["id"], "baseline", "v2"))
+        if c is None:
+            continue
+        r = c["usd_per_success_range"]
+        price_rows.append([
+            m["name"], _price(m["price_out"]), "%d of %d" % (c["k"], c["n"]),
+            _pct(c["rate"]), "%s to %s" % (_pct(c["ci95"][0]), _pct(c["ci95"][1])),
+            _usd(c["usd_per_draw"]),
+            _usd(c["usd_per_success"]) if c["k"] else "none passed",
+            "%s to %s" % (_usd(r["jeffreys"][0]), _usd(r["jeffreys"][2])) if r else "",
+        ])
+
+    rank_rows = []
+    on_roster = {m["id"] for m in roster}
+    for q in data["pairs"]:
+        if not (q["target"] == "clarkco" and q["arm"] == "baseline"
+                and q["protocol"] == "v2" and q["settled"]
+                and q["a"] in on_roster and q["b"] in on_roster):
+            continue
+        a, b = models_[q["a"]], models_[q["b"]]
+        lo, mid, hi = q["ratio"]["jeffreys"]
+        rank_rows.append([
+            a["name"], b["name"],
+            "%s against %s" % (_price(a["price_out"]), _price(b["price_out"])),
+            "yes" if a["price_out"] > b["price_out"] else "no",
+            "%s (%s to %s)" % (_times(mid), _times(lo), _times(hi)),
+            "%.3f / %.3f" % (q["p_a_cheaper"]["jeffreys"], q["p_a_cheaper"]["uniform"]),
+        ])
+    rank_rows.sort(key=lambda r: (r[3] != "yes", r[0], r[1]))
+
+    counts = collections.defaultdict(collections.Counter)
+    for d in data["draws"]:
+        o = d["outcome"]
+        counts[d["cell"]]["silent" if o.startswith("silent") else o] += 1
+    draw_rows = []
+    for m in by_price:
+        for t, label in data["targets"].items():
+            c = cells.get((t, m["id"], "baseline", "v2"))
+            if c is None:
+                continue
+            k = counts[c["key"]]
+            draw_rows.append([m["name"], label.split(",")[0], c["n"]]
+                             + [k[o] for o, _ in OUTCOME_COLUMNS])
+
+    parts = [
+        '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        "<title>Results as Tables</title>\n"
+        '<link rel="icon" href="data:,">\n'
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:'
+        'wght@400;600&display=swap">\n'
+        "<style>%s</style>\n</head>\n<body>\n" % TABLES_CSS,
+        "<h1>The price of a program that works: the figures</h1>\n"
+        "<p>Every figure behind the charts on <a href=\"index.html\">the results page</a>, "
+        "from the same data file (<a href=\"data.json\">data.json</a>), as of %s.</p>\n"
+        % html.escape((data["as_of"] or "").replace("T", " ").replace("Z", " UTC")),
+        "<h2>Clark County: pass@1 and cost per working extractor</h2>\n"
+        "<p>Roster models under protocol v2, by list price per million output tokens. "
+        "Intervals are 95% Wilson; the cost range is the 95% range of the simulation "
+        "(Jeffreys prior).</p>\n",
+        _table("t-price", "Clark County, protocol v2, baseline prompt",
+               ["Model", "$ / M output", "Passed", "pass@1", "95% interval",
+                "Cost per draw", "Cost per success", "95% range"], price_rows),
+        "<h2>Clark County: rankings the data settles</h2>\n"
+        "<p>Pairs of roster models where the probability that the first is cheaper per "
+        "working extractor is at least 0.975 under both priors. \"Reverses\" marks the pairs "
+        "where the first costs more per token.</p>\n",
+        _table("t-rank", "Settled rankings, cheaper per success first",
+               ["Cheaper per success", "Dearer per success", "Price per token",
+                "Reverses", "Times cheaper (95% range)", "P (Jeffreys / uniform)"],
+               rank_rows, left=2),
+        "<h2>Every draw, by outcome</h2>\n"
+        "<p>Protocol v2, baseline prompt. A host failure is a draw the host failed twice; it "
+        "is retried and not counted in the rate.</p>\n",
+        _table("t-draws", "Draws per model and portal",
+               ["Model", "Portal", "Draws"] + [h for _, h in OUTCOME_COLUMNS],
+               draw_rows, left=2),
+        "\n</body>\n</html>\n",
+    ]
+    return "".join(parts)
 
 
 def main():
@@ -238,9 +490,13 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with io.open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(render(data))
-    print("wrote %s  (%d models, %d cells, %d draws, as of %s)"
+    tables = os.path.join(os.path.dirname(os.path.abspath(args.out)), "tables.html")
+    with io.open(tables, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(render_tables(data))
+    print("wrote %s  (%d models, %d cells, %d draws, %d pairs, as of %s)"
           % (os.path.relpath(args.out, ROOT), len(data["models"]),
-             len(data["cells"]), len(data["draws"]), data["as_of"]))
+             len(data["cells"]), len(data["draws"]), len(data["pairs"]),
+             data["as_of"]))
 
 
 if __name__ == "__main__":

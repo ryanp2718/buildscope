@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results as Tables</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600&display=swap">
+<style>
+  :root { --bg: #f6f7f5; --ink: #17191c; --mut: #62666d; --rule: #d9dcd8;
+          --sans: "Libre Franklin", "Helvetica Neue", Arial, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { color-scheme: dark; --bg: #121416; --ink: #e7e9ea;
+                                      --mut: #a0a5ab; --rule: #2e3236; }
+  }
+  :root[data-theme="dark"] { color-scheme: dark; --bg: #121416; --ink: #e7e9ea;
+                             --mut: #a0a5ab; --rule: #2e3236; }
+  body { margin: 0 auto; max-width: 62rem; padding: 1.5rem 16px 3rem; background: var(--bg);
+         color: var(--ink); font: 15px/1.5 var(--sans); }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1.1rem; margin: 2.2rem 0 .3rem; }
+  p { color: var(--mut); margin: 0 0 .8rem; max-width: 44rem; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13.5px; }
+  caption { text-align: left; color: var(--mut); padding-bottom: .4rem; }
+  th, td { padding: .3rem .7rem .3rem 0; border-bottom: 1px solid var(--rule); text-align: right;
+           white-space: nowrap; vertical-align: top; }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  thead th { font-weight: 600; border-bottom-color: var(--ink); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>The price of a program that works: the figures</h1>
+<p>Every figure behind the charts on <a href="index.html">the results page</a>, from the same data file (<a href="data.json">data.json</a>), as of 2026-09-29 23:11:15 UTC.</p>
+<h2>Clark County: pass@1 and cost per working extractor</h2>
+<p>Roster models under protocol v2, by list price per million output tokens. Intervals are 95% Wilson; the cost range is the 95% range of the simulation (Jeffreys prior).</p>
+<div class="scroll"><table id="t-price">
+<caption>Clark County, protocol v2, baseline prompt</caption>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col">$ / M output</th><th scope="col">Passed</th><th scope="col">pass@1</th><th scope="col">95% interval</th><th scope="col">Cost per draw</th><th scope="col">Cost per success</th><th scope="col">95% range</th></tr></thead>
+<tbody>
+<tr><th scope="row">GLM-5.3 Flash</th><td>$0.14</td><td>15 of 19</td><td>79%</td><td>57% to 91%</td><td>$0.033</td><td>$0.042</td><td>$0.033 to $0.060</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td>$0.28</td><td>13 of 20</td><td>65%</td><td>43% to 82%</td><td>$0.0045</td><td>$0.0069</td><td>$0.0051 to $0.011</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td>$0.29</td><td>10 of 10</td><td>100%</td><td>72% to 100%</td><td>$0.0055</td><td>$0.0055</td><td>$0.0038 to $0.0086</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td>$0.47</td><td>16 of 20</td><td>80%</td><td>58% to 92%</td><td>$0.035</td><td>$0.044</td><td>$0.034 to $0.063</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td>$0.50</td><td>2 of 20</td><td>10%</td><td>3% to 30%</td><td>$0.0015</td><td>$0.015</td><td>$0.0054 to $0.073</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td>$0.53</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.0054</td><td>none passed</td><td></td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td>$0.87</td><td>12 of 20</td><td>60%</td><td>39% to 78%</td><td>$0.018</td><td>$0.031</td><td>$0.022 to $0.051</td></tr>
+<tr><th scope="row">MiniMax M3</th><td>$1.20</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.013</td><td>none passed</td><td></td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td>$2.50</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.0032</td><td>none passed</td><td></td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td>$3.50</td><td>10 of 10</td><td>100%</td><td>72% to 100%</td><td>$0.092</td><td>$0.092</td><td>$0.080 to $0.12</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td>$3.75</td><td>19 of 20</td><td>95%</td><td>76% to 99%</td><td>$0.079</td><td>$0.083</td><td>$0.072 to $0.10</td></tr>
+<tr><th scope="row">GLM-5.3</th><td>$4.40</td><td>0 of 1</td><td>0%</td><td>0% to 79%</td><td>$0.17</td><td>none passed</td><td></td></tr>
+<tr><th scope="row">Grok 4.7</th><td>$4.80</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.33</td><td>$0.33</td><td>$0.33 to $2.27</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td>$5</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.075</td><td>none passed</td><td></td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td>$6</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.25</td><td>$0.25</td><td>$0.25 to $1.70</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td>$10</td><td>6 of 20</td><td>30%</td><td>15% to 52%</td><td>$0.040</td><td>$0.13</td><td>$0.074 to $0.30</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td>$10</td><td>0 of 10</td><td>0%</td><td>0% to 28%</td><td>$0.022</td><td>none passed</td><td></td></tr>
+<tr><th scope="row">Kimi K3</th><td>$15</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.080</td><td>$0.080</td><td>$0.080 to $0.53</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td>$20</td><td>1 of 1</td><td>100%</td><td>21% to 100%</td><td>$0.12</td><td>$0.12</td><td>$0.12 to $0.85</td></tr>
+</tbody>
+</table></div><h2>Clark County: rankings the data settles</h2>
+<p>Pairs of roster models where the probability that the first is cheaper per working extractor is at least 0.975 under both priors. "Reverses" marks the pairs where the first costs more per token.</p>
+<div class="scroll"><table id="t-rank">
+<caption>Settled rankings, cheaper per success first</caption>
+<thead><tr><th scope="col" class="l">Cheaper per success</th><th scope="col" class="l">Dearer per success</th><th scope="col">Price per token</th><th scope="col">Reverses</th><th scope="col">Times cheaper (95% range)</th><th scope="col">P (Jeffreys / uniform)</th></tr></thead>
+<tbody>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">GLM-5.3 Flash</td><td>$0.29 against $0.14</td><td>yes</td><td>7.6× (4.5× to 13×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">GLM-5.3 Flash</td><td>$0.28 against $0.14</td><td>yes</td><td>6.1× (3.6× to 9.7×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.29 against $10</td><td>no</td><td>23× (11× to 58×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.29 against $3.50</td><td>no</td><td>17× (11× to 27×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.29 against $3.75</td><td>no</td><td>15× (9.5× to 23×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">MiMo V2.6 Pro</td><td>$0.29 against $0.87</td><td>no</td><td>5.6× (3.2× to 10×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Qwen3.8 Flash</td><td>$0.29 against $0.47</td><td>no</td><td>8.0× (4.8× to 14×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.14 against $10</td><td>no</td><td>3.1× (1.6× to 7.3×)</td><td>1.000 / 0.999</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.14 against $3.50</td><td>no</td><td>2.3× (1.5× to 3.2×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.14 against $3.75</td><td>no</td><td>2.0× (1.4× to 2.8×)</td><td>0.999 / 1.000</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Claude Sonnet 5</td><td>$0.50 against $10</td><td>no</td><td>9.3× (1.6× to 34×)</td><td>0.992 / 0.998</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">DeepSeek V4 Pro</td><td>$0.50 against $3.50</td><td>no</td><td>6.8× (1.3× to 19×)</td><td>0.987 / 0.996</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Gemini 3.8 Flash</td><td>$0.50 against $3.75</td><td>no</td><td>6.0× (1.2× to 16×)</td><td>0.982 / 0.994</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.28 against $10</td><td>no</td><td>19× (9.2× to 46×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.28 against $3.50</td><td>no</td><td>14× (8.6× to 21×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.28 against $3.75</td><td>no</td><td>12× (7.7× to 18×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">MiMo V2.6 Pro</td><td>$0.28 against $0.87</td><td>no</td><td>4.5× (2.6× to 7.9×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Qwen3.8 Flash</td><td>$0.28 against $0.47</td><td>no</td><td>6.4× (3.9× to 10×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Claude Sonnet 5</td><td>$0.87 against $10</td><td>no</td><td>4.2× (2.0× to 10×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">DeepSeek V4 Pro</td><td>$0.87 against $3.50</td><td>no</td><td>3.1× (1.9× to 4.7×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Gemini 3.8 Flash</td><td>$0.87 against $3.75</td><td>no</td><td>2.7× (1.6× to 4.1×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Claude Sonnet 5</td><td>$0.47 against $10</td><td>no</td><td>2.9× (1.5× to 7.0×)</td><td>1.000 / 0.999</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">DeepSeek V4 Pro</td><td>$0.47 against $3.50</td><td>no</td><td>2.1× (1.5× to 3.1×)</td><td>1.000 / 1.000</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Gemini 3.8 Flash</td><td>$0.47 against $3.75</td><td>no</td><td>1.9× (1.3× to 2.6×)</td><td>0.999 / 0.999</td></tr>
+</tbody>
+</table></div><h2>Every draw, by outcome</h2>
+<p>Protocol v2, baseline prompt. A host failure is a draw the host failed twice; it is retried and not counted in the rate.</p>
+<div class="scroll"><table id="t-draws">
+<caption>Draws per model and portal</caption>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Portal</th><th scope="col">Draws</th><th scope="col">Passed</th><th scope="col">Wrong or no rows, no error</th><th scope="col">Raised an error or wrote no program</th><th scope="col">Host failed (not counted)</th></tr></thead>
+<tbody>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Clark County</td><td>19</td><td>15</td><td>2</td><td>2</td><td>1</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">St. Johns County</td><td>3</td><td>3</td><td>0</td><td>0</td><td>1</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Clark County</td><td>20</td><td>13</td><td>3</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">St. Johns County</td><td>10</td><td>4</td><td>0</td><td>6</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>2</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>0</td><td>3</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>16</td><td>2</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Clark County</td><td>20</td><td>2</td><td>6</td><td>12</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>7</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Santa Barbara County</td><td>5</td><td>2</td><td>1</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">Clark County</td><td>10</td><td>0</td><td>4</td><td>6</td><td>0</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">Santa Barbara County</td><td>5</td><td>1</td><td>1</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Clark County</td><td>20</td><td>12</td><td>4</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>2</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">St. Johns County</td><td>10</td><td>7</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>19</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Clark County</td><td>1</td><td>0</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Clark County</td><td>10</td><td>0</td><td>9</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Clark County</td><td>20</td><td>6</td><td>13</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">Clark County</td><td>10</td><td>0</td><td>0</td><td>10</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">St. Johns County</td><td>10</td><td>1</td><td>0</td><td>9</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Clark County</td><td>1</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">Clark County</td><td>20</td><td>2</td><td>12</td><td>6</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">Clark County</td><td>10</td><td>0</td><td>7</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>3</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">Clark County</td><td>10</td><td>0</td><td>5</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">Clark County</td><td>10</td><td>0</td><td>6</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">St. Johns County</td><td>10</td><td>2</td><td>3</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">Clark County</td><td>10</td><td>0</td><td>7</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">Clark County</td><td>10</td><td>0</td><td>8</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>7</td><td>0</td></tr>
+</tbody>
+</table></div>
+</body>
+</html>
