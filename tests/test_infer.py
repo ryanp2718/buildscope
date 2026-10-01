@@ -159,7 +159,9 @@ class TestRequestCache(unittest.TestCase):
         self.assertNotEqual(c._key_for(plain), c._key_for(streamed),
                             "sanity: the two bodies really do differ")
         import inspect
-        src = inspect.getsource(c.message)
+        # `message` and `converse` build and hash the body; `_call`, which
+        # both use, looks it up and stores it.
+        src = inspect.getsource(c.message) + inspect.getsource(c._call)
         # The original bug was an ordering problem: `body["stream"] = True`
         # ran between the lookup and the store. Streaming is now a choice of
         # SDK method, so the body is never mutated after it is hashed and the

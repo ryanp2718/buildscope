@@ -388,6 +388,32 @@ class Completion:
     response_id: str | None = None
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    """One tool call from a model turn. `error` is set, and `arguments` is
+    empty, when the model's arguments did not parse."""
+    id: str
+    name: str
+    arguments: dict[str, Any]
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class Turn:
+    """What `Client.converse` returns: the completion, the tool calls it
+    asked for, and the assistant message to append to the conversation."""
+    completion: Completion
+    tool_calls: tuple[ToolCall, ...]
+    message: dict[str, Any]
+    # What the turn cost when it was bought, also on a replay (where
+    # `completion.usd` is 0.0), so a limit on an episode's spend stops a
+    # replayed episode where the original stopped.
+    purchase_usd: float = 0.0
+    # `list_cost` of the turn's usage: the same on a replay, and the same
+    # whichever host served it.
+    list_usd: float = 0.0
+
+
 _WHEN_KNOWN = ("ttft_s", "protocol", "max_tokens", "reasoning",
                "reasoning_level", "temperature", "top_p", "host",
                "reasoning_tokens", "response_id")
@@ -488,6 +514,18 @@ def cost(model: str, usage: Usage) -> float:
     return ((usage.input_tokens
              + usage.cache_read_input_tokens * spec(model).cache_read
              + usage.cache_creation_input_tokens * CACHE_WRITE) * pin
+            + usage.output_tokens * pout) / 1e6
+
+
+def list_cost(model: str, usage: Usage) -> float:
+    """Dollars for one response at the model's list price, with every input
+    token at the input rate: no cache discount, and nothing that depends on
+    which host served it. The agentic extractor's cost axis, where two
+    arms must be compared on what they used rather than on what a host
+    happened to charge (docs/evidence/2026-09-29-agentic-extractor-plan.md)."""
+    pin, pout = price(model)
+    return ((usage.input_tokens + usage.cache_read_input_tokens
+             + usage.cache_creation_input_tokens) * pin
             + usage.output_tokens * pout) / 1e6
 
 
@@ -759,6 +797,150 @@ def _usage_from_chat(u: Any) -> tuple[dict[str, int], float | None]:
 EXTRA_BODY = frozenset({"reasoning", "provider"})
 
 
+def _add_tool_delta(calls: dict[int, dict[str, Any]], tc: Any) -> None:
+    """Fold one streamed tool-call fragment into `calls`, keyed by index.
+
+    OpenAI-style streams send a call's id and name once and its arguments
+    as JSON text in pieces, so the arguments are concatenated and parsed
+    only when the turn is complete."""
+    idx = getattr(tc, "index", None)
+    idx = len(calls) if idx is None else int(idx)
+    c = calls.setdefault(idx, {"id": None, "name": "", "arguments": ""})
+    if getattr(tc, "id", None):
+        c["id"] = tc.id
+    fn = getattr(tc, "function", None)
+    if fn is not None:
+        if getattr(fn, "name", None) and not c["name"]:
+            c["name"] = fn.name
+        if getattr(fn, "arguments", None):
+            c["arguments"] += fn.arguments
+
+
+# The string fields of an OpenRouter reasoning detail that stream in pieces.
+_DETAIL_TEXT = ("text", "summary", "data")
+
+
+def _merge_details(acc: list[dict[str, Any]], items: Any) -> None:
+    """Fold streamed `reasoning_details` fragments into whole entries.
+
+    A fragment carries its entry's `index` and `type`; its text fields are
+    appended to the entry's and anything else is set. Unverified against a
+    live stream until the agent's smoke run, which is why it is written to
+    keep every field it does not recognise rather than drop it."""
+    for item in items or ():
+        d = dict(item) if isinstance(item, Mapping) else (
+            item.model_dump(mode="json") if hasattr(item, "model_dump")
+            else None)
+        if d is None:
+            continue
+        idx = d.get("index")
+        match = None if idx is None else next(
+            (a for a in acc
+             if a.get("index") == idx and a.get("type") == d.get("type")),
+            None)
+        if match is None:
+            acc.append(d)
+            continue
+        for k, v in d.items():
+            if (k in _DETAIL_TEXT and isinstance(v, str)
+                    and isinstance(match.get(k), str)):
+                match[k] += v
+            elif v is not None:
+                match[k] = v
+
+
+# ------------------------------------------------------ conversations
+# A conversation is kept in a neutral form and converted to a provider's
+# shape only when a request is built:
+#
+#   {"role": "user", "content": str}
+#   {"role": "assistant", "native": <the provider's own assistant message>}
+#   {"role": "tool", "results": [{"id", "content", "is_error"}]}
+#
+# The assistant turn stays in the provider's shape because both providers
+# require parts of it back unchanged (thinking blocks and their signatures;
+# reasoning details), and a translation would be one more place for those to
+# be lost. A tool is {"name", "description", "parameters": JSON schema}.
+
+
+def anthropic_messages(messages: list[dict[str, Any]],
+                       cache_last: bool = True) -> list[dict[str, Any]]:
+    """Neutral messages in Messages API shape. `cache_last` puts a cache
+    breakpoint on the last block, so each turn reads the conversation so far
+    from the cache instead of paying for it again."""
+    out: list[dict[str, Any]] = []
+    for m in messages:
+        role = m["role"]
+        if role == "user":
+            out.append({"role": "user", "content": [
+                {"type": "text", "text": m["content"]}]})
+        elif role == "assistant":
+            out.append(m["native"])
+        elif role == "tool":
+            out.append({"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": r["id"],
+                 "content": r["content"], "is_error": bool(r.get("is_error"))}
+                for r in m["results"]]})
+        else:
+            raise ValueError("unknown message role %r" % role)
+    if cache_last and out and out[-1]["role"] == "user":
+        last = dict(out[-1])
+        blocks = [dict(b) for b in last["content"]]
+        blocks[-1]["cache_control"] = {"type": "ephemeral"}
+        last["content"] = blocks
+        out[-1] = last
+    return out
+
+
+def chat_messages(system: str,
+                  messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Neutral messages in Chat Completions shape, system prompt first."""
+    out: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    for m in messages:
+        role = m["role"]
+        if role == "user":
+            out.append({"role": "user", "content": m["content"]})
+        elif role == "assistant":
+            out.append(m["native"])
+        elif role == "tool":
+            out.extend({"role": "tool", "tool_call_id": r["id"],
+                        "content": r["content"]} for r in m["results"])
+        else:
+            raise ValueError("unknown message role %r" % role)
+    return out
+
+
+def anthropic_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"name": t["name"], "description": t["description"],
+             "input_schema": t["parameters"]} for t in tools]
+
+
+def chat_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"type": "function",
+             "function": {"name": t["name"], "description": t["description"],
+                          "parameters": t["parameters"]}} for t in tools]
+
+
+def parse_tool_call(raw: Mapping[str, Any]) -> "ToolCall":
+    """A stored tool call as a `ToolCall`. Arguments arrive as a dict from
+    Anthropic and as JSON text from OpenRouter; text that does not parse to
+    an object is kept, with the error, for the tool node to report back to
+    the model rather than raise on."""
+    args = raw.get("arguments")
+    if isinstance(args, Mapping):
+        return ToolCall(str(raw["id"]), str(raw["name"]), dict(args))
+    text = str(args or "")
+    try:
+        parsed = json.loads(text) if text.strip() else {}
+    except ValueError as e:
+        return ToolCall(str(raw["id"]), str(raw["name"]), {},
+                        "arguments are not valid JSON: %s" % e)
+    if not isinstance(parsed, dict):
+        return ToolCall(str(raw["id"]), str(raw["name"]), {},
+                        "arguments are not a JSON object")
+    return ToolCall(str(raw["id"]), str(raw["name"]), parsed)
+
+
 @dataclass(frozen=True)
 class _Reply:
     """What a transport hands back to `message`. `billed` is the provider's
@@ -770,6 +952,12 @@ class _Reply:
     model: str
     billed: float | None
     host: str | None
+    # For a conversation: the tool calls as {"id", "name", "arguments"}
+    # (a dict from Anthropic, the JSON string from OpenRouter), and the
+    # assistant message in the provider's own shape, to send back unchanged
+    # on the next turn.
+    tool_calls: tuple[dict[str, Any], ...] = ()
+    assistant: dict[str, Any] | None = None
 
 
 class Client:
@@ -835,7 +1023,7 @@ class Client:
         return self._oai
 
     # -------------------------------------------------------------- cache
-    def _key_for(self, body: Body, draw: int = 0) -> str:
+    def _key_for(self, body: Body, draw: int = 0, salt: str = "") -> str:
         """Hash the request exactly as it goes on the wire.
 
         Keys are sorted so a dict reordering is not a cache miss, and the
@@ -852,10 +1040,17 @@ class Client:
 
         `draw=0` hashes exactly as it did before this argument existed, so
         every response bought earlier still replays for nothing.
+
+        `salt` is `converse`'s run id, the same kind of thing as `draw`: not
+        on the wire, and there so that a response bought in one run of an
+        experiment is never replayed into another (an exploratory run into
+        an evaluation run, say). Empty, the key is unchanged.
         """
         raw = json.dumps(body, sort_keys=True).encode("utf-8")
         if draw:
             raw += ("#draw=%d" % draw).encode("ascii")
+        if salt:
+            raw += ("#" + salt).encode("utf-8")
         return hashlib.sha256(raw).hexdigest()[:24]
 
     def cached(self, key: str) -> dict[str, Any] | None:
@@ -1080,26 +1275,108 @@ class Client:
         to the end of the user message, for a caller that resends the whole
         request (see `build`).
         """
-        prov = provider_for(model)
         body = self.request(model, system, user, max_tokens, thinking,
                             temperature, protocol, effort, cache_user)
-        # Resolved once, in `request`, so the ceiling that goes on the wire
-        # is the same one the budget is checked against, the span records,
-        # and `truncated` compares output against. Computing it at any one of
+        # The ceiling is resolved once, in `request`, and `_call` reads it
+        # back from the body, so the ceiling that goes on the wire is the
+        # same one the budget is checked against, the span records, and
+        # `truncated` compares output against. Computing it at any one of
         # those sites and not the others is how a run gets pre-authorized for
         # a third of what it can actually spend.
-        max_tokens = int(body["max_tokens"])
-        sent = settings_sent(body, protocol)
-        # Computed from the request body alone. Transport concerns - streaming,
-        # retries, backoff - belong to the SDK now and cannot reach this dict,
-        # which is structurally the bug `_store` describes.
+        #
+        # The key is computed from the request body alone. Transport
+        # concerns - streaming, retries, backoff - belong to the SDK now and
+        # cannot reach this dict, which is structurally the bug `_store`
+        # describes.
         #
         # Nothing about the second provider needed a migration here: the two
         # bodies differ in shape and both carry `model`, so an OpenRouter call
         # cannot collide with a Claude one, and every response bought before
         # this existed still hashes to the key it was stored under.
         key = self._key_for(body, draw)
+        est_in = tokens(system) + tokens(user)
+        return self._call(model, body, key, est_in, call_class, tag, draw,
+                          protocol)[0]
 
+    def build_conversation(self, model: str, system: str,
+                           messages: list[dict[str, Any]],
+                           tools: list[dict[str, Any]], max_tokens: int,
+                           thinking: bool = True,
+                           protocol: Protocol = Protocol.V2,
+                           effort: str | None = None) -> Body:
+        """The body for one turn of a conversation with tools.
+
+        Built on `build` and `build_chat`, so a turn carries the same model
+        settings, thinking or reasoning control, sampling and host routing as
+        a one-shot draw, and differs only in its messages and tools. On
+        OpenRouter, `require_parameters` then also routes only to hosts that
+        list `tools`."""
+        max_tokens = ceiling_for(model, max_tokens, protocol)
+        if provider_for(model) == OPENROUTER:
+            body = self.build_chat(model, system, "", max_tokens, thinking,
+                                   None, protocol, effort)
+            body["messages"] = chat_messages(system, messages)
+            if tools:
+                body["tools"] = chat_tools(tools)
+            return body
+        if effort is not None:
+            raise Refused("effort settings are not wired for Anthropic "
+                          "models. Nothing was sent.")
+        body = self.build(model, system, "", max_tokens, thinking, None,
+                          protocol)
+        body["messages"] = anthropic_messages(messages)
+        if tools:
+            body["tools"] = anthropic_tools(tools)
+        return body
+
+    def converse(self, model: str, system: str,
+                 messages: list[dict[str, Any]],
+                 tools: list[dict[str, Any]], max_tokens: int,
+                 call_class: str, run_id: str, episode: int = 0,
+                 tag: str = "", thinking: bool = True,
+                 protocol: Protocol = Protocol.V2,
+                 effort: str | None = None) -> Turn:
+        """One turn of a conversation with tools, on whichever provider owns
+        `model`: the same cache, budget, retries and ledger as `message`.
+
+        The cache key is the whole request, so a turn replays only when the
+        conversation up to it is identical, plus `episode` (the draw number:
+        independent episodes of one task start from the same first request),
+        `call_class` (the arm: the scripted loop's first turn is the same
+        request as a one-shot draw, and each arm's episodes are its own
+        samples) and `run_id`, so that no response crosses from one run into
+        another. The ledger row carries `episode` as its draw."""
+        if not run_id:
+            raise Refused("converse needs a run id, so its responses cannot "
+                          "replay into another run. Nothing was sent.")
+        body = self.build_conversation(model, system, messages, tools,
+                                       max_tokens, thinking, protocol, effort)
+        key = self._key_for(body, episode,
+                            "run=%s|arm=%s" % (run_id, call_class))
+        est_in = (tokens(system) + tokens(json.dumps(body["messages"]))
+                  + tokens(json.dumps(body.get("tools") or [])))
+        done, entry = self._call(model, body, key, est_in, call_class, tag,
+                                 episode, protocol, rich=True)
+        calls = tuple(parse_tool_call(c) for c in entry.get("tool_calls") or ())
+        native = entry.get("assistant") or {"role": "assistant",
+                                            "content": done.text}
+        return Turn(done, calls, {"role": "assistant", "native": native},
+                    float(entry.get("usd") or done.usd),
+                    list_cost(model, done.usage))
+
+    def _call(self, model: str, body: Body, key: str, est_in: int,
+              call_class: str, tag: str, draw: int, protocol: Protocol,
+              rich: bool = False) -> tuple[Completion, dict[str, Any]]:
+        """Replay `body` from the cache or buy it: the budget check, the
+        retries, the ledger row and the store, shared by `message` and
+        `converse`. Returns the completion and the cache entry it came from
+        or was stored as. `rich` stores the tool calls and the assistant
+        message as the provider sent them, which a conversation needs to
+        continue; without it the entry is exactly what `message` always
+        stored."""
+        prov = provider_for(model)
+        max_tokens = int(body["max_tokens"])
+        sent = settings_sent(body, protocol)
         tr = telemetry.tracer()
         with tr.start_as_current_span("chat %s" % model,
                                       kind=SpanKind.CLIENT) as span:
@@ -1143,9 +1420,9 @@ class Client:
                     cached=True, usd=0.0, stop_reason=hit.get("stop_reason"),
                     truncated=truncated(hit.get("stop_reason"), usage,
                                         max_tokens),
-                    host=hit.get("host"), response_id=hit.get("response_id"))
+                    host=hit.get("host"),
+                    response_id=hit.get("response_id")), hit
 
-            est_in = tokens(system) + tokens(user)
             self.budget.check(model, est_in, max_tokens)
             if self.dry_run:
                 raise Refused(
@@ -1261,14 +1538,19 @@ class Client:
                 response_id=clock.response_id, **sent))
             # The raw usage block, not the typed view, so fields `Usage`
             # does not read stay available to a later reader.
-            self._store(key, {"text": text, "usage": raw_usage,
-                              "stop_reason": stop_reason, "host": host,
-                              "response_id": clock.response_id})
+            entry: dict[str, Any] = {
+                "text": text, "usage": raw_usage, "stop_reason": stop_reason,
+                "host": host, "response_id": clock.response_id}
+            if rich:
+                entry["tool_calls"] = list(reply.tool_calls)
+                entry["assistant"] = reply.assistant
+                entry["usd"] = round(usd, 6)
+            self._store(key, entry)
             return Completion(
                 text=text, usage=usage, model=model, provider=prov,
                 cached=False, usd=usd, stop_reason=stop_reason,
                 truncated=truncated(stop_reason, usage, max_tokens),
-                host=host, response_id=clock.response_id)
+                host=host, response_id=clock.response_id), entry
 
     def _send_messages(self, body: Body, clock: _Clock) -> "_Reply":
         """Anthropic transport.
@@ -1295,8 +1577,17 @@ class Client:
         usage = msg.usage.model_dump(mode="json")
         text = "".join(b.text for b in msg.content
                        if isinstance(b, anthropic.types.TextBlock))
+        calls = tuple({"id": b.id, "name": b.name, "arguments": b.input}
+                      for b in msg.content
+                      if isinstance(b, anthropic.types.ToolUseBlock))
+        # Every block, thinking blocks and their signatures included: the
+        # API requires them back unchanged when a turn with thinking ends
+        # in a tool call.
+        assistant = {"role": "assistant",
+                     "content": [b.model_dump(mode="json", exclude_none=True)
+                                 for b in msg.content]}
         return _Reply(text, usage, msg.stop_reason, msg.model, None,
-                      "anthropic")
+                      "anthropic", calls, assistant)
 
     def _send_chat(self, body: Body, clock: _Clock | None = None) -> "_Reply":
         """OpenRouter transport, streamed.
@@ -1329,6 +1620,8 @@ class Client:
         saw_choice = False
         last: Any = None
         host: str | None = None
+        calls: dict[int, dict[str, Any]] = {}
+        details: list[dict[str, Any]] = []
         args = {k: v for k, v in body.items() if k not in EXTRA_BODY}
         extra = {k: v for k, v in body.items() if k in EXTRA_BODY}
         if extra:
@@ -1354,6 +1647,11 @@ class Client:
                     elif (getattr(delta, "reasoning", None)
                           or getattr(delta, "reasoning_content", None)):
                         clock.token()
+                    for tc in getattr(delta, "tool_calls", None) or ():
+                        clock.token()
+                        _add_tool_delta(calls, tc)
+                    _merge_details(details,
+                                   getattr(delta, "reasoning_details", None))
                     if choice.finish_reason:
                         finish = choice.finish_reason
         model = body.get("model")
@@ -1374,7 +1672,25 @@ class Client:
             raise _HostError("stream for %r closed with no finish reason "
                              "after %d output tokens" % (model, out),
                              billed=billed, output_tokens=out, host=host)
-        return _Reply("".join(parts), usage, stop, resp_model, billed, host)
+        text = "".join(parts)
+        tool_calls = tuple(
+            {"id": c["id"] or "call_%d" % i, "name": c["name"],
+             "arguments": c["arguments"]}
+            for i, c in sorted(calls.items()))
+        assistant: dict[str, Any] = {
+            "role": "assistant",
+            "content": text if text or not tool_calls else None}
+        if tool_calls:
+            assistant["tool_calls"] = [
+                {"id": c["id"], "type": "function",
+                 "function": {"name": c["name"], "arguments": c["arguments"]}}
+                for c in tool_calls]
+        if details:
+            # OpenRouter asks for these back unchanged on the next turn, so
+            # a reasoning model keeps its reasoning across a tool call.
+            assistant["reasoning_details"] = details
+        return _Reply(text, usage, stop, resp_model, billed, host,
+                      tool_calls, assistant)
 
     def _log_failure(self, model: str, call_class: str, tag: str, draw: int,
                      clock: _Clock, error_type: str,
