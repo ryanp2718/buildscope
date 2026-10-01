@@ -71,6 +71,9 @@ question any reader already has.
    draw, coloured by what happened: perfect, near miss (missed a few rows), silently empty, raised
    an error, host failure. It shows that two models with the same
    rate can fail in different ways, and that silently empty output dominates the cheap end on Clark. This carries question 1.
+   A companion dot plot gives each model's pass@1 beside its pass^3, the chance that three draws in
+   a row all work: the gap between the two is how much a rate overstates what an unattended
+   pipeline gets (reporting addition, below).
 4. **One table inside a table.** An explainer. A simplified drawing of Clark's page markup, the small
    table inside the grid's caption highlighted, and the cut a common program makes at the first
    closing table tag, landing before any permit row. Beside it, the share of silently empty draws
@@ -98,13 +101,58 @@ question any reader already has.
 
 - the answers to questions 1-5 in the pre-registered order, each with its table and intervals, and
   the counts the pre-registration says are reported;
-- deviations 1 and 2 and anything after them, and the cells cut under the $45 cap, if any;
+- deviations 1 and 2 and anything after them, the cap raised to $50 (amendment 3), and the cells
+  cut under it;
+- **field-level pass@1** beside pass@1 in every table, and field-level cost per success beside cost
+  per success (deviation 4): the share of draws that pass and also agree with the adapter on every
+  field of every matched record, with the fields that fail most per portal. `variance.json` keeps
+  only record-level results per draw, so the export reads field agreement from a re-run of the
+  passing extractors (`data/infer/verifier/field_audit.json`, cached per extractor);
 - a method appendix: settings per model, **hosts per arm** (the hint and baseline arms of a model can
   be served by different hosts, which is a confound in question 5), re-draws per model, host
   failures per model and host, and spend on failed calls (`usd_failed_calls`) beside `usd_total`;
 - exploratory sections, labelled: a failure breakdown per draw (cut at the caption table, rows keyed
   on the detail link, raised, host failure, other), the caption-table removal test, reasoning length
   by outcome, and the effect of the hint on reasoning length;
+- **reporting additions**, not in the pre-registration and labelled as such (they add context to
+  the pre-registered answers and change none of them):
+  - the minimum detectable effect at the design's n for questions 4 and 5 (80% power, two-sided
+    5%): about 60 points at 10 draws against 10, 55 at 10 against 20, 45 at 20 against 20, near a
+    50% rate. A question answered with no claim then reads "an effect smaller than this is not
+    detectable here", not "no effect". This is a property of the design, fixed before the data,
+    and not the post-hoc "observed power" that is advised against;
+  - the unit of generalization: every interval is over draws of one task on one portal, so a rate
+    describes that model on that portal. A claim about portals in general needs more portals and
+    a two-level bootstrap (portals, then draws within them); pooling the three targets is not
+    done, since clustered standard errors are unreliable with three clusters. Wilson intervals and
+    Beta posteriors are used rather than normal intervals because n is 5 to 20 and many rates sit
+    near 0 or 1 (Bowyer, Aitchison and Ivanova, 2025);
+  - missing draws, split by cause. A draw never attempted (a cell stopped by the cap or by time)
+    is missing by design, independent of its outcome, and costs precision only. A draw attempted
+    and lost to host failures after its retry may not be: hosts cut streams at fixed durations,
+    so long-reasoning draws are the likelier to be lost. Each cell with such draws is reported
+    with best/worst-case bounds (every lost draw counted as a pass, then as a fail), with whether
+    any claim changes between them;
+  - exploratory: the expected share of wrong calls among the settled pairwise rankings, the mean
+    of 1 - P(cheaper) over the settled pairs under the less favourable prior (a Bayesian false
+    discovery rate), since 181 pairs are compared and the 0.975 bar is set per pair;
+  - **reliability and economics**, computed from the draws already bought, per cell:
+    - **pass@k** for k = 1, 3, 5, the chance that at least one of k draws works, by the unbiased
+      estimator 1 - C(n-c, k) / C(n, k) (Chen et al., 2021, the Codex paper). It assumes something
+      picks the working draw, which in production means a check that needs no reference; the
+      agentic follow-up measures such a check;
+    - **pass^k** for the same k, the chance that all k draws work, C(c, k) / C(n, k) (Yao et al.,
+      2024, τ-bench). Where pass@k asks whether a model can do the task, pass^k asks whether it
+      does it every time, which is the question for a pipeline that runs unattended;
+    - the **silent failure rate**: draws that ran without error but returned wrong or no rows, as
+      a share of scored draws. These are the failures that would ship bad data unnoticed, so the
+      page states them beside pass@1 rather than inside "failed";
+    - **time per success**: mean wall-clock seconds per scored draw over the pass rate, beside cost
+      per success, and the cost-accuracy frontier drawn with latency as a third dimension (Kapoor et
+      al., 2024, "AI Agents That Matter"). Undefined at a pass rate of 0, as cost per success is.
+
+    The first three need no new data. None is pre-registered, so none changes an answer to
+    questions 1-5; they describe the same cells from the side a user of the extractors sees;
 - kimi-k2-thinking's v1 rate as published and without its host-error draw (deviation 2);
 - "What this does not establish" (every evidence report carries it; `check_docs` requires it),
   with the follow-ups it implies;
@@ -155,6 +203,29 @@ to `main`, so `site/results/` reaches `main` only when the page is ready to publ
   preview. It uses D3 alone; the scroll steps use the browser's IntersectionObserver, which does
   what Scrollama would with one dependency fewer. The slope chart waits until the export carries
   the pairwise comparisons, so that it can mark only settled rankings.
+- 2026-09-29: the export carries the pairwise comparisons: every pair of cells on one target, arm
+  and protocol with a cost per success and at least 3 draws, with P(cheaper) under both priors and
+  the ratio's 95% range. Each cell's simulations are drawn once and paired draw for draw, which is
+  the intervals report's method without a second simulation per pair. The page's slope chart
+  draws a solid line only for a model in a settled reversal. The export also writes `tables.html`:
+  the charts' figures as tables, linked when JavaScript is off and lifted into a "Show the data"
+  disclosure under each chart when it is on. Display names moved into the export, so the page and
+  the tables use one list.
+- 2026-09-29: `tests/test_render.py` is the render check: Playwright, desktop and phone, light and
+  dark, and JavaScript off. It counts marks against `data.json`, and fails on script errors,
+  chart text off the screen, or a page wider than a phone. It needs the network for the CDN and
+  fonts, so it runs only with `RENDER_CHECK=1`, and in CI as its own job, which keeps the
+  screenshots. Playwright is the `render` dependency group.
+- 2026-09-29: four reporting additions to the report, after comparing the design with the
+  recommendations in Miller, "Adding Error Bars to Evals" (Anthropic, 2024): the minimum
+  detectable effect for questions 4 and 5, the unit of generalization, missing draws split by
+  cause with bounds on those lost to host failures, and an exploratory false discovery rate for
+  the settled rankings. Of the paper's other recommendations, paired differences need several
+  tasks answered by both models, and each target here is one task, so they do not apply.
+- 2026-09-29: a fifth reporting addition, reliability and economics: pass@k, pass^k, the silent
+  failure rate and time per success, with a pass@1-against-pass^3 companion to the unit chart.
+- 2026-09-30: field-level pass@1 added beside pass@1 throughout (pre-registration, deviation 4),
+  after the offline verifier showed the scorer decides on permit numbers alone.
 
 ## What this does not establish
 
