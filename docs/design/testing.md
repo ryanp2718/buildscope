@@ -14,6 +14,10 @@ run, which is the only property that makes a suite actually get run. The decisio
 
 `check_docs.py` and `check_identity.py` are invoked as tests, so `run_tests.py` is the single command.
 
+The one exception to "no network" is opt-in. `tests/test_render.py` loads the results page in a real
+browser, which fetches the page's D3 and fonts, so it runs only with `RENDER_CHECK=1` and the `render`
+dependency group (Playwright), and skips otherwise. CI runs it as a separate job and keeps the screenshots.
+
 CI also runs `ruff check .` and `mypy`. mypy is strict and covers only the files listed under
 `[tool.mypy]` in `pyproject.toml`; a file joins that list once it passes, starting from the inference
 layer.
@@ -50,6 +54,8 @@ A test suite aimed at exceptions catches none of these. So the suite is shaped a
 | `test_models.py` | the model registry: every id ever called resolves, reasoning controls fit their provider, tiers, every model that reasons is asked to at its lab's default level, and the protocol v2 efforts, caps, sampling, host filters and excluded endpoints against the catalogue and endpoint snapshots | seven hand-kept model tables that disagreed, so two reasoning models ran as non-reasoning |
 | `test_transport.py` | streaming on both providers, the read timeout and wall-clock limit, the fatal/transient error split with one retry per draw, time to first token, and infra errors reported beside the pass rate | a 900 s per-read timeout that let one call run 65,161 s, and a timeout, a revoked key and a budget refusal all stopping the cell as one outcome |
 | `test_fileio.py` | atomic writes of the cache and the roll-ups, `variance.json` merged under a lock, one run per cell, whole ledger lines under concurrent appends; the races are run between real processes | a truncated cache entry that failed on every later hit, a corrupt `variance.json` read as empty, and two processes that both bought draw 1 of one cell |
+| `test_export_results.py` | the results page's data: the exported cells equal the stats roll-up's, a re-run writes identical bytes, a cell that never worked gets no cost per success, pairs are compared only within a target, arm and protocol and marked settled only at P ≥ 0.975 under both priors, the tables page lists what the charts draw, and nothing private leaves | a page that could quote a number no report does |
+| `test_render.py` | the results page in a browser, at a desktop and a phone width, light and dark, and with JavaScript off: no script errors, one mark per model and draw counted against `data.json`, no chart text off the screen, no page wider than a phone | labels that ran off the screen and dots drawn invisible, both found only by looking |
 | `test_cells.py` | the variance records: `--cells` parsing, a per-cell config that cannot leak, and a byte-for-byte round trip of every stored draw | `run_cells` mutating the shared argument namespace, and `.get()` turning a misspelled field into a silent zero |
 
 ## Four ideas worth knowing before editing these

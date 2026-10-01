@@ -21,6 +21,13 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Render checks for the results page (tests/test_render.py), kept out of `dev`
+# because they drive a browser and load the page's CDN script and fonts:
+# the one part of the suite that needs the network. They run only with
+# RENDER_CHECK=1 (`uv sync --group dev --group render`); otherwise they skip.
+render = [
+    "playwright>=1.49",
+]
 
 [build-system]
 requires = ["hatchling"]

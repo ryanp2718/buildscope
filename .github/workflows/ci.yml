@@ -57,3 +57,38 @@ jobs:
         # every evidence report names a producer and a non-empty
         # "What this does not establish".
         run: uv run python scripts/check_docs.py
+
+  render:
+    # The results page in a real browser (tests/test_render.py): script
+    # errors, mark counts against data.json, text off the screen, a page wider
+    # than a phone. Its own job because it is the one check that needs the
+    # network, for the page's CDN script and fonts. The screenshots are kept
+    # as an artifact, for the look a count cannot give.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev --group render --python 3.13
+
+      - name: Install the browser
+        run: uv run playwright install --with-deps chromium
+
+      - name: Render the results page
+        env:
+          RENDER_CHECK: "1"
+          RENDER_SHOTS: render-shots
+        run: uv run pytest -q tests/test_render.py
+
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-shots
+          path: render-shots/
+          if-no-files-found: ignore
