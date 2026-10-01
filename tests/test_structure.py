@@ -56,6 +56,7 @@ IMPORT_NAMES = {
     "opentelemetry-api": "opentelemetry",
     "opentelemetry-sdk": "opentelemetry",
     "opentelemetry-exporter-otlp-proto-http": "opentelemetry",
+    "langgraph-checkpoint-sqlite": "langgraph",
 }
 
 
@@ -237,6 +238,43 @@ class TestLibraryIsSelfContained(unittest.TestCase):
                         "declare. Add it to [project] dependencies or stop "
                         "importing it."
                         % (os.path.relpath(path, ROOT), mod))
+
+
+class TestTheAgentSeesNoReference(unittest.TestCase):
+    """`permits/agent/` writes and checks extractors with no answer key.
+
+    The adapters are the reference parsers; the scorer lives in
+    `permits.harness`, and the hint text in `scripts/conformance.py`, which
+    the library cannot import at all (`TestLibraryIsSelfContained`). An
+    agent that could reach any of them would be graded by the answer key it
+    was shown (docs/evidence/2026-09-29-agentic-extractor-plan.md), so the
+    rule is checked, not trusted.
+    """
+    FORBIDDEN = ("permits.adapters", "permits.harness")
+
+    def test_no_reference_imports(self):
+        agent = os.path.join(PERMITS, "agent")
+        for f in sorted(os.listdir(agent)):
+            if not f.endswith(".py"):
+                continue
+            path = os.path.join(agent, f)
+            with io.open(path, encoding="utf-8") as fh:
+                tree = ast.parse(fh.read(), filename=path)
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [a.name for a in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module] + ["%s.%s" % (node.module, a.name)
+                                             for a in node.names]
+                for name in names:
+                    with self.subTest(module=f, imports=name):
+                        self.assertFalse(
+                            any(name == b or name.startswith(b + ".")
+                                for b in self.FORBIDDEN),
+                            "permits/agent/%s imports %s, a reference "
+                            "parser" % (f, name))
+                        self.assertNotIn("conformance", name)
 
 
 class TestAdaptersStayThin(unittest.TestCase):
