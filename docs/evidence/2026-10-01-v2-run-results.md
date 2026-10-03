@@ -10,10 +10,11 @@ Inputs:    `data/infer/variance.json` (86 v2 cells, 836 scored v2 draws, 3 of th
            v2 synthesis calls, 2026-09-28 17:02Z to 2026-09-30 06:50Z),
            `data/infer/verifier/field_audit.json` (427 perfect draws re-run), the response cache
 Outputs:   `site/results/data.json` and `tables.html`, `data/infer/model_stats.csv` and `.json`
-Status:    Draft for review. Answers the five questions of the
+Status:    Current. Reviewed and published 2026-10-03, with the results page at
+           https://ryanp2718.github.io/buildscope/results/. Answers the five questions of the
            [v2 pre-registration](2026-09-27-v2-run-preregistration.md) under its analysis plan; the
            reporting additions of the [results plan](2026-09-28-v2-results-and-visualization-plan.md)
-           are labelled as not pre-registered. The results page is not published.
+           are labelled as not pre-registered.
 
 ## The run
 
