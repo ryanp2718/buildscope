@@ -264,6 +264,76 @@ class TestExport(unittest.TestCase):
         self.assertNotIn("private", text)
 
 
+class TestBestOf5(unittest.TestCase):
+    """Best-of-5 with the reference-free check rides along from the
+    verifier's file: its condition split like a cell's, its `source` left
+    behind."""
+
+    @staticmethod
+    def _k(p1, usd1, p5, usd5, oracle5):
+        return {"1": {"success": p1, "usd_per_success": usd1, "pass_at_k": p1},
+                "5": {"success": p5, "usd_per_success": usd5, "pass_at_k": oracle5}}
+
+    def setUp(self):
+        self.bok = {"source": "spikes/verifier_offline.py", "seed": 1, "orders": 2000, "cells": [
+            {"target": "stjohns", "model": M, "condition": "v2", "n": 10, "perfect": 0,
+             "k": self._k(0.0, None, 0.0, None, 0.0)},
+            {"target": "clarkco", "model": M, "condition": "hint|v2", "n": 10, "perfect": 2,
+             "k": self._k(0.21, 0.37, 0.78, 0.32, 0.78)}]}
+        self.v, self.ledger = _store()
+
+    def test_each_cell_carries_its_arm_protocol_and_rates(self):
+        bo = export_results.build(self.v, self.ledger, bok=self.bok)["exploratory"]["best_of_5"]
+        self.assertEqual([(c["target"], c["arm"], c["protocol"], c["k"], c["n"], c["best5"],
+                           c["oracle5"], c["usd_per_success_5"]) for c in bo["cells"]],
+                         [("clarkco", "hint", "v2", 2, 10, 0.78, 0.78, 0.32),
+                          ("stjohns", "baseline", "v2", 0, 10, 0.0, 0.0, None)])
+        self.assertEqual(bo["orders"], 2000)
+
+    def test_the_source_stays_behind(self):
+        text = export_results.render(export_results.build(self.v, self.ledger, bok=self.bok))
+        self.assertNotIn('"source"', text)
+
+    def test_without_the_file_there_is_no_best_of_5(self):
+        self.assertNotIn("best_of_5", export_results.build(self.v, self.ledger)["exploratory"])
+
+    def test_the_table_lists_baseline_cells_only(self):
+        html = export_results.render_tables(export_results.build(self.v, self.ledger, bok=self.bok))
+        best = html.split('id="t-best"')[1].split("</table>")[0]
+        self.assertEqual(best.count("<tr>") - 1, 1)
+        self.assertIn("0 of 10", best)
+
+
+class TestNameClash(unittest.TestCase):
+    """The draws that crash on the `html` parameter ride along from the
+    spike's file as counts per cell: its `source`, and the per-draw rows
+    that carry local paths, left behind."""
+
+    def setUp(self):
+        self.clash = {"source": "spikes/v2_name_clash.py", "v2_crashes": 3,
+                      "draws": [{"path": "C:/private/data/infer/synth/x.py"}],
+                      "crashes_by_cell": [
+                          {"target": "stjohns", "model": M, "arm": "baseline", "protocol": "v2",
+                           "crashes": 1, "pass_patched": 1},
+                          {"target": "clarkco", "model": M, "arm": "baseline", "protocol": "v2",
+                           "crashes": 2, "pass_patched": 0}]}
+        self.v, self.ledger = _store()
+
+    def test_counts_per_cell_and_nothing_else(self):
+        nc = export_results.build(self.v, self.ledger, clash=self.clash)["exploratory"]["name_clash"]
+        self.assertEqual([(c["target"], c["crashes"], c["pass_patched"]) for c in nc["cells"]],
+                         [("clarkco", 2, 0), ("stjohns", 1, 1)])
+        self.assertEqual(set(nc), {"cells", "producer"})
+
+    def test_no_source_or_local_path_leaves(self):
+        text = export_results.render(export_results.build(self.v, self.ledger, clash=self.clash))
+        self.assertNotIn('"source"', text)
+        self.assertNotIn("private", text)
+
+    def test_without_the_file_there_is_no_name_clash(self):
+        self.assertNotIn("name_clash", export_results.build(self.v, self.ledger)["exploratory"])
+
+
 M2 = "xiaomi/mimo-v2.6-flash"
 
 
@@ -355,7 +425,7 @@ class TestTables(unittest.TestCase):
                          set(export_results.ROSTER) | set(export_results.V1_RERUN))
 
     def test_the_page_finds_each_table_by_id(self):
-        for tid in ("t-price", "t-rank", "t-draws"):
+        for tid in ("t-price", "t-rank", "t-draws", "t-best"):
             self.assertEqual(self.html.count('<table id="%s">' % tid), 1)
 
     def test_one_price_row_per_roster_cell_on_clark(self):

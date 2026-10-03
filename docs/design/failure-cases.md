@@ -30,6 +30,7 @@ calls in the ledger and 780 scored v2 draws, except cases 1, 9 and 10, updated 2
 | 8 | Reasoning length at the output cap | model; design | 3 of 4 glm-5.3 Clark draws |
 | 9 | A quote closes its own string literal | model | 5 of 5 v2 draws refused for not parsing |
 | 10 | One host, long reasoning and a broken contract | host or model; unresolved | 13 of deepseek-v4-flash's 19 draws on OpenInference; 0 of 817 elsewhere |
+| 11 | The parameter hides the module | harness (prompt) and model | 62 of 833 scored v2 draws, 8 of 26 models |
 
 ## 1. Announces a plan, then ends the turn
 
@@ -235,3 +236,31 @@ calls in the ledger and 780 scored v2 draws, except cases 1, 9 and 10, updated 2
 - **Consequence.** Reported, not corrected: the pre-registration has no rule for it and the replies
   are complete, so the draws stand as scored. The report gives deepseek-v4-flash's cells split by
   host. Whether to exclude OpenInference for deepseek-v4-flash in later runs is open.
+
+## 11. The parameter hides the module
+
+*Harness (prompt) and model. Found 2026-10-02, over the 833 scored v2 draws of the finished run
+(`spikes/v2_name_clash.py`).*
+
+- **Observed.** `clarkco|openai/gpt-6-sol|v2` draw 0: `import html` on line 1,
+  `def extract(html: str)` on line 5, and inside `extract` a helper named `html_module_unescape`
+  whose body is `return html.unescape(value)`. Inside `extract`, `html` is the page, so the call
+  raises `AttributeError: 'str' object has no attribute 'unescape'` on all 57 pages. The prompt
+  sets this up: it names the parameter `html`, asks for HTML entities to be decoded (rule 1), and
+  allows the `html` module, which decodes them.
+- **Frequency.** 62 of 833 scored v2 draws, from 8 of 26 models: Hunyuan 3 22, GPT-6 Sol 13, Kimi
+  K2 Thinking 12, GPT-6 Luna 7, Qwen3.5 Flash 5, and one each for DeepSeek V4.1 Flash, MiniMax M3
+  and Grok 4.7. 9 more in v1. Of the 62, 37 call the module from a helper defined inside `extract`,
+  16 from `extract` itself, and 9 (GPT-6 Sol 5, GPT-6 Luna 4) try to reach it under another name
+  from inside `extract`.
+- **Hypothesis (partly checked).** A model that reaches the module from a scope where the parameter
+  hides it crashes; one that does not, does not. Checked, from the syntax tree of every stored v2
+  baseline module: the 18 models that never crash import it under an alias, import `unescape`
+  directly, rename the parameter, or call it only from module-level helpers. Claude Opus 5.5
+  aliases it in 35 of 35, GPT-6 Sol in 1 of 24. Not checked: whether a model does the same under
+  another prompt, so these are not claims about a model's habits.
+- **Consequence.** Reported, not corrected: the prompt is part of the protocol, so the draws stand
+  as scored. The report re-scores the 62 with only that reference patched: 28 pass, and one
+  question 4 contrast (Kimi K2 Thinking on St. Johns) would then be claimed (report, "The `html`
+  parameter"). Renaming the parameter is a candidate change for the next protocol. In an agent
+  loop the traceback names the clash, so it should cost a turn rather than the task.

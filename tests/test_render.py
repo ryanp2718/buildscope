@@ -39,8 +39,12 @@ SHOTS = os.environ.get("RENDER_SHOTS")
 VIEWS = [("desktop", 1280, 860, "light"), ("phone", 390, 844, "dark")]
 
 # Chart text that runs past either edge of the viewport.
-OFF_SCREEN = """() => [...document.querySelectorAll(`#price-chart text, #slope-chart text,
-    #ports-chart text, #effects-chart text, #wall-chart text`)]
+# Where the opening's replay button sits on the page, and its size.
+HERO_BTN = """() => { const r = document.getElementById('hero-replay').getBoundingClientRect();
+    return [r.x, r.y + window.scrollY, r.width, r.height]; }"""
+
+OFF_SCREEN = """() => [...document.querySelectorAll(`#hero-chart text, #price-chart text,
+    #slope-chart text, #ports-chart text, #effects-chart text, #bo5-chart text, #wall-chart text`)]
     .map(t => [t.textContent, t.getBoundingClientRect()])
     .filter(([s, r]) => r.width && (r.left < -0.5 || r.right > window.innerWidth + 0.5))
     .map(([s, r]) => s)"""
@@ -65,9 +69,17 @@ def _expected(data):
             held.update((q["a"], q["b"]))
     ports = sum(1 for m in points for t in ("clarkco", "stjohns", "santabarbara")
                 if "%s|%s|v2" % (t, m) in cells)
+    cap = (data.get("exploratory") or {}).get("caption") or {}
+    best = ((data.get("exploratory") or {}).get("best_of_5") or {}).get("cells", [])
+    bo5 = sum(1 for c in best if c["arm"] == "baseline" and c["protocol"] == "v2"
+              and c["model"] in points)
+    hero = [d for d in data["draws"] if d["draw"] < 10
+            and d["cell"] in {"clarkco|%s|v2" % m for m in points}]
+    passed = sum(1 for d in hero if d["outcome"] == "perfect")
     return {"points": len(points), "squares": squares, "held": len(held),
             "ports": ports, "contrasts": len(data.get("contrasts", [])),
-            "wall": len(data.get("wall", []))}
+            "wall": len(data.get("wall", [])), "rescued": cap.get("rows_back"),
+            "bo5": bo5, "hero": len(hero), "hero_passed": passed}
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
@@ -109,9 +121,13 @@ class TestResultsPage(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
 
-    def _open(self, w, h, scheme, js=True, path="index.html"):
+    def _open(self, w, h, scheme, js=True, path="index.html", motion="reduce"):
+        """With `motion="reduce"` (the default) every figure is drawn in its
+        finished state at once, which is what the counts and screenshots
+        want; the scene test turns motion on."""
         ctx = self.browser.new_context(viewport={"width": w, "height": h},
-                                       color_scheme=scheme, java_script_enabled=js)
+                                       color_scheme=scheme, java_script_enabled=js,
+                                       reduced_motion=motion)
         self.addCleanup(ctx.close)
         page = ctx.new_page()
         errors = []
@@ -146,7 +162,26 @@ class TestResultsPage(unittest.TestCase):
                 self.assertEqual(page.locator("#effects-chart g.ef-row").count(),
                                  self.want["contrasts"])
                 self.assertEqual(page.locator("#wall-chart circle").count(), self.want["wall"])
-                self.assertEqual(page.locator("[data-table] table").count(), 7)
+                self.assertEqual(page.locator("#bo5-chart g.bo-cell").count(), self.want["bo5"])
+                self.assertEqual(page.locator("#hero-chart rect:not(.hx-page)").count(),
+                                 self.want["hero"])
+                self.assertEqual(page.locator("#hero-chart rect.hx-slot").count(), 0)
+                self.assertEqual(page.locator("#hero-tally b").first.text_content(),
+                                 str(self.want["hero_passed"]))
+                self.assertEqual(page.locator("[data-table] table").count(), 8)
+                # With motion off the replay button is invisible but keeps its
+                # place, so turning motion on shifts nothing.
+                self.assertEqual(page.evaluate("""() => { const b = document.getElementById('hero-replay');
+                    return [getComputedStyle(b).visibility, b.offsetWidth > 0]; }"""), ["hidden", True])
+                # Leader lines are dotted, unlike the solid interval bars.
+                self.assertEqual(page.evaluate("""() => [...document.querySelectorAll('#price-chart line.leader')]
+                    .filter(l => getComputedStyle(l).strokeDasharray === 'none').length"""), 0)
+                if w >= 900:
+                    page.evaluate("document.querySelectorAll('details.data').forEach(d => d.open = true)")
+                    self.assertEqual(page.evaluate("""() => [...document.querySelectorAll('details.data .scroll')]
+                        .filter(s => s.querySelector('#t-settings') && s.scrollWidth > s.clientWidth + 1)
+                        .length"""), 0)
+                    page.evaluate("document.querySelectorAll('details.data').forEach(d => d.open = false)")
                 # Every number the prose fills in was filled.
                 self.assertEqual(page.evaluate(
                     "[...document.querySelectorAll('[data-q]')].filter(e => !e.textContent.trim())"
@@ -156,7 +191,7 @@ class TestResultsPage(unittest.TestCase):
                 self._shot(page, tag + "_top")
                 self._shot(page, tag + "_slope", ".slope-fig")
                 self._shot(page, tag + "_units", "#unit-chart")
-                for sec in ("what", "caption", "ports", "effects", "fair", "next"):
+                for sec in ("what", "caption", "ports", "effects", "select", "fair", "next"):
                     self._shot(page, tag + "_" + sec, "#" + sec)
                 self._shot(page, tag + "_how", "figure.how")
                 self.assertEqual(errors, [])
@@ -167,12 +202,7 @@ class TestResultsPage(unittest.TestCase):
                 page, errors = self._open(w, h, scheme)
                 page.wait_for_selector("#price-chart g.pt")
                 self.assertEqual(page.locator("#price-chart .ylabel").text_content(), "pass@1")
-                # Into the step trigger band: the middle tenth of the screen on
-                # a desktop, 78-88% of the way down on a phone.
-                band = 0.47 if w >= 900 else 0.80
-                page.evaluate("""f => { const r = document.querySelector('.step[data-step="3"]')
-                    .getBoundingClientRect();
-                    window.scrollBy(0, r.top - window.innerHeight * f); }""", band)
+                self._to_step(page, w, "price", 3)
                 page.wait_for_timeout(1200)
                 self.assertIn("Cost per working extractor",
                               page.locator("#price-chart .ylabel").text_content())
@@ -180,6 +210,131 @@ class TestResultsPage(unittest.TestCase):
                 self.assertEqual(page.evaluate(OFF_SCREEN), [])
                 self._shot(page, tag + "_step3")
                 self.assertEqual(errors, [])
+
+    @staticmethod
+    def _to_step(page, w, scene, i):
+        """Scroll step `i` of `scene` into the trigger band: the middle tenth
+        of the screen on a desktop, 78-88% of the way down on a phone."""
+        band = 0.47 if w >= 900 else 0.80
+        page.evaluate("""([sel, f]) => { const r = document.querySelector(sel)
+            .getBoundingClientRect();
+            window.scrollBy(0, r.top - window.innerHeight * f); }""",
+                      ['#%s .step[data-step="%d"]' % (scene, i), band])
+
+    def _state(self, page, scene):
+        return page.evaluate("s => document.getElementById(s).dataset.state", scene)
+
+    def test_each_scene_plays_through_to_its_last_state(self):
+        """With motion on, scroll every scene a step at a time and every
+        entrance figure into view, and check each ends where it should."""
+        for tag, w, h, scheme in VIEWS:
+            with self.subTest(view=tag):
+                page, errors = self._open(w, h, scheme, motion="no-preference")
+                page.wait_for_selector("#slope-chart path.sl-line")
+                page.evaluate("document.fonts.ready")
+
+                # The opening replay runs while it is on screen and ends with
+                # every draw landed and the tally complete. Its button reads
+                # Skip, then Replay, and never moves or resizes.
+                self.assertEqual(page.locator("#hero-replay").text_content(), "Skip")
+                box = page.evaluate(HERO_BTN)
+                page.wait_for_function(
+                    "document.getElementById('hero-replay').textContent === 'Replay'", timeout=30000)
+                for a, b in zip(box, page.evaluate(HERO_BTN), strict=True):
+                    self.assertAlmostEqual(a, b, delta=0.5)
+                self.assertEqual(page.locator("#hero-chart rect.hx-slot").count(), 0)
+                self.assertEqual(page.locator("#hero-tally b").first.text_content(),
+                                 str(self.want["hero_passed"]))
+                self._shot(page, tag + "_scene_hero", "#hero")
+
+                # A portal not yet shown answers no pointer: its marks sit
+                # stacked under Clark's.
+                self.assertEqual(page.evaluate("""() => [...document.querySelectorAll(
+                    '#ports-chart .p-mark1, #ports-chart .p-mark2')]
+                    .filter(m => getComputedStyle(m).pointerEvents !== 'none').length"""), 0)
+
+                # The two rankings: the dots travel to the right-hand list.
+                for i in range(3):
+                    self._to_step(page, w, "rank", i)
+                    page.wait_for_timeout(1700)
+                    self.assertEqual(self._state(page, "rank"), str(i))
+                self.assertEqual(page.locator("#slope-chart svg.emph").count(), 1)
+                xs = page.evaluate("""() => [...document.querySelectorAll('#slope-chart g > g')]
+                    .map(g => [g.querySelector('path.sl-line').getPointAtLength(1e9).x,
+                               g.querySelectorAll('circle')[1].getCTM().e])""")
+                self.assertEqual(len(xs), self.want["points"])
+                for end, mover in xs:
+                    self.assertAlmostEqual(end, mover, delta=1)
+                self._shot(page, tag + "_scene_rank")
+
+                # The caption table: the read stops with no rows, then reaches
+                # the permits once the small table is out, then the count.
+                self._to_step(page, w, "cap-scene", 1)
+                page.wait_for_timeout(2200)
+                self.assertEqual(page.locator("#cap-rows").text_content(), "0")
+                self._to_step(page, w, "cap-scene", 2)
+                page.wait_for_timeout(4200)
+                self.assertEqual(page.locator("#cap-rows").text_content(), "10")
+                self._to_step(page, w, "cap-scene", 3)
+                page.wait_for_timeout(2000)
+                self.assertEqual(page.locator("#cap-count").text_content(),
+                                 str(self.want["rescued"]))
+                self.assertNotIn("off", page.locator("#cap-big").get_attribute("class"))
+                self._shot(page, tag + "_scene_caption")
+
+                # The three portals: every mark shown, the two named rows lit.
+                for i in range(4):
+                    self._to_step(page, w, "ports-scene", i)
+                    page.wait_for_timeout(1600)
+                    self.assertEqual(self._state(page, "ports-scene"), str(i))
+                self.assertEqual(page.evaluate("""() => [...document.querySelectorAll(
+                    '#ports-chart path.p-mark')].filter(m => +m.getAttribute('opacity') < 1).length"""),
+                    0)
+                self.assertEqual(page.locator("#ports-chart .p-row:not(.dim)").count(), 2)
+                self._shot(page, tag + "_scene_ports")
+
+                # Figures that play once on coming into view.
+                for fig in ("unit-chart", "effects-chart", "bo5-chart", "wall-chart"):
+                    page.locator("#" + fig).scroll_into_view_if_needed()
+                    page.wait_for_timeout(4000)
+                    self.assertEqual(page.evaluate(
+                        "s => document.getElementById(s).dataset.played", fig), "1")
+                self.assertEqual(page.evaluate("""() => [...document.querySelectorAll(
+                    `#unit-chart rect, #effects-chart .ef-head, #effects-chart .ef-zero,
+                     #bo5-chart .ef-head, #bo5-chart .ef-zero`)]
+                    .filter(m => +m.getAttribute('opacity') < 1).length"""), 0)
+                self.assertEqual(page.evaluate("""() => [...document.querySelectorAll(
+                    '#wall-chart circle')].filter(m => +m.getAttribute('opacity') < 0.8).length"""), 0)
+                self.assertEqual(page.evaluate(OFF_SCREEN), [])
+                self.assertFalse(page.evaluate(H_OVERFLOW))
+                self.assertEqual(errors, [])
+
+    def test_reduced_motion_is_the_default_and_the_switch_overrides_it(self):
+        """Under the system's reduced-motion setting the page starts still and
+        says why; the header's switch turns motion on, and the opening
+        replay starts at once."""
+        page, errors = self._open(1280, 860, "light")
+        page.wait_for_selector("#hero-chart rect")
+        self.assertTrue(page.evaluate("document.documentElement.classList.contains('still')"))
+        self.assertEqual(page.locator("#motion").text_content(), "Turn animations on")
+        self.assertIn("reduced motion", page.locator("#motion-why").text_content())
+        self.assertEqual(page.locator("#hero-chart rect.hx-slot").count(), 0)
+        page.locator("#motion").click()
+        page.wait_for_timeout(600)
+        self.assertFalse(page.evaluate("document.documentElement.classList.contains('still')"))
+        self.assertEqual(page.locator("#motion").get_attribute("aria-pressed"), "true")
+        self.assertGreater(page.locator("#hero-chart rect.hx-slot").count(), 0)
+        self.assertEqual(page.locator("#hero-replay").text_content(), "Skip")
+        page.locator("#hero-replay").click()
+        self.assertEqual(page.locator("#hero-chart rect.hx-slot").count(), 0)
+        self.assertEqual(page.locator("#hero-replay").text_content(), "Replay")
+        page.locator("#hero-replay").click()
+        self.assertGreater(page.locator("#hero-chart rect.hx-slot").count(), 0)
+        page.locator("#motion").click()
+        self.assertEqual(page.locator("#hero-chart rect.hx-slot").count(), 0)
+        self.assertEqual(page.evaluate(
+            "getComputedStyle(document.getElementById('hero-replay')).visibility"), "hidden")
+        self.assertEqual(errors, [])
 
     def test_without_javascript_the_tables_are_one_link_away(self):
         page, errors = self._open(390, 844, "light", js=False)
@@ -189,8 +344,8 @@ class TestResultsPage(unittest.TestCase):
 
     def test_the_tables_page_fits_a_phone(self):
         page, errors = self._open(390, 844, "dark", path="tables.html")
-        for tid in ("t-price", "t-rank", "t-draws", "t-ports", "t-effects", "t-settings",
-                    "t-wall"):
+        for tid in ("t-price", "t-rank", "t-draws", "t-ports", "t-effects", "t-best",
+                    "t-settings", "t-wall"):
             self.assertEqual(page.locator("table#%s" % tid).count(), 1)
         self.assertFalse(page.evaluate(H_OVERFLOW))
         self._shot(page, "phone_tables")

@@ -38,8 +38,9 @@ the extractors the v2 run already bought. No model calls.
    Averaged over 2,000 orders with a fixed seed.
 
 Writes `data/infer/verifier/checks.json` (one entry per extractor re-run,
-keyed by source path and content hash, so a re-run only runs new ones) and
-prints the tables.
+keyed by source path and content hash, so a re-run only runs new ones),
+writes the per-cell best-of-k figures to `data/infer/verifier/best_of_k.json`
+for the results page, and prints the tables.
 """
 import collections
 import hashlib
@@ -61,6 +62,7 @@ from permits.agent.verify import (CHECK_NAMES, check_page,   # noqa: E402
 
 OUT = os.path.join(cf.ROOT, "data", "infer", "verifier")
 CHECKS = os.path.join(OUT, "checks.json")
+BEST_OF_K = os.path.join(OUT, "best_of_k.json")
 VARIANCE = os.path.join(cf.OUT, "variance.json")
 LEDGER = os.path.join(cf.OUT, "ledger.jsonl")
 
@@ -224,7 +226,7 @@ def best_of_k(draws, costs):
         by_cell[(d["target"], d["model"], d["condition"])].append(d)
     print("  %-13s %-30s %-7s %3s  %s" % ("target", "model", "cond", "n",
           "   ".join("k=%d  succ   $/succ  (pass@k)" % k for k in (1, 3, 5))))
-    ratio, gain, rescued = [], [], 0
+    ratio, gain, rescued, rows = [], [], 0, []
     for cell, ds in sorted(by_cell.items()):
         per = costs.get(cell, {})
         price = [per.get("d%02d" % d["draw"]) for d in ds]
@@ -243,6 +245,13 @@ def best_of_k(draws, costs):
                         break
             p, usd = ok / ORDERS, spent / ORDERS
             res[k] = (p, usd / p if p else None, pass_at_k(n, c, k))
+        rows.append({"target": cell[0], "model": cell[1], "condition": cell[2],
+                     "n": n, "perfect": c,
+                     "k": {str(k): {"success": round(res[k][0], 4),
+                                    "usd_per_success": (round(res[k][1], 6)
+                                                        if res[k][1] else None),
+                                    "pass_at_k": round(res[k][2], 4)}
+                           for k in KS}})
         cols = []
         for k in (1, 3, 5):
             p, cps, pk = res[k]
@@ -267,6 +276,12 @@ def best_of_k(draws, costs):
               % (len(ratio), gain[len(gain) // 2], gain[0], gain[-1],
                  ratio[len(ratio) // 2], ratio[0], ratio[-1]))
     print("  cells at pass@1 = 0 that best-of-k rescues: %d" % rescued)
+    tmp = BEST_OF_K + ".tmp"
+    with io.open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"source": "spikes/verifier_offline.py", "seed": SEED, "orders": ORDERS,
+                   "cells": rows}, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    os.replace(tmp, BEST_OF_K)
     print("  succ: chance the kept extractor is perfect (0 if none of k is accepted);")
     print("  $/succ: mean purchase cost of the draws looked at over succ; pass@k: an oracle's.")
 

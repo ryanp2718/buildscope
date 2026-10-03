@@ -22,7 +22,10 @@ Writes `site/results/data.json`:
            whether it finished or the host closed the stream (deviation 2)
   exploratory  figures from analyses outside the pre-registration, each
            with its source: the caption-table test
-           (`spikes/v2_results.py --caption`), when it has been run
+           (`spikes/v2_results.py --caption`), best-of-5 with the
+           reference-free check (`spikes/verifier_offline.py`) and the draws
+           that crash on the `html` parameter shadowing the `html` module
+           (`spikes/v2_name_clash.py`), when each has been run
   pairs    one record per pair of comparable cells: which is cheaper per
            success, by how much, how likely, and whether that is settled
 
@@ -68,6 +71,8 @@ from permits.stats import newcombe                           # noqa: E402
 OUT = os.path.join(ROOT, "site", "results", "data.json")
 INFER = os.path.join(ROOT, "data", "infer")
 CAPTION = os.path.join(INFER, "verifier", "caption.json")
+BEST_OF_K = os.path.join(INFER, "verifier", "best_of_k.json")
+NAME_CLASH = os.path.join(INFER, "name_clash.json")
 WALL_MODEL = "z-ai/glm-5.3-flash"
 
 # The step 6 roster and the v1 models re-run under v2, by registry id, in the
@@ -252,6 +257,15 @@ def contrasts(cells):
     return out
 
 
+# Hosts as their providers write them; a direct API call records the lab's
+# lowercase client name.
+HOST_NAMES = {"anthropic": "Anthropic"}
+
+
+def _host(h):
+    return HOST_NAMES.get(h, h)
+
+
 def wall(ledger):
     """Every v2 synthesis call of the model whose hosts closed streams early,
     by duration, so the fixed points at which they did can be seen."""
@@ -272,12 +286,36 @@ def wall(ledger):
             what = "closed by the host"
         else:
             what = "failed with no output"
-        out.append({"seconds": _r(r.seconds, 1), "host": r.host,
+        out.append({"seconds": _r(r.seconds, 1), "host": _host(r.host),
                     "output_tokens": r.output_tokens, "what": what})
     return sorted(out, key=lambda w: (w["seconds"], w["host"] or ""))
 
 
-def build(v, ledger, audit=(), caption=None):
+def best_of_5(bok):
+    """Per cell, pass@1 beside the chance that the first of five draws the
+    reference-free check accepts is perfect, and an oracle's pass@5."""
+    out = []
+    for c in bok["cells"]:
+        arm, protocol = arm_protocol(c["condition"])
+        k1, k5 = c["k"]["1"], c["k"]["5"]
+        out.append({"target": c["target"], "model": c["model"], "arm": arm,
+                    "protocol": protocol, "n": c["n"], "k": c["perfect"],
+                    "best5": k5["success"], "oracle5": k5["pass_at_k"],
+                    "usd_per_success_1": k1["usd_per_success"],
+                    "usd_per_success_5": k5["usd_per_success"]})
+    return sorted(out, key=lambda r: (r["target"], r["model"], r["arm"]))
+
+
+def name_clash(nc):
+    """Per cell, the scored draws that crash on the `html` parameter
+    shadowing the `html` module, and how many of them pass once only that
+    reference is patched."""
+    return sorted(({k: c[k] for k in ("target", "model", "arm", "protocol", "crashes",
+                                      "pass_patched")} for c in nc["crashes_by_cell"]),
+                  key=lambda r: (r["target"], r["model"], r["arm"], r["protocol"]))
+
+
+def build(v, ledger, audit=(), caption=None, bok=None, clash=None):
     cells = {k: c for k, c in v["cells"].items() if wanted(c)}
     fields = rollup.field_verdicts(audit)
     rows = rollup.rows_from_variance({"cells": cells}, ledger, fields)
@@ -297,7 +335,7 @@ def build(v, ledger, audit=(), caption=None):
         e = agg[key]
         arm, protocol = arm_protocol(e["condition"])
         draws = rollup.draws_of(cell)
-        hosts = collections.Counter(d.host for d in draws
+        hosts = collections.Counter(_host(d.host) for d in draws
                                     if d.scored() and d.host)
         costs = [per_draw[(key, "d%02d" % d.draw)].get("usd_purchase")
                  for d in draws if d.scored()]
@@ -346,7 +384,7 @@ def build(v, ledger, audit=(), caption=None):
                 "reasoning_tokens": d.reasoning_tokens,
                 "usd": _r(m.get("usd_purchase")),
                 "seconds": _r(m.get("seconds"), 1),
-                "host": d.host,
+                "host": _host(d.host),
                 "redrawn": bool(d.redraw_max_tokens),
                 "recall_min": _r(d.recall_min, 4),
             })
@@ -397,11 +435,17 @@ def build(v, ledger, audit=(), caption=None):
         "wall": wall(ledger),
         # Counts only: the file that holds them names its producer under
         # `source`, a key nothing in this export may carry.
-        "exploratory": ({"caption": {
-            "silent_empty": caption["silent_empty"],
-            "rows_back": caption["rows_back"], "pass": caption["pass"],
-            "producer": "spikes/v2_results.py --caption"}}
-            if caption else {}),
+        "exploratory": dict(
+            ({"caption": {
+                "silent_empty": caption["silent_empty"],
+                "rows_back": caption["rows_back"], "pass": caption["pass"],
+                "producer": "spikes/v2_results.py --caption"}} if caption else {}),
+            **({"best_of_5": {
+                "cells": best_of_5(bok), "orders": bok["orders"], "seed": bok["seed"],
+                "producer": "spikes/verifier_offline.py"}} if bok else {}),
+            **({"name_clash": {
+                "cells": name_clash(clash),
+                "producer": "spikes/v2_name_clash.py"}} if clash else {})),
     }
 
 
@@ -418,7 +462,8 @@ def render(data):
 
 OUTCOME_COLUMNS = [
     ("perfect", "Passed"),
-    ("silent", "Wrong or no rows, no error"),
+    ("silent_empty", "No rows on some page"),
+    ("silent_partial", "Wrong or missing rows"),
     ("loud", "Raised an error or wrote no program"),
     ("infra_error", "Host failed (not counted)"),
 ]
@@ -468,15 +513,18 @@ def _times(x):
     return ("%d" % round(x) if x >= 10 else "%.1f" % x) + sign
 
 
-def _table(tid, caption, head, rows, left=1):
-    """One table; the first `left` columns are text, the rest figures."""
+def _table(tid, caption, head, rows, left=1, wrap=()):
+    """One table; the first `left` columns are text, the rest figures. Columns
+    in `wrap` hold long text and wrap rather than widen the table."""
     esc = html.escape
-    th = "".join('<th scope="col"%s>%s</th>' % (' class="l"' if i < left else "", esc(h))
+    th = "".join('<th scope="col"%s>%s</th>' % (' class="l"' if i < left or i in wrap else "",
+                                                 esc(h))
                  for i, h in enumerate(head))
     body = []
     for r in rows:
         tds = ['<th scope="row">%s</th>' % esc(str(r[0]))]
-        tds += ['<td%s>%s</td>' % (' class="l"' if i + 1 < left else "", esc(str(c)))
+        tds += ['<td%s>%s</td>' % (' class="wrap"' if i + 1 in wrap
+                                   else ' class="l"' if i + 1 < left else "", esc(str(c)))
                 for i, c in enumerate(r[1:])]
         body.append("<tr>%s</tr>" % "".join(tds))
     return ('<div class="scroll"><table id="%s">\n<caption>%s</caption>\n'
@@ -526,8 +574,7 @@ def render_tables(data):
 
     counts = collections.defaultdict(collections.Counter)
     for d in data["draws"]:
-        o = d["outcome"]
-        counts[d["cell"]]["silent" if o.startswith("silent") else o] += 1
+        counts[d["cell"]][d["outcome"]] += 1
     draw_rows = []
     for m in by_price:
         for t, label in data["targets"].items():
@@ -561,6 +608,15 @@ def render_tables(data):
                                          round(hi * 100)),
             "yes" if q["claimed"] else "no"])
 
+    bo5 = (data.get("exploratory") or {}).get("best_of_5") or {"cells": []}
+    order = {t: i for i, t in enumerate(data["targets"])}
+    best_rows = [[names[r["model"]], data["targets"][r["target"]].split(",")[0],
+                  "%d of %d" % (r["k"], r["n"]), _pct(r["k"] / r["n"]),
+                  _pct(r["best5"]), _pct(r["oracle5"])]
+                 for r in sorted(bo5["cells"], key=lambda r: (order[r["target"]],
+                                                             names[r["model"]]))
+                 if r["arm"] == "baseline" and r["protocol"] == "v2"]
+
     wall_rows = [[w["host"] or "unknown", "%.0f" % w["seconds"],
                   w["output_tokens"], w["what"]] for w in data.get("wall", [])]
 
@@ -576,7 +632,8 @@ def render_tables(data):
             "lab default" if m["temperature"] is None else m["temperature"],
             "lab default" if m["top_p"] is None else m["top_p"],
             sum(c["draws_redrawn"] for c in mc),
-            ", ".join("%s %d" % hc for hc in hosts.most_common())])
+            # A host's count in brackets, unbroken: "Mancer 2 (2)".
+            ", ".join(("%s (%d)" % hc).replace(" ", chr(0xA0)) for hc in hosts.most_common())])
 
     parts = [
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
@@ -586,7 +643,7 @@ def render_tables(data):
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:'
         'wght@400;600&display=swap">\n'
         "<style>%s</style>\n</head>\n<body>\n" % TABLES_CSS,
-        "<h1>The price of a program that works: the figures</h1>\n"
+        "<h1>The price of a working program: the figures</h1>\n"
         "<p>Every figure behind the charts on <a href=\"index.html\">the results page</a>, "
         "from the same data file (<a href=\"data.json\">data.json</a>), as of %s.</p>\n"
         % html.escape((data["as_of"] or "").replace("T", " ").replace("Z", " UTC")),
@@ -623,12 +680,20 @@ def render_tables(data):
         _table("t-effects", "Hint minus baseline, and v2 minus v1",
                ["Model", "Comparison", "Before", "After", "Difference (95%)",
                 "Effect claimed"], effect_rows, left=2),
+        "<h2>Keeping the first of five draws a check accepts</h2>\n"
+        "<p>Offline, on the draws already bought. Per cell, five draws in a random order, "
+        "keeping the first that a check with no reference accepts: the chance the kept "
+        "extractor passes, averaged over %d orders, beside an oracle's pass@5.</p>\n"
+        % bo5.get("orders", 0),
+        _table("t-best", "pass@1 and best-of-5 with the check, protocol v2, baseline prompt",
+               ["Model", "Portal", "Passed", "pass@1", "Best of 5, check", "pass@5, oracle"],
+               best_rows, left=2),
         "<h2>Settings and hosts</h2>\n"
         "<p>What each model was sent under protocol v2, the hosts that served its scored "
         "draws, and the draws re-drawn at a higher output cap after a cut-off.</p>\n",
         _table("t-settings", "Settings per model",
                ["Model", "Reasoning effort", "Temperature", "top_p", "Re-drawn", "Hosts"],
-               setting_rows, left=2),
+               setting_rows, left=2, wrap=(5,)),
         "<h2>GLM-5.3 Flash's calls, by duration</h2>\n"
         "<p>Every protocol v2 synthesis call of the model whose hosts closed streams "
         "early.</p>\n",
@@ -655,7 +720,9 @@ def main():
         raise SystemExit("no %s; run scripts/field_audit.py first"
                          % os.path.relpath(apath, ROOT))
     caption = fileio.read_json(CAPTION) if os.path.exists(CAPTION) else None
-    data = build(v, ledger, fileio.read_json(apath), caption)
+    bok = fileio.read_json(BEST_OF_K) if os.path.exists(BEST_OF_K) else None
+    clash = fileio.read_json(NAME_CLASH) if os.path.exists(NAME_CLASH) else None
+    data = build(v, ledger, fileio.read_json(apath), caption, bok, clash)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with io.open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(render(data))

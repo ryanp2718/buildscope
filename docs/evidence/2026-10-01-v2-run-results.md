@@ -3,8 +3,9 @@
 Date:      2026-10-01
 Produced:  `python scripts/field_audit.py`, `python scripts/export_results.py`,
            `python spikes/v2_results.py --caption` (every table below), `python spikes/v2_label_check.py`
-           (the label correction), `python spikes/v2_stage1_audit.py` (host failures, whole run). No
-           model calls; cost $0.00.
+           (the label correction), `python spikes/v2_stage1_audit.py` (host failures, whole run),
+           `python spikes/v2_name_clash.py` (the `html` parameter, added 2026-10-02). No model
+           calls; cost $0.00.
 Inputs:    `data/infer/variance.json` (86 v2 cells, 836 scored v2 draws, 3 of them excluded), `data/infer/ledger.jsonl` (927
            v2 synthesis calls, 2026-09-28 17:02Z to 2026-09-30 06:50Z),
            `data/infer/verifier/field_audit.json` (427 perfect draws re-run), the response cache
@@ -71,8 +72,9 @@ model of the first group over one of the second. Grok 4.7's cell is 13 draws and
 two cells by one draw and no pair.
 
 Failures differ in kind more than rates show. 13 of Claude Sonnet 5's 14 failures are near misses, a
-few records missed and none invented; GPT-6 Sol's 10 all raise; MiniMax M3's and Gemini 3.5
-Flash-Lite's 10 are all silent.
+few records missed and none invented; GPT-6 Sol's 10 all raise, 7 of them on a name the prompt
+gives two meanings (below, "The `html` parameter"); MiniMax M3's and Gemini 3.5 Flash-Lite's 10 are
+all silent.
 
 ## Question 2: price per token against cost per success
 
@@ -104,7 +106,7 @@ settles 13, 12 of them the same: it does not settle Claude Opus 5.5 over DeepSee
 Wilson-bound intervals miss each other by $0.0005, and it settles Qwen3.8 Max over Grok 4.7. The
 largest:
 
-| dearer per token, cheaper per success | than | times cheaper per success [95%] |
+| pricier per token, cheaper per success | than | times cheaper per success [95%] |
 |---|---|---:|
 | Claude Opus 5.5 ($20) | GLM-5.3 ($4.40) | 7.6 [4.9, 14.0] |
 | DeepSeek V4.1 Flash ($0.29) | GLM-5.3 Flash ($0.14) | 7.6 [4.5, 12.8] |
@@ -171,7 +173,8 @@ other two moved by one or two draws. On St. Johns, two effects are claimed by th
 kimi-k2-thinking's v1 Clark cell without its host-error draw (deviation 2) is 2/9, and the
 difference is then -0.22 [-0.55, +0.10]: no change. At these sizes an effect smaller than about 54
 points (10 draws against 20) or 63 (10 against 10) would not be detected, so "no effect claimed" is
-not "no effect".
+not "no effect". Kimi K2 Thinking's St. Johns difference is not claimed as scored, and would be with
+the draws that crash on the `html` parameter patched (below).
 
 ## Question 5: the hint
 
@@ -270,6 +273,86 @@ portals in general needs more portals and a two-level bootstrap; the three targe
 (every target and arm), the expected number of wrong calls is 1.1; over the 73 settled roster pairs
 on Clark it is 0.15.
 
+## The `html` parameter (not pre-registered)
+
+Found 2026-10-02, after the run, while reading why GPT-6 Sol failed every Clark draw
+([failure cases](../design/failure-cases.md), case 11). The answers above stand as scored: the
+prompt is part of the protocol, and v1's and v2's both name the parameter `html`. What follows is
+what the prompt cost, from `python spikes/v2_name_clash.py`, with no model calls.
+
+**What happens.** The prompt asks for `def extract(html: str)`, asks for HTML entities to be decoded
+(rule 1), and allows the `html` module, whose `unescape` decodes them. Inside `extract` the name
+`html` is the page. A module that does `import html` and then calls `html.unescape` inside
+`extract`, or in a helper defined inside it, calls it on a string and raises `AttributeError: 'str'
+object has no attribute 'unescape'`. GPT-6 Sol's Clark draw 0 defines, inside `extract`, a helper
+named `html_module_unescape` whose body is `return html.unescape(value)`.
+
+**How often.** 62 of the 833 scored v2 draws, from 8 of the 26 models: Hunyuan 3 22, GPT-6 Sol 13,
+Kimi K2 Thinking 12, GPT-6 Luna 7, Qwen3.5 Flash 5, and one each for DeepSeek V4.1 Flash, MiniMax M3
+and Grok 4.7. 44 are baseline draws and 18 hint draws; v1 adds 9. Of the 62, 37 call the module from
+a helper defined inside `extract`, 16 in `extract` itself, and 9 try to reach it under another name
+from inside `extract`, which gets the page again or a name never defined (GPT-6 Sol 5, GPT-6 Luna 4).
+
+**The other 18 models.** Read from the syntax tree of each stored v2 baseline module, they reach the
+module some other way: Claude Opus 5.5 imports it under an alias in 35 of 35 (`import html as
+_html`), Gemini 3.8 Flash names the parameter something else in 29 of 35 and Gemini 3.5 Flash-Lite
+in 21 of 24, and others use `from html import unescape` or call it only from helpers at module
+level, where `html` is still the module. GPT-6 Sol imports it under an alias in 1 of its 24 stored
+modules. These are counts under one prompt; whether a model does the same under another is not
+tested.
+
+**Re-scored with that one reference patched.** Each of the 62 draws was re-run with
+`import html as _htmlmod` added and the hidden references pointed at it, nothing else changed, and
+scored as a v2 draw is scored. 28 pass (25 of the 44 baseline draws), 21 still raise and 13 run but
+miss records. This is what these draws would have scored without the clash, not what a prompt with
+another parameter name would draw. Cells that change, pass@1 with field-level in parentheses:
+
+| target | model | as scored | patched |
+|---|---|---:|---:|
+| Clark | GPT-6 Sol | 0/10 (0) | 2/10 (2) |
+| Clark | Hunyuan 3, hint | 0/10 (0) | 3/10 (3) |
+| Santa Barbara | DeepSeek V4.1 Flash | 0/5 (0) | 1/5 (1) |
+| Santa Barbara | GPT-6 Luna | 2/5 (2) | 3/5 (3) |
+| Santa Barbara | GPT-6 Sol | 3/5 (3) | 4/5 (4) |
+| Santa Barbara | Hunyuan 3 | 1/5 (1) | 3/5 (3) |
+| St. Johns | Hunyuan 3 | 5/10 (4) | 10/10 (9) |
+| St. Johns | Kimi K2 Thinking | 3/10 (2) | 10/10 (7) |
+| St. Johns | Kimi K2 Thinking, v1 | 0/2 | 1/2 |
+| St. Johns | Qwen3.5 Flash | 3/10 (3) | 6/10 (6) |
+| St. Johns | Qwen3.5 Flash, v1 | 10/20 | 13/20 |
+| St. Johns | GPT-6 Sol | 1/10 (0) | 2/10 (0) |
+| St. Johns | MiniMax M3 | 9/10 (9) | 10/10 (10) |
+| St. Johns | Grok 4.7 | 6/7 (4) | 7/7 (4) |
+
+**The questions, recomputed with the patched rates.**
+
+- Question 1: 78 separable pairs, not 81. GPT-6 Sol at 2/10 [0.06, 0.51] now overlaps GLM-5.3,
+  MiMo V2.6 Flash and MiMo V2.6 Pro. The two groups stand.
+- Question 2: 14 reversals, not 13. The new one is GPT-6 Sol ($10 per M output tokens), at $0.110
+  per success [0.043, 0.389], over GLM-5.3 ($4.40) at $0.543 [0.426, 0.957]. Sol's draws cost $0.022
+  each.
+- Question 3: Spearman's rho 0.06 [-0.41, 0.55], not 0.17 [-0.30, 0.65]. DeepSeek V4.1 Flash's Santa
+  Barbara cell goes to 1/5, so no model passes Clark reliably and fails Santa Barbara reliably;
+  Claude Haiku 4.5 still does the reverse.
+- Question 4: Kimi K2 Thinking on St. Johns goes from +0.30 [-0.39, +0.60] to **+0.50 [+0.01,
+  +0.91]**, which the rule would claim, against a v1 cell of 2 draws like GLM-5.2's. Qwen3.5 Flash's
+  -0.20 becomes -0.05 [-0.38, +0.27]. Clark does not change.
+- Question 5: Hunyuan 3's hint difference goes from 0.00 to +0.30 [-0.04, +0.60], not claimed.
+
+**GPT-6 Sol on Clark, the rest of the way.** Patched, 2 of its 10 Clark draws pass. The other 8, 3
+of which never had the clash, agree with the reference on the 52 pages without a temporary permit
+and raise on the 5 with one. A temporary permit's row (`26TMP-`) puts its number in a span whose id
+ends `lblPermitNumber`; an issued permit's ends `lblPermitNumber1`. The Clark excerpt in the prompt
+has only issued permits. Sol's extractors key on the issued permit's span and raise when a row lacks it,
+as the prompt asks ("if the structure you keyed on is absent, raise"). Across all models, 25 of the
+28 patched Clark v2 draws that still fail do so only on those 5 pages.
+
+**What it changes.** Passes lost to it, v1 included: Hunyuan 3 10, Kimi K2 Thinking 8, Qwen3.5
+Flash 6, GPT-6 Sol 4, and one each for the other four models. Their cells above understate what
+their extractors did apart from this one name. A parameter name no allowed module shares (`page`,
+say) is a candidate change for the next protocol. In an agent loop the clash costs a turn, not the
+draw: the traceback names it.
+
 ## Exploratory
 
 **The caption table.** Clark's grid carries a small layout table inside its first row (the "Showing
@@ -320,3 +403,6 @@ whether a host serves the model it lists is not checked by anything here.
 
 **Cost at other prices or settings.** Costs are what each draw cost to buy at the run's prices and
 each lab's default reasoning level; a different effort level changes both the rate and the cost.
+
+**Rates under another prompt.** Every draw had one prompt, and its parameter name collides with a
+module it allows ("The `html` parameter"). A model's rate here includes what that cost it.

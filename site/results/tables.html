@@ -31,7 +31,7 @@
 </style>
 </head>
 <body>
-<h1>The price of a program that works: the figures</h1>
+<h1>The price of a working program: the figures</h1>
 <p>Every figure behind the charts on <a href="index.html">the results page</a>, from the same data file (<a href="data.json">data.json</a>), as of 2026-09-30 06:50:17 UTC.</p>
 <h2>Clark County: pass@1 and cost per working extractor</h2>
 <p>Roster models under protocol v2, by list price per million output tokens. Intervals are 95% Wilson; the cost range is the 95% range of the simulation (Jeffreys prior).</p>
@@ -143,79 +143,79 @@
 <p>Protocol v2, baseline prompt. A host failure is a draw the host failed twice; it is retried and not counted in the rate.</p>
 <div class="scroll"><table id="t-draws">
 <caption>Draws per model and portal</caption>
-<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Portal</th><th scope="col">Draws</th><th scope="col">Passed</th><th scope="col">Wrong or no rows, no error</th><th scope="col">Raised an error or wrote no program</th><th scope="col">Host failed (not counted)</th></tr></thead>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Portal</th><th scope="col">Draws</th><th scope="col">Passed</th><th scope="col">No rows on some page</th><th scope="col">Wrong or missing rows</th><th scope="col">Raised an error or wrote no program</th><th scope="col">Host failed (not counted)</th></tr></thead>
 <tbody>
-<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Clark County</td><td>19</td><td>15</td><td>2</td><td>2</td><td>1</td></tr>
-<tr><th scope="row">GLM-5.3 Flash</th><td class="l">St. Johns County</td><td>3</td><td>3</td><td>0</td><td>0</td><td>1</td></tr>
-<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Clark County</td><td>20</td><td>13</td><td>3</td><td>4</td><td>0</td></tr>
-<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">St. Johns County</td><td>10</td><td>4</td><td>0</td><td>6</td><td>0</td></tr>
-<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>2</td><td>0</td><td>3</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>0</td><td>3</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>16</td><td>2</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>0</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>1</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">GPT-6 Luna</th><td class="l">Clark County</td><td>20</td><td>2</td><td>6</td><td>12</td><td>0</td></tr>
-<tr><th scope="row">GPT-6 Luna</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>7</td><td>0</td></tr>
-<tr><th scope="row">GPT-6 Luna</th><td class="l">Santa Barbara County</td><td>5</td><td>2</td><td>1</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Hunyuan 3</th><td class="l">Clark County</td><td>10</td><td>0</td><td>4</td><td>6</td><td>0</td></tr>
-<tr><th scope="row">Hunyuan 3</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
-<tr><th scope="row">Hunyuan 3</th><td class="l">Santa Barbara County</td><td>5</td><td>1</td><td>1</td><td>3</td><td>0</td></tr>
-<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Clark County</td><td>20</td><td>12</td><td>4</td><td>4</td><td>0</td></tr>
-<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
-<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>1</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">MiniMax M3</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">MiniMax M3</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">MiniMax M3</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>2</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>1</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">St. Johns County</td><td>10</td><td>7</td><td>0</td><td>3</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>19</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">GLM-5.3</th><td class="l">Clark County</td><td>10</td><td>7</td><td>2</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">GLM-5.3</th><td class="l">St. Johns County</td><td>2</td><td>2</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">GLM-5.3</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Grok 4.7</th><td class="l">Clark County</td><td>13</td><td>12</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Grok 4.7</th><td class="l">St. Johns County</td><td>7</td><td>6</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Grok 4.7</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Clark County</td><td>10</td><td>0</td><td>9</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Claude Haiku 4.5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>1</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Max</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Max</th><td class="l">St. Johns County</td><td>8</td><td>8</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.8 Max</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>1</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Claude Sonnet 5</th><td class="l">Clark County</td><td>20</td><td>6</td><td>13</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Claude Sonnet 5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Claude Sonnet 5</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">GPT-6 Sol</th><td class="l">Clark County</td><td>10</td><td>0</td><td>0</td><td>10</td><td>0</td></tr>
-<tr><th scope="row">GPT-6 Sol</th><td class="l">St. Johns County</td><td>10</td><td>1</td><td>0</td><td>9</td><td>0</td></tr>
-<tr><th scope="row">GPT-6 Sol</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Kimi K3</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Kimi K3</th><td class="l">St. Johns County</td><td>7</td><td>4</td><td>0</td><td>3</td><td>0</td></tr>
-<tr><th scope="row">Kimi K3</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Claude Opus 5.5</th><td class="l">Clark County</td><td>20</td><td>18</td><td>1</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">Claude Opus 5.5</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>0</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Claude Opus 5.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">Clark County</td><td>20</td><td>2</td><td>12</td><td>6</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.5 Flash</th><td class="l">Clark County</td><td>10</td><td>0</td><td>7</td><td>3</td><td>0</td></tr>
-<tr><th scope="row">Qwen3.5 Flash</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>3</td><td>4</td><td>0</td></tr>
-<tr><th scope="row">gpt-oss-120b</th><td class="l">Clark County</td><td>10</td><td>0</td><td>5</td><td>5</td><td>0</td></tr>
-<tr><th scope="row">gpt-oss-120b</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Qwen3 Coder</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Qwen3 Coder</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>1</td><td>1</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">Clark County</td><td>10</td><td>0</td><td>6</td><td>4</td><td>0</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">St. Johns County</td><td>10</td><td>2</td><td>3</td><td>5</td><td>0</td></tr>
-<tr><th scope="row">GLM-5.2</th><td class="l">Clark County</td><td>10</td><td>0</td><td>7</td><td>3</td><td>0</td></tr>
-<tr><th scope="row">GLM-5.2</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><th scope="row">Kimi K2 Thinking</th><td class="l">Clark County</td><td>10</td><td>0</td><td>8</td><td>2</td><td>0</td></tr>
-<tr><th scope="row">Kimi K2 Thinking</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>7</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Clark County</td><td>19</td><td>15</td><td>0</td><td>2</td><td>2</td><td>1</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">St. Johns County</td><td>3</td><td>3</td><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Clark County</td><td>20</td><td>13</td><td>2</td><td>1</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">St. Johns County</td><td>10</td><td>4</td><td>0</td><td>0</td><td>6</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>2</td><td>0</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>0</td><td>2</td><td>1</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>16</td><td>1</td><td>1</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Clark County</td><td>20</td><td>2</td><td>0</td><td>6</td><td>12</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>0</td><td>7</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Santa Barbara County</td><td>5</td><td>2</td><td>1</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">Clark County</td><td>10</td><td>0</td><td>0</td><td>4</td><td>6</td><td>0</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">Santa Barbara County</td><td>5</td><td>1</td><td>1</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Clark County</td><td>20</td><td>12</td><td>1</td><td>3</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">Clark County</td><td>10</td><td>0</td><td>6</td><td>4</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>2</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Clark County</td><td>10</td><td>0</td><td>9</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">St. Johns County</td><td>10</td><td>7</td><td>0</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Clark County</td><td>20</td><td>19</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Clark County</td><td>10</td><td>7</td><td>0</td><td>2</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">St. Johns County</td><td>2</td><td>2</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Clark County</td><td>13</td><td>12</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">St. Johns County</td><td>7</td><td>6</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Clark County</td><td>10</td><td>0</td><td>8</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">St. Johns County</td><td>8</td><td>8</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Clark County</td><td>20</td><td>6</td><td>0</td><td>13</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">St. Johns County</td><td>10</td><td>9</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">Clark County</td><td>10</td><td>0</td><td>0</td><td>0</td><td>10</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">St. Johns County</td><td>10</td><td>1</td><td>0</td><td>0</td><td>9</td><td>0</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">Santa Barbara County</td><td>5</td><td>3</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Clark County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">St. Johns County</td><td>7</td><td>4</td><td>0</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Santa Barbara County</td><td>5</td><td>4</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Clark County</td><td>20</td><td>18</td><td>0</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Santa Barbara County</td><td>5</td><td>5</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">Clark County</td><td>20</td><td>2</td><td>12</td><td>0</td><td>6</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">St. Johns County</td><td>10</td><td>5</td><td>0</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">Clark County</td><td>10</td><td>0</td><td>6</td><td>1</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>3</td><td>0</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">Clark County</td><td>10</td><td>0</td><td>5</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">Clark County</td><td>10</td><td>0</td><td>10</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">St. Johns County</td><td>10</td><td>8</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">Clark County</td><td>10</td><td>0</td><td>3</td><td>3</td><td>4</td><td>0</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">St. Johns County</td><td>10</td><td>2</td><td>3</td><td>0</td><td>5</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">Clark County</td><td>10</td><td>0</td><td>0</td><td>7</td><td>3</td><td>0</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">St. Johns County</td><td>10</td><td>10</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">Clark County</td><td>10</td><td>0</td><td>5</td><td>3</td><td>2</td><td>0</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">St. Johns County</td><td>10</td><td>3</td><td>0</td><td>0</td><td>7</td><td>0</td></tr>
 </tbody>
 </table></div><h2>Pass here, fail there</h2>
 <p>Each roster model's pass@1 on the three portals, protocol v2, baseline prompt. Santa Barbara was held out: no prompt was written against it.</p>
@@ -278,38 +278,114 @@
 <tr><th scope="row">Qwen3.8 Flash</th><td class="l">hint, Clark County</td><td>16 of 20</td><td>7 of 10</td><td>-10 points (-43 to +19)</td><td>no</td></tr>
 <tr><th scope="row">gpt-oss-120b</th><td class="l">hint, Clark County</td><td>0 of 10</td><td>0 of 10</td><td>+0 points (-28 to +28)</td><td>no</td></tr>
 </tbody>
+</table></div><h2>Keeping the first of five draws a check accepts</h2>
+<p>Offline, on the draws already bought. Per cell, five draws in a random order, keeping the first that a check with no reference accepts: the chance the kept extractor passes, averaged over 2000 orders, beside an oracle's pass@5.</p>
+<div class="scroll"><table id="t-best">
+<caption>pass@1 and best-of-5 with the check, protocol v2, baseline prompt</caption>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Portal</th><th scope="col">Passed</th><th scope="col">pass@1</th><th scope="col">Best of 5, check</th><th scope="col">pass@5, oracle</th></tr></thead>
+<tbody>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Clark County</td><td>18 of 20</td><td>90%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Clark County</td><td>6 of 20</td><td>30%</td><td>88%</td><td>87%</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">Clark County</td><td>2 of 20</td><td>10%</td><td>43%</td><td>45%</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Clark County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Clark County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Clark County</td><td>7 of 10</td><td>70%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Clark County</td><td>15 of 19</td><td>79%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Clark County</td><td>2 of 20</td><td>10%</td><td>44%</td><td>45%</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Clark County</td><td>19 of 20</td><td>95%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Clark County</td><td>12 of 13</td><td>92%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Clark County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Clark County</td><td>13 of 20</td><td>65%</td><td>92%</td><td>100%</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Clark County</td><td>12 of 20</td><td>60%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Clark County</td><td>16 of 20</td><td>80%</td><td>95%</td><td>100%</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Clark County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">Clark County</td><td>0 of 10</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">St. Johns County</td><td>9 of 10</td><td>90%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">St. Johns County</td><td>8 of 10</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">St. Johns County</td><td>9 of 10</td><td>90%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">St. Johns County</td><td>5 of 10</td><td>50%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">St. Johns County</td><td>7 of 10</td><td>70%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">St. Johns County</td><td>2 of 10</td><td>20%</td><td>77%</td><td>78%</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">St. Johns County</td><td>9 of 10</td><td>90%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">St. Johns County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">St. Johns County</td><td>3 of 10</td><td>30%</td><td>92%</td><td>92%</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">St. Johns County</td><td>1 of 10</td><td>10%</td><td>50%</td><td>50%</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">St. Johns County</td><td>9 of 10</td><td>90%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">St. Johns County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">St. Johns County</td><td>6 of 7</td><td>86%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">St. Johns County</td><td>5 of 10</td><td>50%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">St. Johns County</td><td>3 of 10</td><td>30%</td><td>91%</td><td>92%</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">St. Johns County</td><td>4 of 7</td><td>57%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">St. Johns County</td><td>4 of 10</td><td>40%</td><td>98%</td><td>98%</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">St. Johns County</td><td>5 of 10</td><td>50%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">St. Johns County</td><td>9 of 10</td><td>90%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">St. Johns County</td><td>8 of 10</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">St. Johns County</td><td>3 of 10</td><td>30%</td><td>91%</td><td>92%</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">St. Johns County</td><td>8 of 10</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">St. Johns County</td><td>8 of 8</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">St. Johns County</td><td>10 of 10</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">Santa Barbara County</td><td>5 of 5</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">Santa Barbara County</td><td>5 of 5</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">Santa Barbara County</td><td>4 of 5</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">Santa Barbara County</td><td>3 of 5</td><td>60%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">Santa Barbara County</td><td>0 of 5</td><td>0%</td><td>0%</td><td>0%</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">Santa Barbara County</td><td>4 of 5</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">Santa Barbara County</td><td>4 of 5</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">Santa Barbara County</td><td>2 of 5</td><td>40%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">Santa Barbara County</td><td>3 of 5</td><td>60%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">Santa Barbara County</td><td>4 of 5</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">Santa Barbara County</td><td>5 of 5</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">Santa Barbara County</td><td>5 of 5</td><td>100%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">Santa Barbara County</td><td>1 of 5</td><td>20%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">Santa Barbara County</td><td>4 of 5</td><td>80%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">Santa Barbara County</td><td>2 of 5</td><td>40%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">Santa Barbara County</td><td>3 of 5</td><td>60%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">Santa Barbara County</td><td>3 of 5</td><td>60%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">Santa Barbara County</td><td>3 of 5</td><td>60%</td><td>100%</td><td>100%</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">Santa Barbara County</td><td>4 of 5</td><td>80%</td><td>80%</td><td>100%</td></tr>
+</tbody>
 </table></div><h2>Settings and hosts</h2>
 <p>What each model was sent under protocol v2, the hosts that served its scored draws, and the draws re-drawn at a higher output cap after a cut-off.</p>
 <div class="scroll"><table id="t-settings">
 <caption>Settings per model</caption>
-<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Reasoning effort</th><th scope="col">Temperature</th><th scope="col">top_p</th><th scope="col">Re-drawn</th><th scope="col">Hosts</th></tr></thead>
+<thead><tr><th scope="col" class="l">Model</th><th scope="col" class="l">Reasoning effort</th><th scope="col">Temperature</th><th scope="col">top_p</th><th scope="col">Re-drawn</th><th scope="col" class="l">Hosts</th></tr></thead>
 <tbody>
-<tr><th scope="row">GLM-5.3 Flash</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>10</td><td>Sail Research 16, SiliconFlow 8, Z.AI 4, Inceptron 2, Near AI 2, Parasail 2, BaseTen 1, Novita 1</td></tr>
-<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>0</td><td>Xiaomi 28, Novita 9, Venice 5, DeepInfra 3</td></tr>
-<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>AtlasCloud 10, Morph 9, NextBit 9, Sail Research 5, DeepInfra 1, StreamLake 1</td></tr>
-<tr><th scope="row">Qwen3.8 Flash</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>12</td><td>Alibaba 45</td></tr>
-<tr><th scope="row">GPT-6 Luna</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td>OpenAI 45</td></tr>
-<tr><th scope="row">Hunyuan 3</th><td class="l">high</td><td>0.9</td><td>1.0</td><td>0</td><td>GMICloud 28, AtlasCloud 7</td></tr>
-<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>0</td><td>Xiaomi 29, GMICloud 6</td></tr>
-<tr><th scope="row">MiniMax M3</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>1</td><td>AtlasCloud 12, Novita 6, GMICloud 5, StreamLake 1, Venice 1</td></tr>
-<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">minimal</td><td>lab default</td><td>lab default</td><td>0</td><td>Google 35</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>Baidu 13, NextBit 8, AtlasCloud 3, GMICloud 1</td></tr>
-<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td>Google 34, Google AI Studio 1</td></tr>
-<tr><th scope="row">GLM-5.3</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>10</td><td>Sail Research 19, Morph 1</td></tr>
-<tr><th scope="row">Grok 4.7</th><td class="l">high</td><td>0.7</td><td>0.95</td><td>0</td><td>xAI 25</td></tr>
-<tr><th scope="row">Claude Haiku 4.5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td>anthropic 35</td></tr>
-<tr><th scope="row">Qwen3.8 Max</th><td class="l">xhigh</td><td>lab default</td><td>lab default</td><td>0</td><td>Alibaba 23</td></tr>
-<tr><th scope="row">Claude Sonnet 5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td>anthropic 35</td></tr>
-<tr><th scope="row">GPT-6 Sol</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td>OpenAI 25</td></tr>
-<tr><th scope="row">Kimi K3</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>0</td><td>Sail Research 7, Morph 7, Relace 5, InferenceNet 2, Modal 1</td></tr>
-<tr><th scope="row">Claude Opus 5.5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td>anthropic 35</td></tr>
-<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>OpenInference 19, Baidu 18, StreamLake 3</td></tr>
-<tr><th scope="row">Qwen3.5 Flash</th><td class="l">lab default</td><td>0.6</td><td>0.95</td><td>1</td><td>Alibaba 30</td></tr>
-<tr><th scope="row">gpt-oss-120b</th><td class="l">medium</td><td>1.0</td><td>1.0</td><td>0</td><td>AkashML 9, CoreWeave 6, DeepInfra 4, DekaLLM 4, BaseTen 2, Mancer 2 2, Crusoe 2, Nebius 1</td></tr>
-<tr><th scope="row">Qwen3 Coder</th><td class="l">lab default</td><td>0.7</td><td>0.8</td><td>0</td><td>Novita 17, Venice 13</td></tr>
-<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td>StreamLake 22, Alibaba 8</td></tr>
-<tr><th scope="row">GLM-5.2</th><td class="l">xhigh</td><td>1.0</td><td>0.95</td><td>1</td><td>Venice 11, StreamLake 9, Phala 8, AtlasCloud 1, Novita 1</td></tr>
-<tr><th scope="row">Kimi K2 Thinking</th><td class="l">lab default</td><td>1.0</td><td>1.0</td><td>0</td><td>Novita 30</td></tr>
+<tr><th scope="row">GLM-5.3 Flash</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>10</td><td class="wrap">Sail Research (16), SiliconFlow (8), Z.AI (4), Inceptron (2), Near AI (2), Parasail (2), BaseTen (1), Novita (1)</td></tr>
+<tr><th scope="row">MiMo V2.6 Flash</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>0</td><td class="wrap">Xiaomi (28), Novita (9), Venice (5), DeepInfra (3)</td></tr>
+<tr><th scope="row">DeepSeek V4.1 Flash</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td class="wrap">AtlasCloud (10), Morph (9), NextBit (9), Sail Research (5), DeepInfra (1), StreamLake (1)</td></tr>
+<tr><th scope="row">Qwen3.8 Flash</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>12</td><td class="wrap">Alibaba (45)</td></tr>
+<tr><th scope="row">GPT-6 Luna</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td class="wrap">OpenAI (45)</td></tr>
+<tr><th scope="row">Hunyuan 3</th><td class="l">high</td><td>0.9</td><td>1.0</td><td>0</td><td class="wrap">GMICloud (28), AtlasCloud (7)</td></tr>
+<tr><th scope="row">MiMo V2.6 Pro</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>0</td><td class="wrap">Xiaomi (29), GMICloud (6)</td></tr>
+<tr><th scope="row">MiniMax M3</th><td class="l">lab default</td><td>1.0</td><td>0.95</td><td>1</td><td class="wrap">AtlasCloud (12), Novita (6), GMICloud (5), StreamLake (1), Venice (1)</td></tr>
+<tr><th scope="row">Gemini 3.5 Flash-Lite</th><td class="l">minimal</td><td>lab default</td><td>lab default</td><td>0</td><td class="wrap">Google (35)</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td class="wrap">Baidu (13), NextBit (8), AtlasCloud (3), GMICloud (1)</td></tr>
+<tr><th scope="row">Gemini 3.8 Flash</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td class="wrap">Google (34), Google AI Studio (1)</td></tr>
+<tr><th scope="row">GLM-5.3</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>10</td><td class="wrap">Sail Research (19), Morph (1)</td></tr>
+<tr><th scope="row">Grok 4.7</th><td class="l">high</td><td>0.7</td><td>0.95</td><td>0</td><td class="wrap">xAI (25)</td></tr>
+<tr><th scope="row">Claude Haiku 4.5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td class="wrap">Anthropic (35)</td></tr>
+<tr><th scope="row">Qwen3.8 Max</th><td class="l">xhigh</td><td>lab default</td><td>lab default</td><td>0</td><td class="wrap">Alibaba (23)</td></tr>
+<tr><th scope="row">Claude Sonnet 5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td class="wrap">Anthropic (35)</td></tr>
+<tr><th scope="row">GPT-6 Sol</th><td class="l">medium</td><td>lab default</td><td>lab default</td><td>0</td><td class="wrap">OpenAI (25)</td></tr>
+<tr><th scope="row">Kimi K3</th><td class="l">max</td><td>1.0</td><td>0.95</td><td>0</td><td class="wrap">Sail Research (7), Morph (7), Relace (5), InferenceNet (2), Modal (1)</td></tr>
+<tr><th scope="row">Claude Opus 5.5</th><td class="l">lab default</td><td>1.0</td><td>lab default</td><td>0</td><td class="wrap">Anthropic (35)</td></tr>
+<tr><th scope="row">DeepSeek V4 Flash</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td class="wrap">OpenInference (19), Baidu (18), StreamLake (3)</td></tr>
+<tr><th scope="row">Qwen3.5 Flash</th><td class="l">lab default</td><td>0.6</td><td>0.95</td><td>1</td><td class="wrap">Alibaba (30)</td></tr>
+<tr><th scope="row">gpt-oss-120b</th><td class="l">medium</td><td>1.0</td><td>1.0</td><td>0</td><td class="wrap">AkashML (9), CoreWeave (6), DeepInfra (4), DekaLLM (4), BaseTen (2), Mancer 2 (2), Crusoe (2), Nebius (1)</td></tr>
+<tr><th scope="row">Qwen3 Coder</th><td class="l">lab default</td><td>0.7</td><td>0.8</td><td>0</td><td class="wrap">Novita (17), Venice (13)</td></tr>
+<tr><th scope="row">DeepSeek V4 Pro (Apr)</th><td class="l">high</td><td>1.0</td><td>1.0</td><td>0</td><td class="wrap">StreamLake (22), Alibaba (8)</td></tr>
+<tr><th scope="row">GLM-5.2</th><td class="l">xhigh</td><td>1.0</td><td>0.95</td><td>1</td><td class="wrap">Venice (11), StreamLake (9), Phala (8), AtlasCloud (1), Novita (1)</td></tr>
+<tr><th scope="row">Kimi K2 Thinking</th><td class="l">lab default</td><td>1.0</td><td>1.0</td><td>0</td><td class="wrap">Novita (30)</td></tr>
 </tbody>
 </table></div><h2>GLM-5.3 Flash's calls, by duration</h2>
 <p>Every protocol v2 synthesis call of the model whose hosts closed streams early.</p>

@@ -10,16 +10,19 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <style>
   :root {
-    --bg: #f6f7f5;
+    --bg: #f7f7f4;
     --panel: #ffffff;
-    --ink: #17191c;
-    --mut: #62666d;
-    --faint: #9a9ea5;
-    --rule: #d9dcd8;
-    --pass: #0b7a63;
-    --silent: #c8373f;
-    --loud: #8f949b;
-    --hilite: #fff2b3;
+    --ink: #14161a;
+    --mut: #5a5f68;
+    --faint: #959aa4;
+    --rule: #d8dad6;
+    --pass: #069a68;
+    --silent: #e2343f;
+    --loud: #8b919a;
+    --accent: #4646e8;
+    --accent-soft: rgba(70, 70, 232, 0.16);
+    --amber: #d98200;
+    --hilite: #ffef9e; --shade: rgba(20, 22, 26, 0.24);
     --step-bg: rgba(255, 255, 255, 0.94);
     --sans: "Libre Franklin", "Franklin Gothic Medium", "Helvetica Neue", Arial, sans-serif;
     --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
@@ -27,16 +30,18 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       color-scheme: dark;
-      --bg: #121416; --panel: #1a1d20; --ink: #e7e9ea; --mut: #a0a5ab; --faint: #6e747b;
-      --rule: #2e3236; --pass: #3cc49e; --silent: #f0646b; --loud: #6e747b;
-      --hilite: #4a3f10; --step-bg: rgba(26, 29, 32, 0.94);
+      --bg: #111316; --panel: #1a1d21; --ink: #eceef0; --mut: #a3a8b0; --faint: #6c727b;
+      --rule: #2d3137; --pass: #2fd49c; --silent: #ff5c66; --loud: #737a84;
+      --accent: #9d9dff; --accent-soft: rgba(157, 157, 255, 0.2); --amber: #ffb52e;
+      --hilite: #4d4111; --step-bg: rgba(26, 29, 33, 0.94); --shade: rgba(255, 255, 255, 0.26);
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #121416; --panel: #1a1d20; --ink: #e7e9ea; --mut: #a0a5ab; --faint: #6e747b;
-    --rule: #2e3236; --pass: #3cc49e; --silent: #f0646b; --loud: #6e747b;
-    --hilite: #4a3f10; --step-bg: rgba(26, 29, 32, 0.94);
+    --bg: #111316; --panel: #1a1d21; --ink: #eceef0; --mut: #a3a8b0; --faint: #6c727b;
+    --rule: #2d3137; --pass: #2fd49c; --silent: #ff5c66; --loud: #737a84;
+    --accent: #9d9dff; --accent-soft: rgba(157, 157, 255, 0.2); --amber: #ffb52e;
+    --hilite: #4d4111; --step-bg: rgba(26, 29, 33, 0.94); --shade: rgba(255, 255, 255, 0.26);
   }
 
   * { box-sizing: border-box; }
@@ -45,11 +50,42 @@
   .col { max-width: 38rem; margin-inline: auto; }
   .wide { max-width: 62rem; margin-inline: auto; }
 
-  .preview { font: 500 13px/1.45 var(--sans); color: var(--mut); border: 1px dashed var(--rule);
-             padding: .6rem .8rem; margin: 1.5rem auto 0; max-width: 38rem; }
-  header.top { padding-block: 2.5rem 1rem; }
+  header.top { padding-block: 2.5rem 1rem; display: grid; gap: 1.6rem; align-items: center; }
+  @media (min-width: 900px) {
+    header.top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr); gap: 2.8rem;
+                 padding-block: 3.2rem 1.5rem; }
+  }
+  .meta { font: 500 13px/1.45 var(--sans); color: var(--mut); margin: 1rem 0 0; }
   .kicker { font: 600 12px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase;
-            color: var(--pass); margin: 0 0 .9rem; }
+            color: var(--accent); margin: 0 0 .9rem; }
+
+  /* the opening figure: every model's first ten Clark draws, replayed */
+  .hero { margin: 0; }
+  .hero svg { width: 100%; height: auto; }
+  .hx-head { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+             fill: var(--mut); }
+  .hx-edge { fill: none; stroke: var(--rule); stroke-width: 1; }
+  .hx-node { fill: var(--panel); stroke: var(--faint); stroke-width: 1.3; }
+  .hx-node.on { fill: var(--accent); stroke: var(--accent); }
+  .hx-ring { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+  .hx-name { font-size: 11px; fill: var(--mut); }
+  .hx-name.on { fill: var(--ink); font-weight: 600; }
+  .hx-slot { fill: none; stroke: var(--rule); stroke-width: 1; }
+  .hx-gate { stroke: var(--faint); stroke-dasharray: 2 3; }
+  .hx-page { fill: var(--panel); stroke: var(--faint); stroke-width: 1.2; }
+  .hx-page-ln { stroke: var(--faint); stroke-width: 2; }
+  .hx-page-ln.h { stroke: var(--ink); }
+  .hx-pulse { fill: var(--accent); }
+  .hero-cap { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem;
+              font: 12.5px/1.4 var(--sans); color: var(--mut); margin-top: .5rem; }
+  #hero-tally { display: flex; flex-wrap: wrap; gap: .3rem 1rem; }
+  .hero-cap .tl { display: inline-flex; align-items: center; gap: .35rem;
+                  font-variant-numeric: tabular-nums; }
+  /* Room for three digits, so the key holds still as a count passes 99. */
+  .hero-cap .tl b { font-weight: 600; color: var(--ink); min-width: 3ch; text-align: right; }
+  .hero-btn { font: 600 12px/1 var(--sans); color: var(--accent); background: none; margin-left: auto;
+              border: 1px solid var(--accent); padding: .3rem .6rem; cursor: pointer; min-width: 5.2em; }
+  .hero-note { font: 12px/1.4 var(--sans); color: var(--mut); margin: .3rem 0 0; }
   h1 { font: 800 clamp(2rem, 5.2vw, 3.1rem)/1.06 var(--sans); letter-spacing: -.02em;
        margin: 0 0 1rem; text-wrap: balance; }
   .dek { font-size: 1.2rem; line-height: 1.5; color: var(--mut); margin: 0; text-wrap: pretty; }
@@ -60,6 +96,7 @@
          font-size: .92em; }
   a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 3px; }
   abbr { text-decoration: none; }
+  code { font: .88em ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; }
 
   /* scroll-driven figure */
   .scrolly { position: relative; margin-block: 1.5rem 3rem; }
@@ -67,6 +104,7 @@
             display: flex; flex-direction: column; justify-content: center; z-index: 0; }
   .fig-title { font: 700 15px/1.3 var(--sans); margin: 0 0 .2rem; }
   .fig-sub { font: 400 13px/1.35 var(--sans); color: var(--mut); margin: 0 0 .4rem; min-height: 1.35em; }
+  .fig-sub a { color: var(--accent); text-decoration-color: currentColor; }
   .steps { position: relative; z-index: 1; margin-top: -30vh; padding-bottom: 30vh; pointer-events: none; }
   .step { max-width: 22rem; margin: 0 0 75vh; padding: .9rem 1.1rem; background: var(--step-bg);
           border: 1px solid var(--rule); font-size: 1rem; line-height: 1.5; pointer-events: auto; }
@@ -74,11 +112,14 @@
   .step:first-child { margin-top: 0; }
   @media (min-width: 900px) {
     .scrolly { display: grid; grid-template-columns: 19rem 1fr; gap: 2.5rem; }
-    .sticky { grid-column: 2; grid-row: 1; align-self: start; }
+    /* Figures hang from near the top rather than centring in the screen, so
+       a short one starts right under its section's lead. */
+    .sticky { grid-column: 2; grid-row: 1; align-self: start; box-sizing: border-box;
+              justify-content: flex-start; padding-top: 9vh; }
     .steps { grid-column: 1; grid-row: 1; margin-top: 0; padding-block: 35vh 45vh; }
     .step { margin-bottom: 70vh; background: none; border: 0; border-left: 3px solid var(--rule);
             padding: .2rem 0 .2rem 1rem; }
-    .step.is-active { border-left-color: var(--ink); }
+    .step.is-active { border-left-color: var(--accent); }
   }
   @media (max-width: 899px) {
     .sticky { height: 72vh; height: 72svh; top: calc(env(safe-area-inset-top, 0px) + 4vh); }
@@ -95,18 +136,19 @@
   .lbl { font-size: 11.5px; font-weight: 500; paint-order: stroke; stroke: var(--bg);
          stroke-width: 3px; stroke-linejoin: round; }
   .lbl.dim, .dot.dim, .ci.dim { opacity: .28; }
+  .leader { stroke: var(--mut); stroke-width: 1.4; stroke-dasharray: 0 3; stroke-linecap: round; opacity: .75; }
+  .leader.dim { opacity: .28; }
   .iso { stroke: var(--faint); stroke-dasharray: 4 4; fill: none; }
   .iso-lbl { font-size: 10.5px; fill: var(--mut); font-style: italic; }
   .shelf-line { stroke: var(--silent); stroke-width: 1; stroke-dasharray: 1 3; }
   .shelf-lbl { font-size: 11px; font-weight: 600; fill: var(--silent); letter-spacing: .02em; }
 
   /* slope chart */
-  .slope-fig { margin: 0 auto 1rem; padding: 0; }
   .slope-fig .fig-sub { max-width: 44rem; }
   .sl-line { fill: none; stroke: var(--faint); stroke-width: 1.2; stroke-dasharray: 3 3; }
-  .sl-line.held { stroke: var(--ink); stroke-width: 2.2; stroke-dasharray: none; }
+  .sl-line.held { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: none; }
   .sl-dot { fill: var(--faint); }
-  .sl-dot.held { fill: var(--ink); }
+  .sl-dot.held { fill: var(--accent); }
   .sl-dot.hollow { fill: var(--bg); stroke: var(--faint); stroke-width: 1.2; }
   .sl-lbl { font-size: 11.5px; fill: var(--mut); font-variant-numeric: tabular-nums; }
   .sl-lbl.held { fill: var(--ink); font-weight: 600; }
@@ -135,7 +177,12 @@
   /* "Show the data": tables lifted from tables.html */
   details.data { font: 14px/1.45 var(--sans); margin: .6rem auto 2rem; }
   details.data summary { cursor: pointer; color: var(--mut); font-weight: 500; }
-  details.data .scroll { overflow-x: auto; margin-top: .6rem; }
+  details.data .scroll { overflow-x: auto; margin-top: .6rem;
+    background: linear-gradient(to right, var(--bg) 30%, transparent) left / 2.5rem 100% no-repeat local,
+                linear-gradient(to left, var(--bg) 30%, transparent) right / 2.5rem 100% no-repeat local,
+                radial-gradient(farthest-side at 0 50%, var(--shade), transparent) left / 1.1rem 100% no-repeat scroll,
+                radial-gradient(farthest-side at 100% 50%, var(--shade), transparent) right / 1.1rem 100% no-repeat scroll; }
+  details.data td.wrap { white-space: normal; min-width: 16em; max-width: 26em; text-align: left; }
   details.data table { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
   details.data caption { text-align: left; color: var(--mut); padding-bottom: .4rem; }
   details.data th, details.data td { padding: .28rem .7rem .28rem 0; border-bottom: 1px solid var(--rule);
@@ -171,31 +218,29 @@
   }
 
   /* section 4: the caption table */
-  .explain { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1.6rem;
-             align-items: center; margin: 1.2rem auto 1.5rem; }
-  pre.markup { margin: 0; background: var(--panel); border: 1px solid var(--rule); padding: .9rem 1rem;
-               font: 12.5px/1.55 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
-               white-space: pre; overflow-x: auto; color: var(--mut); }
-  pre.markup .inner { background: var(--hilite); color: var(--ink); }
-  pre.markup .row { color: var(--pass); }
-  pre.markup .cut { color: var(--silent); font-weight: 700; }
   .big { font: 800 2.6rem/1 var(--sans); letter-spacing: -.02em; margin: 0 0 .4rem; }
   .big-sub { font: 15px/1.45 var(--sans); color: var(--mut); margin: 0; }
   .tag { display: inline-block; font: 600 11px/1 var(--sans); letter-spacing: .06em;
          text-transform: uppercase; color: var(--mut); border: 1px solid var(--rule);
          padding: .3rem .45rem; margin-bottom: .8rem; }
-  @media (max-width: 720px) { .explain { grid-template-columns: 1fr; } }
-  @media (max-width: 480px) { pre.markup { font-size: 9.5px; padding: .7rem .6rem; } }
 
   /* sections 5-7: dot, arrow and duration charts */
   .chart { margin: 1rem auto .4rem; }
   .p-lbl { font-size: 12px; }
   .p-ci { stroke-width: 1.4; }
-  .ef-arrow { fill: none; stroke: var(--faint); stroke-width: 1.6; }
-  .ef-arrow.claimed { stroke: var(--ink); stroke-width: 2.4; }
-  .ef-head { fill: var(--faint); }
-  .ef-head.claimed { fill: var(--ink); }
-  .ef-zero { fill: var(--faint); }
+  .ef-arrow { fill: none; stroke: var(--mut); stroke-width: 2; }
+  .ef-arrow.claimed, .ef-arrow.up { stroke: var(--accent); stroke-width: 2.6; }
+  .ef-head { fill: var(--mut); }
+  .ef-head.claimed, .ef-head.up { fill: var(--accent); }
+  .ef-start { fill: var(--bg); stroke: var(--mut); stroke-width: 1.5; }
+  .ef-start.claimed, .ef-start.up { stroke: var(--accent); }
+  .ef-zero { fill: var(--mut); }
+  .ef-zero.never { fill: var(--bg); stroke: var(--silent); stroke-width: 1.5; }
+  .ef-zero.all { fill: var(--pass); }
+  .ef-oracle { stroke: var(--ink); stroke-width: 1.5; }
+  .ef-k { font-size: 10.5px; fill: var(--mut); font-variant-numeric: tabular-nums; }
+  .ef-band { fill: transparent; }
+  .bo-cell:hover .ef-band, .bo-cell:focus .ef-band { fill: var(--accent-soft); }
   .ef-panel { font-size: 12px; font-weight: 600; }
   .ref-line { stroke: var(--silent); stroke-dasharray: 3 3; }
   .ref-lbl { font-size: 11px; fill: var(--silent); font-weight: 600; }
@@ -206,25 +251,98 @@
   ul.next { padding-left: 1.1rem; }
   ul.next li { margin-bottom: .8rem; }
 
+  /* scenes: the two rankings, the caption table, the three portals */
+  .slope:not(.emph) .sl-line.held { stroke: var(--faint); stroke-width: 1.2; stroke-dasharray: 3 3; }
+  .slope:not(.emph) .sl-dot.held { fill: var(--faint); }
+  .slope:not(.emph) .sl-lbl.held { fill: var(--mut); }
+  .slope.emph .sl-line:not(.held) { opacity: .55; }
+  .sl-r { transition: opacity .45s; }
+  .cap-fig { display: grid; gap: .9rem; }
+  .markup { background: var(--panel); border: 1px solid var(--rule); padding: .7rem 0;
+            font: 12.5px/1.6 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+            color: var(--mut); overflow-x: auto; }
+  .markup .ln { white-space: pre; padding: 0 1rem; max-height: 2em; overflow: hidden;
+                transition: background .15s, color .3s, max-height .45s, opacity .45s; }
+  .markup .inner { background: var(--hilite); color: var(--ink); }
+  .markup .ln.scan { background: var(--rule); color: var(--ink); }
+  .markup .ln.ok { color: var(--pass); }
+  .markup .cut { color: var(--silent); font-weight: 700; }
+  .markup .ln.off, .markup .ln.gone { max-height: 0; opacity: 0; }
+  .readout { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+             font: 500 13px/1.3 var(--sans); color: var(--mut); border-top: 1px solid var(--rule);
+             padding-top: .5rem; }
+  .readout b { font: 800 1.6rem/1 var(--sans); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .readout b.zero { color: var(--silent); }
+  .cap-big { transition: opacity .45s, transform .45s; }
+  .cap-big.off { opacity: 0; transform: translateY(8px); }
+  .p-row { transition: opacity .4s; }
+  .p-row.dim { opacity: .25; }
+  .key span { transition: opacity .4s; }
+  .key span.off { opacity: .3; }
+  @media (max-width: 899px) {
+    .markup { font-size: 10.5px; }
+    .cap-big .big { font-size: 2rem; }
+    .cap-big .big-sub { font-size: 13px; }
+  }
+  @media (max-width: 480px) { .markup { font-size: 9px; } .markup .ln { padding: 0 .5rem; } }
+
+  /* the how figure replays when it scrolls into view; at rest it is
+     complete, and `.from` is the replay's start state */
+  .how .how-panel, .how .how-arrow { transition: opacity .5s, transform .5s; }
+  .how .how-panel:nth-child(3) { transition-delay: .5s; }
+  .how .how-arrow:nth-child(2) { transition-delay: .3s; }
+  .how .how-arrow:nth-child(4) { transition-delay: 1.9s; }
+  .how .how-panel:nth-child(5) { transition-delay: 2.1s; }
+  .how .cl { transition: opacity .2s; }
+  .how .cl:nth-child(1) { transition-delay: .9s; }
+  .how .cl:nth-child(2) { transition-delay: 1.1s; }
+  .how .cl:nth-child(3) { transition-delay: 1.3s; }
+  .how .cl:nth-child(4) { transition-delay: 1.5s; }
+  .how .cl:nth-child(5) { transition-delay: 1.7s; }
+  .how table.mock-rows td i { transition: transform .35s; transform-origin: left; }
+  .how table.mock-rows tr:nth-child(2) td i { transition-delay: 2.5s; }
+  .how table.mock-rows tr:nth-child(3) td i { transition-delay: 2.75s; }
+  .how table.mock-rows tr:nth-child(4) td i { transition-delay: 3s; }
+  .how.from .how-panel, .how.from .how-arrow { opacity: 0; transform: translateY(10px); }
+  .how.from .cl { opacity: 0; }
+  .how.from table.mock-rows td i { transform: scaleX(0); }
+  .how.from, .how.from * { transition: none !important; }
+
   .note { font: 13px/1.5 var(--sans); color: var(--mut); }
   footer { border-top: 1px solid var(--rule); margin-top: 4rem; padding-block: 1.2rem 3rem; }
   noscript p { font: 15px/1.5 var(--sans); border: 1px solid var(--rule); padding: .8rem 1rem; }
   :focus-visible { outline: 2px solid var(--pass); outline-offset: 2px; }
-  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  html.still * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  .motion { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .7rem; margin: .7rem 0 0;
+            font: 500 13px/1.4 var(--sans); color: var(--mut); }
+  .motion button { font: 600 12px/1 var(--sans); color: var(--accent); background: none; cursor: pointer;
+                   border: 1px solid var(--accent); padding: .32rem .6rem; }
 </style>
 <noscript><style>details.data { display: none; }</style></noscript>
 </head>
 <body>
 
-<p class="preview" id="preview">Protocol v2 model comparison, run 28-30 September 2026.
-<span id="asof"></span></p>
-
-<header class="top col">
-  <p class="kicker">Language models writing web scrapers</p>
-  <h1>The price of a program that works</h1>
-  <p class="dek">We asked 19 language models to write the same scraper for a county permit portal,
-  again and again, and checked every attempt against a hand-written one. Price per token turned
-  out to be a poor guide to what a working program costs.</p>
+<header class="top wide">
+  <div>
+    <p class="kicker">Language models writing web scrapers</p>
+    <h1>The price of a working program</h1>
+    <p class="dek">We asked 19 language models to write the same scraper for a county permit portal,
+    again and again, and checked every attempt against a hand-written one. Price per token turned
+    out to be a poor guide to what a working program costs.</p>
+    <p class="meta" id="preview">Protocol v2 model comparison, run 28-30 September 2026.
+    <span id="asof"></span></p>
+    <p class="motion" id="motion-row" hidden><button type="button" id="motion" aria-pressed="true">Turn
+    animations off</button><span id="motion-why"></span></p>
+  </div>
+  <figure class="hero" id="hero" aria-label="Each of the 19 models, cheapest per token at the top, receives Clark County's results page and sends back ten extractors, one at a time; each is checked and lands as a square coloured by its outcome.">
+    <div id="hero-chart"></div>
+    <figcaption>
+      <div class="hero-cap"><span id="hero-tally"></span>
+        <button type="button" class="hero-btn" id="hero-replay">Replay</button></div>
+      <p class="hero-note">Each model's first ten draws on Clark County, replayed. A dot lights
+      while its model works, for a time scaled from how long the draw really took.</p>
+    </figcaption>
+  </figure>
 </header>
 
 <main>
@@ -239,11 +357,11 @@
     <div class="how-arrow" aria-hidden="true">&rarr;</div>
     <div class="how-panel">
       <p class="how-head">A language model writes an extractor</p>
-<pre class="mock-code">def extract(html):
-    rows = []
-    for tr in grid_rows(html):
-        rows.append({...})
-    return rows</pre>
+<pre class="mock-code"><span class="cl">def extract(html):
+</span><span class="cl">    rows = []
+</span><span class="cl">    for tr in grid_rows(html):
+</span><span class="cl">        rows.append({...})
+</span><span class="cl">    return rows</span></pre>
     </div>
     <div class="how-arrow" aria-hidden="true">&rarr;</div>
     <div class="how-panel">
@@ -256,9 +374,10 @@
       </table>
     </div>
   </div>
-  <figcaption><span class="num" data-q="nModels">26</span> models,
-  <span class="num" data-q="nTargets">3</span> county and city permit portals, the same page and the
-  same instructions for every model, and every attempt checked on every saved page of the portal.</figcaption>
+  <figcaption><span class="num" data-q="nModels">26</span> models in all, counting
+  <span class="num" data-q="nEarlier">7</span> re-run from an earlier test, on
+  <span class="num" data-q="nTargets">3</span> county and city permit portals. Every model got the
+  same page and instructions, and every attempt was checked on every saved page of its portal.</figcaption>
 </figure>
 
 <section class="col" id="what">
@@ -267,9 +386,9 @@
   extractor then runs on every saved page from that portal and passes only if its rows agree with a
   hand-written reference on all of them. The share of draws that pass is the model's
   <abbr title="the share of single attempts that pass">pass@1</abbr>.</p>
-  <p>Every model got the same prompt, the same 64,000-token output budget, its lab's default
-  reasoning level and its model card's sampling settings. The first portal, Clark County, Nevada,
-  has <span class="num" data-q="clarkPages">57</span> saved pages.</p>
+  <p>The first portal, Clark County, Nevada, has <span class="num" data-q="clarkPages">57</span>
+  saved pages, and an extractor has to get every one of them right. How the comparison was kept
+  fair across labs and hosts is at the end.</p>
 </section>
 
 <section id="price">
@@ -278,8 +397,8 @@
   </div>
   <div class="scrolly wide">
     <div class="sticky">
-      <p class="fig-title" id="fig-title">Clark County: pass@1 against price per token</p>
-      <p class="fig-sub" id="fig-sub">Each dot is one model. Bars are 95% Wilson intervals.</p>
+      <p class="fig-title" id="fig-title">Clark County: pass@1 against output price</p>
+      <p class="fig-sub" id="fig-sub">Each dot is one model. Bars are 95% confidence intervals.</p>
       <div id="price-chart" role="img" aria-label="Scatter chart of each model's pass rate on Clark County against its list price per million output tokens."></div>
     </div>
     <div class="steps">
@@ -288,17 +407,20 @@
         from <span class="num" data-q="priceMin">$0.14</span> to
         <span class="num" data-q="priceMax">$20</span> per million output tokens.
         Price runs left to right; pass@1 runs bottom to top.</p>
+        <p>Each bar is a 95% confidence interval for the model's true pass rate. Ten draws pin a
+        rate down only loosely, so a bar can span half the chart; the <a href="https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval" target="_blank" rel="noopener">Wilson method</a> keeps it honest
+        at 0 of 10 and 10 of 10, where the textbook formula collapses to a point.</p>
       </div>
       <div class="step" data-step="1">
-        <p>The best records so far are at the cheap end.
+        <p>The best records are at the cheap end.
         <b data-q="bestName">DeepSeek V4.1 Flash</b> passed
         <span class="num" data-q="bestK">10 of 10</span> at
-        <span class="num" data-q="bestPrice">$0.29</span> per million tokens.
+        <span class="num" data-q="bestPrice">$0.29</span> per million output tokens.
         <b>Claude Haiku 4.5</b>, at <span class="num" data-q="haikuPrice">$5</span>, passed
         <span class="num" data-q="haikuK">0 of 10</span>.</p>
       </div>
       <div class="step" data-step="2">
-        <p>What a team pays for is a program that works. Divide what a model's draws cost by the
+        <p>What a team pays for is a working program. Divide what a model's draws cost by the
         number that passed, and the vertical axis becomes <b>cost per success</b>. The dashed lines
         show what fixed numbers of output tokens cost at each price.</p>
       </div>
@@ -309,18 +431,32 @@
     </div>
   </div>
   <details class="data wide"><summary>Show the data</summary><div data-table="t-price"></div></details>
-  <div class="col">
-    <p>Put the same models in two lists, one by price per token and one by cost per working
-    extractor, and the lists disagree. <span data-q="slopeLead"></span></p>
+  <div class="scrolly wide" id="rank">
+    <div class="sticky slope-fig">
+      <p class="fig-title">Clark County: two rankings of the same models</p>
+      <p class="fig-sub" id="slope-sub"></p>
+      <div id="slope-chart" role="img" aria-label="Slope chart ranking each model on Clark County by list price per million output tokens on the left and by cost per working extractor on the right."></div>
+    </div>
+    <div class="steps">
+      <div class="step" data-step="0">
+        <p>Put the same models in a list by what they charge per million output tokens, cheapest
+        at the top.</p>
+      </div>
+      <div class="step" data-step="1">
+        <p>Now rank them again by what each working extractor cost. Only
+        <span class="num" data-q="slopeSame">2</span> of the <span class="num" data-q="slopeN">19</span>
+        models keep their place, and models with no passing draw drop to a shelf at the bottom.</p>
+      </div>
+      <div class="step" data-step="2">
+        <p>Some of these moves could be luck. Call a pair of models whose order flips a reversal:
+        the one with the higher price per token is the cheaper per success. A reversal is settled
+        when the data put the chance of that at 97.5% or more, under both of the priors the full
+        report uses, and both models' lines are then drawn solid.
+        <span data-q="slopeLead"></span></p>
+        <p><span data-q="slopeLevel">Hover over or tap a model to see its settled pairs.</span></p>
+      </div>
+    </div>
   </div>
-  <figure class="wide slope-fig">
-    <p class="fig-title">Clark County: two rankings of the same models</p>
-    <p class="fig-sub">Left, by list price per million output tokens; right, by what each working
-    extractor cost. A solid line is a model in a reversal the data settles: the probability that the
-    dearer model per token is the cheaper per success is at least 97.5% under both priors. Dashed
-    lines are not settled yet; hollow dots rest on a single draw.</p>
-    <div id="slope-chart" role="img" aria-label="Slope chart ranking each model on Clark County by list price per token on the left and by cost per working extractor on the right."></div>
-  </figure>
   <details class="data wide"><summary>Show the data</summary><div data-table="t-rank"></div></details>
 </section>
 
@@ -332,8 +468,20 @@
     County, California, which no prompt was written against. On Clark, a model that passed or
     failed all of its first ten draws stopped there; the rest drew ten more, shown as a second
     row.</p>
-    <p>The red squares matter most. A red extractor ran without error and returned rows that were
-    wrong or missing, the failure a pipeline doesn't notice until someone checks the numbers.</p>
+    <p>The red squares matter most. A red extractor ran without error but returned no rows on some
+    page (full red) or rows that were wrong or missing (light red), the failure a pipeline doesn't
+    notice until someone checks the numbers.</p>
+    <p>Many grey squares share one cause, and the prompt is part of it. It asks for a function
+    <code>extract(html)</code>, asks for entities such as <code>&amp;amp;</code> to be decoded, and
+    allows Python's <code>html</code> module, which decodes them. Inside the function the name
+    <code>html</code> means the page, so an extractor that calls the module there stops with an
+    error. That is <span class="num" data-q="clashN">44</span> of the
+    <span class="num" data-q="clashLoud">158</span> grey squares, from
+    <span class="num" data-q="clashModels">8</span> models, among them
+    <span class="num" data-q="clashSol">7</span> of GPT-6 Sol's
+    <span class="num" data-q="clashSolN">10</span> on Clark. With only that name
+    fixed, <span class="num" data-q="clashPass">25</span> of the
+    <span class="num" data-q="clashN">44</span> pass; the full report re-scores them.</p>
   </div>
   <div class="units wide">
     <div class="legend" id="legend"></div>
@@ -345,63 +493,103 @@
 <section id="caption">
   <div class="col">
     <h2>One table inside a table</h2>
-    <p>Most of the extractors that returned nothing on Clark County share one cause. Clark's results
-    grid carries a small table
-    inside its first row: the bar that reads "Showing 1-10 of 100+". An extractor that finds the
-    grid and reads up to the first closing table tag stops inside that bar, before any permit, and
-    returns nothing.</p>
+    <p>On Clark County, <span class="num" data-q="capEmpty">112</span> extractors ran without an
+    error and returned no rows on some page, the most common silent failure there. When that many
+    models fail the same way, the cause is usually in the page.</p>
   </div>
-  <div class="explain wide">
-<pre class="markup" aria-label="Simplified markup of Clark County's results grid. Inside the grid's first row sits a small table holding the 'Showing 1-10 of 100+' bar; the permit rows come after it."><span>&lt;table class="ACA_GridView"&gt;</span>
-  <span>&lt;caption&gt;Record list&lt;/caption&gt;</span>
-  <span>&lt;tr&gt;&lt;td&gt;&lt;div class="aca_gridview_caption"&gt;</span>
-    <span class="inner">&lt;table&gt; Showing 1-10 of 100+ | Export &lt;/table&gt;</span>
-    <span class="cut">                                  ^ stops here</span>
-  <span>&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;</span>
-  <span class="row">&lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</span>
-  <span class="row">&lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</span>
-  <span>...</span>
-<span>&lt;/table&gt;</span></pre>
-    <div>
-      <p class="tag">Exploratory</p>
-      <p class="big"><span data-q="capBack">84</span> of <span data-q="capEmpty">112</span></p>
-      <p class="big-sub">Clark extractors that returned nothing on some page return the right rows once
-      that one small table is removed. <span data-q="capPass">18</span> of them then pass outright;
-      the rest also stumble on something else.</p>
+  <div class="scrolly wide" id="cap-scene">
+    <div class="sticky">
+      <p class="fig-title">Clark County's results grid, simplified</p>
+      <p class="fig-sub" id="cap-sub"></p>
+      <div class="cap-fig" id="cap-fig">
+        <div class="markup" role="img" aria-label="Simplified markup of Clark County's results grid. Inside the grid's first row sits a small table holding the 'Showing 1-10 of 100+' bar; the permit rows come after it.">
+<div class="ln">&lt;table class="ACA_GridView"&gt;</div>
+<div class="ln">  &lt;caption&gt;Record list&lt;/caption&gt;</div>
+<div class="ln">  &lt;tr&gt;&lt;td&gt;&lt;div class="aca_gridview_caption"&gt;</div>
+<div class="ln inner">    &lt;table&gt; Showing 1-10 of 100+ | Export &lt;/table&gt;</div>
+<div class="ln cut off">                                          ^ stops here</div>
+<div class="ln">  &lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;</div>
+<div class="ln row">  &lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</div>
+<div class="ln row">  &lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</div>
+<div class="ln row">  &lt;tr&gt; permit, address, type, status, date &lt;/tr&gt;</div>
+<div class="ln row">  ...</div>
+<div class="ln">&lt;/table&gt;</div>
+        </div>
+        <div class="readout"><span>Rows the extractor returns</span><b id="cap-rows">&ndash;</b></div>
+        <div class="cap-big off" id="cap-big">
+          <p class="big"><span id="cap-count" data-q="capBack">84</span> of <span data-q="capEmpty">112</span></p>
+          <p class="big-sub">Clark extractors that returned nothing on some page return the right rows once
+          that one small table is removed. <span data-q="capPass">18</span> of them then pass outright;
+          the rest also stumble on something else.</p>
+        </div>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="step" data-step="0">
+        <p>Most of the extractors that returned nothing on Clark County share one cause. Clark's results
+        grid carries a small table inside its first row: the bar that reads "Showing 1-10 of
+        100+".</p>
+      </div>
+      <div class="step" data-step="1">
+        <p>An extractor that finds the grid and reads up to the first closing table tag stops inside
+        that bar, before any permit. It returns nothing, and raises no error.</p>
+      </div>
+      <div class="step" data-step="2">
+        <p>Take that one small table out of the saved pages and run the same extractors again.</p>
+      </div>
+      <div class="step" data-step="3">
+        <p>Most of them now find the permits.</p>
+      </div>
     </div>
   </div>
   <div class="col">
     <p class="note">Santa Barbara's grid carries the same small table, but the sample of the page
-    each model was shown there starts just after it, at the grid's header row. Exploratory: this
-    re-ran the stored extractors on edited pages after the results were in, and is not part of the
-    pre-registered analysis.</p>
+    each model was shown there starts just after it, at the grid's header row. This test re-ran the
+    stored extractors on edited copies of the saved pages once the run was over; the full report
+    lists it with the other follow-up analyses, apart from the pre-registered ones.</p>
   </div>
 </section>
 
 <section id="ports">
   <div class="col">
     <h2>Pass here, fail there</h2>
-    <p>Clark County was the portal the instructions were developed on. St. Johns County, Florida, is
-    a different vendor's grid, and Santa Barbara, California, the same vendor as Clark on a
-    different template, was held out: nobody looked at a model's output on it until the run.
-    <span data-q="portsLead"></span></p>
+    <p>Clark County is where the prompt was written. Two more portals, one of them held out until
+    the run, test whether a model's rate there carries over.</p>
   </div>
-  <figure class="wide chart">
-    <p class="fig-title">pass@1 on three portals</p>
-    <p class="fig-sub">One row per model, ordered by its Clark rate. Lines are 95% Wilson intervals.</p>
-    <div class="key" id="ports-key"></div>
-    <div id="ports-chart" role="img" aria-label="For each model, its pass rate on Clark County, St. Johns County and Santa Barbara, with intervals."></div>
-  </figure>
+  <div class="scrolly wide" id="ports-scene">
+    <div class="sticky">
+      <p class="fig-title">pass@1 on three portals</p>
+      <p class="fig-sub" id="ports-sub">One row per model, ordered by its Clark rate. Lines are 95% confidence intervals (<a href="https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval" target="_blank" rel="noopener">Wilson score</a>).</p>
+      <div class="key" id="ports-key"></div>
+      <div id="ports-chart" role="img" aria-label="For each model, its pass rate on Clark County, St. Johns County and Santa Barbara, with intervals."></div>
+    </div>
+    <div class="steps">
+      <div class="step" data-step="0">
+        <p>Each circle is a model's pass@1 on Clark County, best at the top.</p>
+      </div>
+      <div class="step" data-step="1">
+        <p>St. Johns County, Florida, runs a different vendor's grid. Each model's square moves from its
+        Clark rate to its rate there.</p>
+      </div>
+      <div class="step" data-step="2">
+        <p>Santa Barbara, California, runs the same vendor as Clark on a different template, and was
+        held out: nobody looked at a model's output on it until the run.</p>
+      </div>
+      <div class="step" data-step="3">
+        <p><span data-q="portsLead"></span></p>
+      </div>
+    </div>
+  </div>
   <details class="data wide"><summary>Show the data</summary><div data-table="t-ports"></div></details>
 </section>
 
 <section id="effects">
   <div class="col">
     <h2>Instructions and settings barely moved the needle</h2>
-    <p>Two changes were tested on the same models. A one-paragraph hint about Clark's row layout,
-    written from the failures, was added to the prompt; and seven models from an earlier run were
-    re-run with this run's fairer settings. Each arrow runs from before to after. A dark arrow is a
-    change the data can tell from chance; a pale one is not.
+    <p>Two changes were tested. A one-paragraph hint about Clark's row layout, written from the
+    failures, was added to the prompt; and the seven models from an earlier test were re-run with
+    this run's fairer settings. Each arrow runs from before to after. A blue arrow is a
+    change the data can tell from chance; a grey one is not.
     <span data-q="effectsLead"></span></p>
   </div>
   <figure class="wide chart">
@@ -410,7 +598,38 @@
   <details class="data wide"><summary>Show the data</summary><div data-table="t-effects"></div></details>
   <div class="col">
     <p class="note">With ten draws a side, only a difference of about 60 points or more is
-    reliably detectable, so a pale arrow means "not shown", not "no effect".</p>
+    reliably detectable, so a grey arrow means "not shown", not "no effect".</p>
+  </div>
+</section>
+
+<section id="select">
+  <div class="col">
+    <h2>Drawing again did</h2>
+    <p>What did move it needs no new prompt: draw again, and keep the first extractor that passes a
+    check needing no answer key. The check runs the extractor on the portal's saved pages and asks
+    only what the pages themselves can answer: as many rows as the grid shows, a unique permit
+    number on every row, no stray markup, dates that look like dates.</p>
+    <p>Allowed up to five draws, a model that passes some of the time ends with a working extractor
+    far more often: <span class="num" data-q="bo5Top">32 of 39</span> such model and portal pairs
+    reach 95% or better, against a median of <span class="num" data-q="bo5Base">60%</span> from one
+    draw. A working extractor costs about the same, a median
+    <span class="num" data-q="bo5Cost">0.95</span> times a single draw's cost per success, because most
+    runs stop at the first or second draw. Where a model never passed, there is nothing to pick.</p>
+  </div>
+  <figure class="wide chart">
+    <p class="fig-title">One draw, against the first of up to five that the check accepts</p>
+    <p class="fig-sub">Each arrow runs from a model's pass@1 to the chance the extractor it keeps
+    works. A tick marks pass@5, what an oracle that always picks a working draw would get.</p>
+    <div class="key" id="bo5-key"></div>
+    <div id="bo5-chart" role="img" aria-label="For each model on each of the three portals, an arrow from its pass rate on one draw to its success rate when keeping the first of up to five draws a reference-free check accepts."></div>
+  </figure>
+  <details class="data wide"><summary>Show the data</summary><div data-table="t-best"></div></details>
+  <div class="col">
+    <p class="note">The check was written after the run, from the development portals: its row
+    count rule was fixed on Clark and St. Johns before Santa Barbara was looked at. It was tried
+    here on the extractors already bought, in <span class="num" data-q="bo5Orders">2,000</span>
+    random orders of each pair's draws, so no new draws were made. Pairs with fewer than five
+    draws are left out.</p>
   </div>
 </section>
 
@@ -442,9 +661,9 @@
     <li><b>More portals.</b> Three portals, one of them held out at five draws per model, already
     rank models differently. Two more held-out portals, Polk County and Oregon's statewide system,
     are collected and checked, and kept unused for the next test.</li>
-    <li><b>Letting the model run its program.</b> Every draw here is one attempt with no feedback.
-    A check that needs no reference picks a working extractor out of five draws almost as well as
-    an oracle; the next experiment gives a model tools to run and repair its own extractor, and
+    <li><b>Letting the model run its program.</b> Every draw here is one attempt with no feedback,
+    so one slip, like the <code>html</code> name above, ends it. The check above picks a working extractor out of five draws almost as well as an oracle; the
+    next experiment gives a model tools to run and repair its own extractor, and
     compares it with that at the same spend.</li>
     <li><b>Every field, not just every record.</b> A pass here means the right permits came out. On
     St. Johns, <span class="num" data-q="sjFieldMiss">39 of 160</span> passing extractors got some
@@ -463,7 +682,7 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
 <footer class="col note">
   <p>Pass@1 is agreement with a hand-written reference extractor on every saved page of a portal,
   not accuracy against the portal itself. Costs are what each draw cost to buy, in US dollars;
-  prices are list prices. Intervals are 95% Wilson score intervals; cost-per-success ranges combine
+  prices are list prices. Intervals are 95% <a href="https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval">Wilson score intervals</a>; cost-per-success ranges combine
   a Beta posterior on the pass rate with a bootstrap of the cost per draw.</p>
   <p>The full report, with every pre-registered answer, interval and deviation:
   <a href="https://github.com/ryanp2718/buildscope/blob/main/docs/evidence/2026-10-01-v2-run-results.md">2026-10-01 v2 run results</a>.</p>
@@ -481,12 +700,39 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
   var NAMES = {};    // id -> display name, from data.json
   var OUTCOMES = [
     ["perfect", "Passed", "var(--pass)"],
-    ["silent_empty", "Returned no rows, no error", "var(--silent)"],
-    ["silent_partial", "Returned wrong rows, no error", "var(--silent)"],
+    ["silent_empty", "Returned no rows on some page", "var(--silent)"],
+    ["silent_partial", "Returned wrong or missing rows", "var(--silent)"],
     ["loud", "Raised an error or wrote no program", "var(--loud)"],
     ["infra_error", "Host failed; not counted", "none"]
   ];
-  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Motion follows the system's reduced-motion setting unless the viewer
+  // has chosen with the switch in the header; the choice is remembered in
+  // this browser where storage allows.
+  var sysReduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var chosen = null;
+  try { chosen = localStorage.getItem("motion"); } catch (e) { /* no storage: follow the system */ }
+  var reduce = chosen ? chosen === "off" : sysReduce;
+  var motionHooks = [];
+  document.documentElement.classList.toggle("still", reduce);
+  (function () {
+    var row = document.getElementById("motion-row"), btn = document.getElementById("motion");
+    var why = document.getElementById("motion-why");
+    function label() {
+      btn.textContent = reduce ? "Turn animations on" : "Turn animations off";
+      btn.setAttribute("aria-pressed", String(!reduce));
+      why.textContent = reduce && sysReduce && !chosen ? "Off because your system asks for reduced motion." : "";
+    }
+    btn.addEventListener("click", function () {
+      reduce = !reduce;
+      chosen = reduce ? "off" : "on";
+      try { localStorage.setItem("motion", chosen); } catch (e) { /* kept for this visit only */ }
+      document.documentElement.classList.toggle("still", reduce);
+      label();
+      motionHooks.forEach(function (f) { f(); });
+    });
+    label();
+    row.hidden = false;
+  })();
   var tip = document.getElementById("tip");
 
   function name(id) { return NAMES[id] || id; }
@@ -499,6 +745,8 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
   }
   function price(x) { return "$" + (x < 1 ? x.toFixed(2) : (x % 1 ? x.toFixed(2) : x.toFixed(0))); }
   function pct(x) { return Math.round(x * 100) + "%"; }
+  var WILSON = '<a href="https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval" ' +
+               'target="_blank" rel="noopener">Wilson score</a>';
 
   function showTip(ev, html) {
     tip.innerHTML = html; tip.hidden = false;
@@ -568,48 +816,322 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     var haiku = pts.find(function (p) { return p.m.id === "claude-haiku-4-5-20251001"; });
     if (haiku) { fill("haikuPrice", price(haiku.m.price_out)); fill("haikuK", haiku.c.k + " of " + haiku.c.n); }
 
-    var priceFig = priceChart(document.getElementById("price-chart"), pts, best, haiku);
+    var el = function (id) { return document.getElementById(id); };
+    var heroFig = heroChart(el("hero-chart"), roster, cellOf, drawsOf);
+    var priceFig = priceChart(el("price-chart"), pts, best, haiku);
     var held = reversals(pts, data.pairs || [], models);
     slopeLead(held, models);
-    slopeChart(document.getElementById("slope-chart"), pts, held);
-    unitChart(document.getElementById("unit-chart"), data, models, cellOf, drawsOf);
+    var slopeFig = slopeChart(el("slope-chart"), pts, held);
+    var units = function () { unitChart(el("unit-chart"), data, models, cellOf, drawsOf); };
+    var effects = function () { effectsChart(el("effects-chart"), data); };
+    var wall = function () { wallChart(el("wall-chart"), data.wall || []); };
+    var bo5 = function () { bestOf5Chart(el("bo5-chart"), data, cellOf); };
     legend();
     fillCounts(data, cellOf, drawsOf);
-    portsChart(document.getElementById("ports-chart"), data, cellOf);
-    effectsChart(document.getElementById("effects-chart"), data);
-    wallChart(document.getElementById("wall-chart"), data.wall || []);
-    // Label columns are measured, so measure again once the web fonts are in.
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () { slopeChart(document.getElementById("slope-chart"), pts, held); });
+    var capFig = captionFig(el("cap-scene"));
+    var portsFig = portsChart(el("ports-chart"), data, cellOf);
+    // The figures further down are drawn one task each, so the opening
+    // paints and starts its replay first.
+    [units, effects, bo5, wall].forEach(function (f) { setTimeout(f, 0); });
+    // Label columns are measured, so measure again if the web fonts were
+    // still loading when they were drawn.
+    if (document.fonts && document.fonts.status !== "loaded") {
+      document.fonts.ready.then(function () { slopeFig.redraw(); priceFig.redraw(); });
     }
 
-    var steps = document.querySelectorAll(".step");
-    var current = -1;
-    function go(i) {
-      if (i === current) return;
-      current = i;
-      steps.forEach(function (s) { s.classList.toggle("is-active", +s.dataset.step === i); });
-      priceFig.state(i);
-    }
-    go(0);
-    if ("IntersectionObserver" in window) {
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) { if (e.isIntersecting) go(+e.target.dataset.step); });
-      }, { rootMargin: window.innerWidth < 900 ? "-78% 0px -12% 0px" : "-45% 0px -45% 0px" });
-      steps.forEach(function (s) { io.observe(s); });
-    }
-    var rw;
+    // Scenes: a pinned figure that steps through states as its text scrolls by.
+    scrolly(el("price"), priceFig);
+    scrolly(el("rank"), slopeFig);
+    scrolly(el("cap-scene"), capFig);
+    scrolly(el("ports-scene"), portsFig);
+    // Figures that play once, on first coming into view.
+    onEnter(document.querySelector("figure.how"), function () {
+      var f = document.querySelector("figure.how");
+      f.classList.add("from");
+      void f.offsetWidth;
+      f.classList.remove("from");
+    });
+    onEnter(el("unit-chart"), function () { playUnits(el("unit-chart")); });
+    onEnter(el("effects-chart"), function () { playEffects(el("effects-chart")); });
+    onEnter(el("bo5-chart"), function () { playEffects(el("bo5-chart")); });
+    onEnter(el("wall-chart"), function () { playWall(el("wall-chart")); });
+
+    // Redraw on a change of width, or of height beyond what a phone's address
+    // bar takes: the bar shows and hides as the reader scrolls, and a redraw
+    // each time would jolt the figures under them.
+    var rw, lastW = window.innerWidth, lastH = window.innerHeight;
     window.addEventListener("resize", function () {
+      if (window.innerWidth === lastW && Math.abs(window.innerHeight - lastH) < 160) return;
+      lastW = window.innerWidth;
+      lastH = window.innerHeight;
       clearTimeout(rw);
       rw = setTimeout(function () {
+        heroFig.redraw();
         priceFig.redraw();
-        slopeChart(document.getElementById("slope-chart"), pts, held);
-        unitChart(document.getElementById("unit-chart"), data, models, cellOf, drawsOf);
-        portsChart(document.getElementById("ports-chart"), data, cellOf);
-        effectsChart(document.getElementById("effects-chart"), data);
-        wallChart(document.getElementById("wall-chart"), data.wall || []);
+        slopeFig.redraw();
+        units(); effects(); bo5(); wall();
+        portsFig.redraw();
       }, 150);
     });
+  }
+
+  // Steps a figure through its states as each `.step` in `root` crosses the
+  // trigger band: the middle tenth of the screen on a desktop, 78-88% of the
+  // way down on a phone, where the step boxes scroll over the figure.
+  // `fig.state(i, prev)` is told where it came from, so it can animate a
+  // single step forward and jump anywhere else.
+  function scrolly(root, fig) {
+    var steps = root.querySelectorAll(".step"), cur = -1;
+    function go(i) {
+      if (i === cur) return;
+      var prev = cur;
+      cur = i;
+      steps.forEach(function (s) { s.classList.toggle("is-active", +s.dataset.step === i); });
+      root.dataset.state = i;
+      fig.state(i, prev);
+    }
+    go(0);
+    if (!("IntersectionObserver" in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) go(+e.target.dataset.step); });
+    }, { rootMargin: window.innerWidth < 900 ? "-78% 0px -12% 0px" : "-45% 0px -45% 0px" });
+    steps.forEach(function (s) { io.observe(s); });
+  }
+
+  // Replays a figure's animation once, as it scrolls into view. Every
+  // figure is drawn finished, so the page is complete at rest; `play` jumps
+  // to the start state and animates back. A figure already on screen when
+  // the page loads is left as it is; with motion off, a figure waits, and
+  // plays the next time it comes into view after motion is turned on.
+  function onEnter(node, play) {
+    if (!("IntersectionObserver" in window)) { node.dataset.played = "1"; return; }
+    var first = true;
+    var io = new IntersectionObserver(function (entries) {
+      var seen = entries.some(function (e) { return e.isIntersecting; });
+      if (first) {
+        first = false;
+        if (seen && !reduce) { io.disconnect(); node.dataset.played = "1"; }
+        return;
+      }
+      if (!seen || reduce) return;
+      io.disconnect();
+      node.dataset.played = "1";
+      play();
+    });
+    io.observe(node);
+  }
+
+  // ---- The opening figure: every roster model's first ten Clark draws ----
+  // Replayed: a request travels from the page to the model, the model's dot
+  // lights while it works, for a time scaled from the draw's real duration
+  // on a log scale, and its extractor travels on through the check to land
+  // as a square in its outcome's colour. Drawn finished; it plays when it is
+  // first on screen, pauses off screen, and stays still under reduced motion.
+  function heroChart(el, roster, cellOf, drawsOf) {
+    var KINDS = [["passed", "var(--pass)"], ["wrong or no rows", "var(--silent)"],
+                 ["raised an error", "var(--loud)"]];
+    var kindOf = function (o) {
+      return o === "perfect" ? 0 : o.indexOf("silent") === 0 ? 1 : o === "infra_error" ? -1 : 2;
+    };
+    var IN = 420, OUT = 560;
+    var rows = roster.slice()
+      .sort(function (a, b) { return a.price_out - b.price_out || d3.ascending(name(a.id), name(b.id)); })
+      .map(function (m, i) {
+        var c = cellOf["clarkco|" + m.id + "|v2"];
+        var ds = c ? (drawsOf.get(c.key) || []).filter(function (d) { return d.draw < 10; })
+                       .sort(function (a, b) { return a.draw - b.draw; }) : [];
+        // One draw after another: the next request leaves as the last
+        // extractor does.
+        var t = 150 + i * 80;
+        var ev = ds.map(function (d) {
+          var s = Math.max(3, d.seconds || 3);
+          var think = 150 + 1150 * Math.min(1, Math.log(s / 3) / Math.log(1000));
+          var e = { kind: kindOf(d.outcome), req: t, arr: t + IN, fin: t + IN + think };
+          e.land = e.fin + OUT;
+          t = e.fin;
+          return e;
+        });
+        return { m: m, ev: ev };
+      }).filter(function (r) { return r.ev.length; });
+    var total = d3.max(rows, function (r) { return r.ev[r.ev.length - 1].land; }) || 0;
+    var tallyEl = document.getElementById("hero-tally"), btn = document.getElementById("hero-replay");
+    var g, geo, raf = null, clock = 0, last = 0, started = false, running = false, onScreen = false;
+    // The tally is built once; each frame rewrites only a count that changed.
+    tallyEl.innerHTML = KINDS.map(function (k) {
+      return '<span class="tl"><i class="sw" style="background:' + k[1] + '"></i><b></b>' + k[0] + "</span>";
+    }).join("");
+    var tallyB = tallyEl.querySelectorAll("b");
+    // Writes an attribute only when its value changes, so a frame where a
+    // row is idle costs no style work.
+    function setA(n, a, v) {
+      if (n["_" + a] === v) return;
+      n.setAttribute(a, v);
+      n["_" + a] = v;
+    }
+
+    function draw() {
+      el.innerHTML = "";
+      var W = Math.max(el.clientWidth || 440, 300), narrow = W < 420;
+      var rh = narrow ? 14.5 : 16.5, top = 28, s = narrow ? 9 : 10.5, step = s + 2;
+      var H = top + rows.length * rh + 2;
+      var pageW = narrow ? 30 : 46, pageH = Math.round(pageW * 1.3);
+      var midY = top + rows.length * rh / 2 - rh / 2;
+      var sqX = W - 10 * step + 2, gateX = sqX - 8;
+      var nodeX = pageW + (narrow ? 34 : 58);
+      geo = { W: W, rh: rh, top: top, s: s, step: step, sqX: sqX, gateX: gateX, nodeX: nodeX };
+      var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H)
+        .attr("aria-hidden", "true");
+      svg.append("text").attr("class", "hx-head").attr("x", 0).attr("y", 11).text("Page");
+      svg.append("text").attr("class", "hx-head").attr("x", nodeX - 5).attr("y", 11)
+        .text(narrow ? "Model" : "Model, cheapest first");
+      svg.append("text").attr("class", "hx-head").attr("x", W).attr("y", 11).attr("text-anchor", "end")
+        .text(narrow ? "Ten draws" : "Ten draws, checked");
+      // Clark's results page, as a sketch of its grid.
+      var py = midY - pageH / 2;
+      svg.append("rect").attr("class", "hx-page").attr("x", 0.6).attr("y", py).attr("width", pageW)
+        .attr("height", pageH).attr("rx", 2);
+      d3.range(7).forEach(function (k) {
+        svg.append("line").attr("class", "hx-page-ln" + (k === 1 ? " h" : ""))
+          .attr("x1", 6).attr("x2", pageW - (k === 0 ? pageW * 0.45 : 5))
+          .attr("y1", py + 8 + k * (pageH - 14) / 6).attr("y2", py + 8 + k * (pageH - 14) / 6);
+      });
+      svg.append("line").attr("class", "hx-gate").attr("x1", gateX).attr("x2", gateX)
+        .attr("y1", top - 8).attr("y2", H);
+      g = svg.selectAll("g.hx-row").data(rows).join("g").attr("class", "hx-row");
+      g.each(function (r, i) {
+        var y = top + i * rh, row = d3.select(this);
+        r.y = y;
+        r.edge = row.append("path").attr("class", "hx-edge")
+          .attr("d", "M" + (pageW + 1) + "," + midY + " C" + (pageW + (nodeX - pageW) * 0.55) + "," + midY +
+                " " + (pageW + (nodeX - pageW) * 0.45) + "," + y + " " + (nodeX - 5) + "," + y).node();
+        r.edgeL = r.edge.getTotalLength();
+        row.append("line").attr("class", "hx-edge").attr("x1", nodeX + 5).attr("x2", gateX)
+          .attr("y1", y).attr("y2", y).attr("stroke-dasharray", "1 3");
+        r.slots = r.ev.map(function (e, j) {
+          return row.append("rect").attr("class", "hx-slot").attr("x", sqX + j * step).attr("y", y - s / 2)
+            .attr("width", s).attr("height", s).node();
+        });
+        r.ring = row.append("circle").attr("class", "hx-ring").attr("cx", nodeX).attr("cy", y).attr("r", 5)
+          .attr("opacity", 0).node();
+        r.node = row.append("circle").attr("class", "hx-node").attr("cx", nodeX).attr("cy", y).attr("r", 4).node();
+        r.name = row.append("text").attr("class", "hx-name lbl").attr("x", nodeX + 10).attr("y", y)
+          .attr("dy", "0.32em").text(name(r.m.id)).node();
+        r.req = row.append("circle").attr("class", "hx-pulse").attr("r", 2.6).attr("opacity", 0).node();
+        r.res = row.append("circle").attr("class", "hx-pulse").attr("r", 3).attr("cy", y).attr("opacity", 0).node();
+      });
+      frame(running || (started && clock < total) ? clock : Infinity);
+    }
+
+    function paint(rect, kind) {
+      if (kind == null) {
+        rect.setAttribute("class", "hx-slot");
+        rect.removeAttribute("style");
+        return;
+      }
+      rect.setAttribute("class", "");
+      rect.style.fill = kind < 0 ? "none" : KINDS[kind][1];
+      rect.style.stroke = kind < 0 ? "var(--mut)" : "none";
+      rect.style.strokeDasharray = kind < 0 ? "2 2" : "";
+    }
+
+    // Everything as it stands `t` ms into the replay (Infinity: the end).
+    function frame(t) {
+      var tally = [0, 0, 0];
+      rows.forEach(function (r) {
+        var req = null, think = null, res = null;
+        r.ev.forEach(function (e, j) {
+          if (t >= e.land) {
+            if (e.kind >= 0) tally[e.kind]++;
+            if (r.slots[j]._k !== e.kind) { paint(r.slots[j], e.kind); r.slots[j]._k = e.kind; }
+            return;
+          }
+          if (r.slots[j]._k !== null) { paint(r.slots[j], null); r.slots[j]._k = null; }
+          if (t >= e.req && t < e.arr) req = [e, (t - e.req) / IN];
+          else if (t >= e.arr && t < e.fin) think = [e, t - e.arr];
+          else if (t >= e.fin) res = [e, (t - e.fin) / OUT, j];
+        });
+        if (req) {
+          var q = r.edge.getPointAtLength(d3.easeCubicInOut(req[1]) * r.edgeL);
+          setA(r.req, "cx", q.x); setA(r.req, "cy", q.y); setA(r.req, "opacity", 1);
+        } else setA(r.req, "opacity", 0);
+        r.node.classList.toggle("on", !!think);
+        r.name.classList.toggle("on", !!think);
+        if (think) {
+          var ph = (think[1] % 650) / 650;
+          setA(r.ring, "r", 5 + 5 * ph);
+          setA(r.ring, "opacity", 0.9 * (1 - ph));
+        } else setA(r.ring, "opacity", 0);
+        if (res) {
+          var x0 = geo.nodeX + 5, x1 = geo.sqX + res[2] * geo.step + geo.s / 2;
+          var x = x0 + (x1 - x0) * d3.easeQuadInOut(res[1]);
+          setA(r.res, "cx", x);
+          setA(r.res, "opacity", 1);
+          var fillC = x < geo.gateX || res[0].kind < 0 ? "" : KINDS[res[0].kind][1];
+          if (r.res.style.fill !== fillC) r.res.style.fill = fillC;
+        } else setA(r.res, "opacity", 0);
+      });
+      tally.forEach(function (n, i) {
+        if (tallyB[i].textContent !== String(n)) tallyB[i].textContent = n;
+      });
+    }
+
+    function tick(now) {
+      clock += Math.min(64, now - last);
+      last = now;
+      frame(clock);
+      if (clock >= total) { running = false; raf = null; label(); return; }
+      raf = requestAnimationFrame(tick);
+    }
+    function resume() {
+      if (raf || !running || !onScreen) return;
+      last = performance.now();
+      raf = requestAnimationFrame(tick);
+    }
+    function pause() { if (raf) cancelAnimationFrame(raf); raf = null; }
+    function play() {
+      pause();
+      started = running = true;
+      clock = 0;
+      label();
+      frame(0);
+      resume();
+    }
+
+    // Jumps to the finished grid.
+    function stop() {
+      pause();
+      running = false;
+      clock = total;
+      frame(Infinity);
+      label();
+    }
+
+    // The button keeps its place, so the page never shifts under it: Skip
+    // while the replay runs, Replay once it is over, and invisible with
+    // motion off.
+    function label() {
+      btn.textContent = running ? "Skip" : "Replay";
+      btn.style.visibility = reduce ? "hidden" : "";
+    }
+
+    draw();
+    label();
+    btn.addEventListener("click", function () { if (running) stop(); else play(); });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        onScreen = entries.some(function (e) { return e.isIntersecting; });
+        if (reduce) return;
+        if (onScreen && !started) play();
+        else if (onScreen) resume();
+        else pause();
+      }).observe(el);
+    }
+    motionHooks.push(function () {
+      if (reduce) stop();
+      else if (onScreen) play();
+      else { started = false; label(); }
+    });
+    return { redraw: draw };
   }
 
   // ---- Section 2: price against pass@1, then against cost per success ----
@@ -659,10 +1181,11 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
         .attr("transform", "translate(" + M.l + ",0)");
       svg.select(".gy .domain").remove();
       svg.select(".ylabel").text(cost ? "Cost per working extractor (log scale)" : "pass@1");
-      d3.select("#fig-title").text(cost ? "Clark County: cost per working extractor against price per token"
-                                        : "Clark County: pass@1 against price per token");
-      d3.select("#fig-sub").text(cost ? "Bars are 95% ranges; hollow dots rest on a single draw. Dashed lines mark the list price of 10k, 100k and 1M output tokens."
-                                      : "Each dot is one model. Bars are 95% Wilson intervals; hollow dots rest on a single draw.");
+      d3.select("#fig-title").text(cost ? "Clark County: cost per working extractor against output price"
+                                        : "Clark County: pass@1 against output price");
+      var hollow = pts.some(function (p) { return p.c.n <= 1; }) ? "; hollow dots rest on a single draw" : "";
+      d3.select("#fig-sub").html(cost ? "Bars are 95% ranges" + hollow + ". Dashed lines mark the list price of 10k, 100k and 1M output tokens."
+                                      : "Each dot is one model. Bars are 95% confidence intervals (" + WILSON + ")" + hollow + ".");
 
       // Iso-token lines: the list price of N output tokens at each price.
       var isos = cost ? [1e4, 1e5, 1e6] : [];
@@ -728,7 +1251,8 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
        .on("focus", function (ev, p) { var b = this.getBoundingClientRect(); showTip({ clientX: b.right, clientY: b.top }, tipHtml(p)); })
        .on("blur", hideTip);
 
-      g.transition(t).style("opacity", function (p) { return visible(p) ? 1 : 0; });
+      g.style("pointer-events", function (p) { return visible(p) ? null : "none"; })
+        .transition(t).style("opacity", function (p) { return visible(p) ? 1 : 0; });
       g.select("line").classed("dim", dim)
         .style("opacity", function (p) { return single(p) ? 0.45 : null; })
         .transition(t)
@@ -747,31 +1271,43 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
       var labelled = pts.filter(function (p) {
         return visible(p) && !single(p) && !(cost && !ok(p));
       });
-      // Each label's horizontal extent, measured: on the dot's right, or on
-      // its left where the right would run past the edge. The de-overlap
-      // compares extents, so a flipped label is not stacked against labels
-      // on the other side of the plot.
-      var meas = svg.append("text").attr("class", "lbl").style("visibility", "hidden");
-      var flip = {};
-      var items = labelled.map(function (p) {
-        var w = meas.text(name(p.m.id)).node().getComputedTextLength();
-        var x = X(p.m.price_out), f = x + 9 + w > W - 2;
-        flip[p.m.id] = f;
-        return { id: p.m.id, y: yOf(p), x0: f ? x - 9 - w : x + 9, x1: f ? x - 9 : x + 9 + w };
+      // Every dot and interval bar is an obstacle; each label takes the first
+      // spot around its dot that covers none of them and no label already
+      // placed, else the spot that covers least. A bar counts for little, since
+      // a label's halo reads cleanly over one.
+      var obstacles = [];
+      pts.filter(visible).forEach(function (p) {
+        var cx = X(p.m.price_out), cy = yOf(p), b = ci(p);
+        obstacles.push([cx - 6.5, cy - 6.5, cx + 6.5, cy + 6.5, 1]);
+        obstacles.push([cx - 2, Math.min(b[0], b[1]), cx + 2, Math.max(b[0], b[1]), 0.08]);
       });
+      var meas = svg.append("text").attr("class", "lbl").style("visibility", "hidden");
+      var widths = {};
+      labelled.forEach(function (p) { widths[p.m.id] = meas.text(name(p.m.id)).node().getComputedTextLength(); });
       meas.remove();
-      var ys = nudge(items, 13);
+      var spots = placeLabels(labelled.map(function (p) {
+        return { id: p.m.id, x: X(p.m.price_out), y: yOf(p), w: widths[p.m.id], first: highlight.has(p.m.id) };
+      }), obstacles, [M.l + 2, 0, W - 2, H - M.b + 8]);
       var lab = svg.select(".labels").selectAll("text").data(labelled, function (p) { return p.m.id; });
       lab.exit().remove();
       lab = lab.enter().append("text").attr("class", "lbl").attr("dy", "0.32em")
-        .attr("x", function (p) { return X(p.m.price_out) + 9; })
-        .attr("y", function (p) { return ys[p.m.id]; })
+        .attr("x", function (p) { return spots[p.m.id].x; })
+        .attr("y", function (p) { return spots[p.m.id].y; })
         .merge(lab);
       lab.classed("dim", dim).text(function (p) { return name(p.m.id); });
-      lab.attr("text-anchor", function (p) { return flip[p.m.id] ? "end" : "start"; })
+      lab.attr("text-anchor", function (p) { return spots[p.m.id].anchor; })
         .transition(t)
-        .attr("x", function (p) { return X(p.m.price_out) + (flip[p.m.id] ? -9 : 9); })
-        .attr("y", function (p) { return ys[p.m.id]; });
+        .attr("x", function (p) { return spots[p.m.id].x; })
+        .attr("y", function (p) { return spots[p.m.id].y; });
+      var lead = svg.select(".labels").selectAll("line.leader")
+        .data(labelled.filter(function (p) { return spots[p.m.id].leader; }), function (p) { return p.m.id; });
+      lead.exit().remove();
+      lead.enter().append("line").attr("class", "leader").merge(lead)
+        .classed("dim", dim)
+        .transition(t)
+        .attr("x1", function (p) { return spots[p.m.id].lx; }).attr("y1", function (p) { return spots[p.m.id].ly; })
+        .attr("x2", function (p) { var s = spots[p.m.id]; return s.anchor === "end" ? s.x + 2 : s.x - 2; })
+        .attr("y2", function (p) { return spots[p.m.id].y; });
     }
 
     function tipHtml(p) {
@@ -792,31 +1328,50 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     };
   }
 
-  // Greedy vertical de-overlap of labels whose horizontal extents
-  // [x0, x1] overlap, working up from the bottom so labels at 0% stay above
-  // the axis.
-  function nudge(items, gap) {
-    var out = {};
-    items.sort(function (a, b) { return b.y - a.y; });
-    var placed = [];
-    items.forEach(function (it) {
-      var y = it.y;
-      for (var k = 0; k < 40; k++) {
-        var clash = placed.find(function (p) {
-          return p.x0 < it.x1 + 4 && it.x0 < p.x1 + 4 && Math.abs(p.y - y) < gap;
-        });
-        if (!clash) break;
-        y = clash.y - gap;
-      }
-      placed.push({ x0: it.x0, x1: it.x1, y: y });
-      out[it.id] = y;
+  // Places a label beside each point. `items` are {id, x, y, w, first};
+  // `obstacles` and `bounds` are boxes [x0, y0, x1, y1]. Each label tries
+  // the spots beside, above and below its point, then spots further up or
+  // down with a leader line, and takes the first that covers no obstacle
+  // and no placed label and stays in bounds; failing that, the one that
+  // covers least. Labels marked `first`, then the most crowded, go first.
+  function placeLabels(items, obstacles, bounds) {
+    var SPOTS = [[9, 0], [-9, 0], [7, -12], [7, 12], [-7, -12], [-7, 12]];
+    [14, 26, 38].forEach(function (d) { SPOTS.push([9, -d], [9, d], [-9, -d], [-9, d]); });
+    var area = function (a, b) {
+      return Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) *
+             Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+    };
+    var crowd = function (it) {
+      return items.filter(function (o) { return Math.abs(o.x - it.x) < 90 && Math.abs(o.y - it.y) < 24; }).length;
+    };
+    var order = items.slice().sort(function (a, b) { return (b.first - a.first) || (crowd(b) - crowd(a)); });
+    var placed = [], out = {};
+    order.forEach(function (it) {
+      var best = null;
+      SPOTS.some(function (s, k) {
+        var end = s[0] < 0, x = it.x + s[0], y = it.y + s[1];
+        var box = [end ? x - it.w : x, y - 6.5, end ? x : x + it.w, y + 6.5];
+        // A spot that needs a leader costs about as much as covering a bar.
+        var cost = k * 0.01 + (Math.abs(s[1]) > 12 ? 6 : 0);
+        obstacles.forEach(function (o) { cost += area(box, o) * (o[4] == null ? 1 : o[4]); });
+        placed.forEach(function (o) { cost += 3 * area(box, o); });
+        var inside = area(box, bounds), full = (box[2] - box[0]) * (box[3] - box[1]);
+        cost += 50 * (full - inside);
+        if (!best || cost < best.cost) best = { cost: cost, box: box, x: x, y: y, s: s };
+        return cost < 1;
+      });
+      placed.push(best.box);
+      var lead = Math.abs(best.s[1]) > 12;
+      var ang = Math.atan2(best.y - it.y, best.x - it.x);
+      out[it.id] = { x: best.x, y: best.y, anchor: best.s[0] < 0 ? "end" : "start", leader: lead,
+                     lx: it.x + 9.5 * Math.cos(ang), ly: it.y + 9.5 * Math.sin(ang) };
     });
     return out;
   }
 
   // ---- Section 2, end: the two rankings ----
   // Settled reversals on Clark among roster models: pairs where the model
-  // dearer per token is the cheaper per success, with P >= 0.975 under both
+  // pricier per token is the cheaper per success, with P >= 0.975 under both
   // priors (the export's `settled`). Only these draw solid lines.
   function reversals(pts, pairs, models) {
     var onChart = new Set(pts.map(function (p) { return p.m.id; }));
@@ -831,24 +1386,29 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
 
   function slopeLead(held, models) {
     if (!held.length) { fill("slopeLead", "None of the reversals is settled yet."); return; }
-    var parts = held.slice(0, 3).map(function (q) {
+    var parts = held.slice(0, 1).map(function (q) {
       return name(q.a) + " costs " + times(models[q.a].price_out / models[q.b].price_out) +
         " as much per token as " + name(q.b) + " and is " + times(q.ratio.jeffreys[1]) +
         " cheaper per working extractor (95% range " + times(q.ratio.jeffreys[0]) + " to " +
         times(q.ratio.jeffreys[2]) + ")";
     });
-    var more = held.length - parts.length;
-    fill("slopeLead", (held.length === 1 ? "One reversal is settled: " : held.length + " reversals are settled. ") +
-      parts.join("; ") + (more > 0 ? "; and " + more + " more." : "."));
+    fill("slopeLead", (held.length === 1 ? "One reversal is settled: " : held.length + " are settled. The widest: ") +
+      parts.join("; ") + ".");
   }
 
+  // States: 0, the models listed by price per token; 1, each model's dot
+  // travels along its line to its rank by cost per success; 2, the settled
+  // reversals drawn solid.
   function slopeChart(el, pts, held) {
-    el.innerHTML = "";
-    var W = Math.max(el.clientWidth || 600, 320);
-    var narrow = W < 560;
+    var st = 0, svg, movers, lines, W, x0;
     var inHeld = new Set();
     held.forEach(function (q) { inHeld.add(q.a); inHeld.add(q.b); });
     var ok = function (p) { return p.c.usd_per_success != null; };
+    var SUBS = [
+      "By list price per million output tokens, cheapest at the top.",
+      "Left, by list price per million output tokens; right, by what each working extractor cost.",
+      "Solid lines: models in a settled reversal, a pair whose order flips. Dashed: models in none."
+    ];
 
     var left = pts.slice().sort(function (a, b) {
       return a.m.price_out - b.m.price_out || d3.ascending(name(a.m.id), name(b.m.id));
@@ -856,78 +1416,170 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     var ranked = pts.filter(ok).sort(function (a, b) { return a.c.usd_per_success - b.c.usd_per_success; });
     var shelf = pts.filter(function (p) { return !ok(p); })
                    .sort(function (a, b) { return a.m.price_out - b.m.price_out; });
-
-    var rowH = narrow ? 19 : 22, top = 30, shelfGap = 26;
-    var yL = {}, yR = {};
-    left.forEach(function (p, i) { yL[p.m.id] = top + i * rowH; });
-    ranked.forEach(function (p, i) { yR[p.m.id] = top + i * rowH; });
-    var shelfTop = top + ranked.length * rowH + (shelf.length ? shelfGap : 0);
-    shelf.forEach(function (p, i) { yR[p.m.id] = shelfTop + i * rowH; });
-    var H = Math.max(top + left.length * rowH, shelfTop + shelf.length * rowH) + 6;
-
-    var leftText = function (p) { return narrow ? name(p.m.id) : name(p.m.id) + "  " + price(p.m.price_out); };
-    var rightText = function (p) {
-      if (narrow) return name(p.m.id);
-      return name(p.m.id) + "  " + (ok(p) ? usd(p.c.usd_per_success) : "0 of " + p.c.n);
-    };
-    var headL = narrow ? "Price per token" : "By price per token";
-    var headR = narrow ? "Cost per success" : "By cost per working extractor";
-    var shelfText = "NO PASSING DRAW";
-
-    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
-    // Label columns as wide as their longest label, measured, so nothing
-    // runs off either edge at any width.
-    function widest(cls, strings) {
-      var t = svg.append("text").attr("class", cls), m = 0;
-      strings.forEach(function (str) { t.text(str); m = Math.max(m, t.node().getComputedTextLength()); });
-      t.remove();
-      return m;
+    var right = ranked.concat(shelf);
+    if (pts.some(function (p) { return p.c.n <= 1; })) {
+      SUBS = SUBS.map(function (s, i) { return i ? s + " Hollow dots rest on a single draw." : s; });
     }
-    var wl = Math.max(widest("sl-lbl held", left.map(leftText)), widest("sl-head", [headL]));
-    var wr = Math.max(widest("sl-lbl held", pts.map(rightText)), widest("sl-head", [headR]),
-                      shelf.length ? widest("sl-shelf", [shelfText]) : 0);
-    var x0 = Math.ceil(wl) + 6, x1 = W - Math.ceil(wr) - 6;
-    svg.append("text").attr("class", "sl-head").attr("x", x0 - 4).attr("y", 12).attr("text-anchor", "end")
-      .text(headL);
-    svg.append("text").attr("class", "sl-head").attr("x", x1 + 4).attr("y", 12).text(headR);
-    if (shelf.length) {
-      svg.append("text").attr("class", "sl-shelf").attr("x", x1 + 4).attr("y", shelfTop - 13)
-        .text(shelfText);
-    }
+    fill("slopeN", pts.length);
+    var level = left.filter(function (p, i) { return right[i] === p; });
+    fill("slopeSame", level.length);
+    // A pair can flip while one of its models keeps its rank, so a solid line
+    // can run level; say so, with the first such model and its partner.
+    var still = level.filter(function (p) { return inHeld.has(p.m.id); })[0];
+    var pair = still && held.filter(function (q) { return q.a === still.m.id || q.b === still.m.id; })[0];
+    fill("slopeLevel", (!pair ? "" : "A solid line can run level: " + name(still.m.id) + " keeps its place while " +
+      (pair.a === still.m.id ? name(pair.b) + ", cheaper per token, drops below it. "
+                             : name(pair.a) + ", which costs more per token, climbs past it. ")) +
+      "Hover over or tap a model to see its settled pairs.");
 
-    // Settled lines drawn last, so they sit above the dashed ones.
-    var order = left.slice().sort(function (a, b) { return inHeld.has(a.m.id) - inHeld.has(b.m.id); });
-    var g = svg.append("g").selectAll("g").data(order).join("g")
-      .attr("tabindex", 0)
-      .on("mousemove", function (ev, p) { showTip(ev, slopeTip(p)); })
-      .on("mouseleave", hideTip)
-      .on("focus", function (ev, p) { var b = this.getBoundingClientRect(); showTip({ clientX: b.right, clientY: b.top }, slopeTip(p)); })
-      .on("blur", hideTip);
-    var cls = function (base) { return function (p) { return base + (inHeld.has(p.m.id) ? " held" : ""); }; };
-    g.append("path").attr("class", cls("sl-line"))
-      .attr("d", function (p) {
+    function draw() {
+      el.innerHTML = "";
+      W = Math.max(el.clientWidth || 600, 320);
+      var narrow = W < 560;
+      var rowH = narrow ? 19 : 22, top = 30, shelfGap = 26;
+      var yL = {}, yR = {};
+      left.forEach(function (p, i) { yL[p.m.id] = top + i * rowH; });
+      ranked.forEach(function (p, i) { yR[p.m.id] = top + i * rowH; });
+      var shelfTop = top + ranked.length * rowH + (shelf.length ? shelfGap : 0);
+      shelf.forEach(function (p, i) { yR[p.m.id] = shelfTop + i * rowH; });
+      var H = Math.max(top + left.length * rowH, shelfTop + shelf.length * rowH) + 6;
+
+      var leftText = function (p) { return narrow ? name(p.m.id) : name(p.m.id) + "  " + price(p.m.price_out); };
+      var rightText = function (p) {
+        if (narrow) return name(p.m.id);
+        return name(p.m.id) + "  " + (ok(p) ? usd(p.c.usd_per_success) : "0 of " + p.c.n);
+      };
+      var headL = narrow ? "$ / M output" : "By $ per M output tokens";
+      var headR = narrow ? "Cost per success" : "By cost per working extractor";
+      var shelfText = "NO PASSING DRAW";
+
+      svg = d3.select(el).append("svg").attr("class", "slope").attr("viewBox", [0, 0, W, H])
+        .attr("width", W).attr("height", H);
+      // Label columns as wide as their longest label, measured, so nothing
+      // runs off either edge at any width.
+      function widest(cls, strings) {
+        var t = svg.append("text").attr("class", cls), m = 0;
+        strings.forEach(function (str) { t.text(str); m = Math.max(m, t.node().getComputedTextLength()); });
+        t.remove();
+        return m;
+      }
+      var wl = Math.max(widest("sl-lbl held", left.map(leftText)), widest("sl-head", [headL]));
+      var wr = Math.max(widest("sl-lbl held", pts.map(rightText)), widest("sl-head", [headR]),
+                        shelf.length ? widest("sl-shelf", [shelfText]) : 0);
+      x0 = Math.ceil(wl) + 6;
+      var x1 = W - Math.ceil(wr) - 6;
+      svg.append("text").attr("class", "sl-head").attr("x", x0 - 4).attr("y", 12).attr("text-anchor", "end")
+        .text(headL);
+      svg.append("text").attr("class", "sl-head sl-r").attr("x", x1 + 4).attr("y", 12).text(headR);
+      if (shelf.length) {
+        svg.append("text").attr("class", "sl-shelf sl-r").attr("x", x1 + 4).attr("y", shelfTop - 13)
+          .text(shelfText);
+      }
+
+      var pathD = function (p) {
         var ya = yL[p.m.id], yb = yR[p.m.id], mx = (x0 + x1) / 2;
         return "M" + (x0 + 6) + "," + ya + " C" + mx + "," + ya + " " + mx + "," + yb + " " + (x1 - 6) + "," + yb;
-      });
-    [[x0 + 6, yL], [x1 - 6, yR]].forEach(function (end) {
-      g.append("circle").attr("r", 3.5).attr("cx", end[0]).attr("cy", function (p) { return end[1][p.m.id]; })
-        .attr("class", function (p) {
-          return "sl-dot" + (p.c.n <= 1 ? " hollow" : "") + (inHeld.has(p.m.id) ? " held" : "");
+      };
+      // Settled lines drawn last, so they sit above the dashed ones.
+      var order = left.slice().sort(function (a, b) { return inHeld.has(a.m.id) - inHeld.has(b.m.id); });
+      var g = svg.append("g").selectAll("g").data(order).join("g")
+        .attr("tabindex", 0)
+        .on("mousemove", function (ev, p) { showTip(ev, slopeTip(p, held)); })
+        .on("mouseleave", hideTip)
+        .on("focus", function (ev, p) { var b = this.getBoundingClientRect(); showTip({ clientX: b.right, clientY: b.top }, slopeTip(p, held)); })
+        .on("blur", hideTip);
+      var cls = function (base) { return function (p) { return base + (inHeld.has(p.m.id) ? " held" : ""); }; };
+      var dotCls = function (p) {
+        return "sl-dot" + (p.c.n <= 1 ? " hollow" : "") + (inHeld.has(p.m.id) ? " held" : "");
+      };
+      lines = g.append("path").attr("class", cls("sl-line")).attr("d", pathD)
+        .each(function () { this._L = this.getTotalLength(); });
+      g.append("circle").attr("r", 3.5).attr("cx", x0 + 6).attr("cy", function (p) { return yL[p.m.id]; })
+        .attr("class", dotCls);
+      movers = g.append("circle").attr("r", 3.5).attr("class", dotCls);
+      g.append("text").attr("class", cls("sl-lbl"))
+        .attr("x", x0 - 4).attr("y", function (p) { return yL[p.m.id]; }).attr("dy", "0.32em").attr("text-anchor", "end")
+        .text(leftText);
+      g.append("text").attr("class", function (p) { return cls("sl-lbl")(p) + " sl-r"; })
+        .attr("x", x1 + 4).attr("y", function (p) { return yR[p.m.id]; }).attr("dy", "0.32em")
+        .text(rightText);
+      apply(null);
+    }
+
+    // `dir` is 1 to animate the dots out to the right, -1 to bring them back,
+    // and null to place everything at once.
+    function apply(dir) {
+      var out = st >= 1;
+      svg.classed("emph", st >= 2);
+      // On the way out, the right-hand labels wait for the dots to arrive.
+      svg.selectAll(".sl-r").style("transition-delay", dir === 1 && !reduce ? "1.1s" : "0s")
+        .style("opacity", out ? 1 : 0);
+      d3.select("#slope-sub").text(SUBS[st]);
+      var at = function (path, t) {
+        var q = path.getPointAtLength(t * path._L);
+        return "translate(" + q.x + "," + q.y + ")";
+      };
+      var pathOf = function (node) { return node.parentNode.querySelector("path.sl-line"); };
+      // At rest a line is either whole, styled by its class, or not drawn.
+      var rest = function (path) { path.style.strokeDasharray = out ? "" : "0 " + (path._L + 10); };
+      if (dir === null || reduce) {
+        movers.interrupt().attr("transform", function () { return at(pathOf(this), out ? 1 : 0); });
+        lines.interrupt().each(function () { rest(this); });
+        return;
+      }
+      var dur = 1400;
+      movers.transition().duration(dur).ease(d3.easeCubicInOut)
+        .attrTween("transform", function () {
+          var path = pathOf(this);
+          return function (t) { return at(path, dir > 0 ? t : 1 - t); };
         });
-    });
-    g.append("text").attr("class", cls("sl-lbl"))
-      .attr("x", x0 - 4).attr("y", function (p) { return yL[p.m.id]; }).attr("dy", "0.32em").attr("text-anchor", "end")
-      .text(leftText);
-    g.append("text").attr("class", cls("sl-lbl"))
-      .attr("x", x1 + 4).attr("y", function (p) { return yR[p.m.id]; }).attr("dy", "0.32em")
-      .text(rightText);
+      // Each line draws itself along its own length, in step with its dot:
+      // its own dash pattern up to the drawn length, then one long gap, so a
+      // dashed line keeps its dashes as it grows.
+      lines.transition().duration(dur).ease(d3.easeCubicInOut)
+        .styleTween("stroke-dasharray", function () {
+          var path = this, L = path._L;
+          path.style.strokeDasharray = "";
+          var css = getComputedStyle(path).strokeDasharray;
+          var pat = css === "none" ? [] : css.split(/[ ,]+/).map(parseFloat).filter(function (v) { return v > 0; });
+          return function (t) { return drawnTo(pat, L * (dir > 0 ? t : 1 - t), L); };
+        })
+        .on("end", function () { rest(this); });
+    }
+
+    // A dash array that paints `pat` (empty: solid) for the first `d` of a
+    // path `L` long, and nothing after. Its length stays even, so dashes and
+    // gaps keep their places.
+    function drawnTo(pat, d, L) {
+      if (!pat.length) return d + " " + (L + 10);
+      var out = [], acc = 0, i = 0;
+      while (acc + pat[i % pat.length] < d) { acc += pat[i % pat.length]; out.push(pat[i % pat.length]); i++; }
+      if (i % 2 === 0) out.push(d - acc, L + 10);
+      else out.push(d - acc, 0, L + 10);
+      return out.join(" ");
+    }
+
+    draw();
+    return {
+      state: function (i, prev) {
+        var wasOut = st >= 1;
+        st = i;
+        var isOut = st >= 1;
+        apply(prev >= 0 && wasOut !== isOut ? (isOut ? 1 : -1) : null);
+      },
+      redraw: draw
+    };
   }
 
-  function slopeTip(p) {
-    var c = p.c;
-    return "<b>" + name(p.m.id) + "</b><br>List price " + price(p.m.price_out) + " / M output tokens<br>" +
+  function slopeTip(p, held) {
+    var c = p.c, id = p.m.id;
+    var over = held.filter(function (q) { return q.a === id; }).map(function (q) { return name(q.b); });
+    var under = held.filter(function (q) { return q.b === id; }).map(function (q) { return name(q.a); });
+    return "<b>" + name(id) + "</b><br>List price " + price(p.m.price_out) + " / M output tokens<br>" +
       c.k + " of " + c.n + " draws passed<br>" +
-      (c.usd_per_success != null ? "Cost per success " + usd(c.usd_per_success) : "No passing draw");
+      (c.usd_per_success != null ? "Cost per success " + usd(c.usd_per_success) : "No passing draw") +
+      (over.length ? "<br>Settled: cheaper per success than " + over.join(", ") : "") +
+      (under.length ? "<br>Settled: costs more per success than " + under.join(", ") : "");
   }
 
   // ---- Section 3: one square per draw ----
@@ -1003,10 +1655,12 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
           var col = d.draw % c.per, rr = Math.floor(d.draw / c.per);
           if (rr > 1) return;
           var o = OUTCOMES.find(function (o) { return o[0] === d.outcome; }) || OUTCOMES[3];
+          var rx = colX[i] + col * step;
           var rect = row.append("rect")
-            .attr("x", colX[i] + col * step).attr("y", rr * step)
+            .attr("x", rx).attr("y", rr * step)
             .attr("width", s).attr("height", s)
-            .attr("fill", o[2] === "none" ? "var(--bg)" : o[2]);
+            .attr("fill", o[2] === "none" ? "var(--bg)" : o[2])
+            .property("_delay", rx / xx * 900 + L.y / H * 500);
           if (d.outcome === "silent_partial") rect.attr("fill-opacity", 0.55);
           if (d.outcome === "infra_error") rect.attr("stroke", "var(--mut)").attr("stroke-dasharray", "2 2");
           rect.on("mousemove", function (ev) {
@@ -1021,12 +1675,132 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     });
   }
 
+  // The squares arrive in a wave from the top left, draw by draw.
+  function playUnits(el) {
+    d3.select(el).selectAll("rect").attr("opacity", 0).transition()
+      .delay(function () { return this._delay; }).duration(250)
+      .attr("opacity", 1);
+  }
+
+  // ---- Section 4: the caption table ----
+  // States: 0, the markup; 1, an extractor reads it line by line and stops at
+  // the small table's closing tag, with no rows; 2, the small table is taken
+  // out and the same read reaches every permit row; 3, how many of Clark's
+  // empty extractors that rescues, counted up.
+  function captionFig(root) {
+    var lines = Array.prototype.slice.call(root.querySelectorAll(".markup .ln"));
+    var INNER = lines.findIndex(function (l) { return l.classList.contains("inner"); });
+    var CUT = lines.findIndex(function (l) { return l.classList.contains("cut"); });
+    var rowsEl = document.getElementById("cap-rows"), big = document.getElementById("cap-big");
+    var countEl = document.getElementById("cap-count"), total = countEl.textContent;
+    var SUBS = [
+      "The grid's first row holds a second, smaller table.",
+      "An extractor that reads to the first </table> it meets.",
+      "The same extractor, with the small table taken out.",
+      "Every Clark extractor that returned nothing on some page, re-run without the small table."
+    ];
+    var run = 0, PER_PAGE = 10;
+
+    function rows(n) {
+      if (n == null) { rowsEl.innerHTML = "&ndash;"; rowsEl.classList.remove("zero"); return; }
+      rowsEl.textContent = n;
+      rowsEl.classList.toggle("zero", n === 0);
+    }
+    function end(s) {
+      run++;
+      d3.select(countEl).interrupt();
+      lines.forEach(function (l) {
+        l.classList.remove("scan");
+        if (l.classList.contains("row")) l.classList.toggle("ok", s >= 2);
+      });
+      lines[CUT].classList.toggle("off", s < 1);
+      lines[INNER].classList.toggle("gone", s >= 2);
+      lines[CUT].classList.toggle("gone", s >= 2);
+      rows(s === 0 ? null : s === 1 ? 0 : PER_PAGE);
+      big.classList.toggle("off", s < 3);
+      countEl.textContent = total;
+      document.getElementById("cap-sub").textContent = SUBS[s];
+    }
+    // Moves the read cursor over `order`, one line per tick, unless a newer
+    // state has started.
+    function scan(order, wait, onLine, done) {
+      var my = ++run, k = 0;
+      function next() {
+        if (my !== run) return;
+        lines.forEach(function (l) { l.classList.remove("scan"); });
+        if (k >= order.length) { done(); return; }
+        var i = order[k++];
+        lines[i].classList.add("scan");
+        onLine(i);
+        setTimeout(next, 280);
+      }
+      setTimeout(next, wait);
+    }
+
+    function state(s, prev) {
+      if (reduce || prev !== s - 1) { end(s); return; }
+      if (s === 1) {
+        end(0);
+        document.getElementById("cap-sub").textContent = SUBS[1];
+        scan(d3.range(0, INNER + 1), 0, function () {}, function () {
+          lines[INNER].classList.add("scan");
+          lines[CUT].classList.remove("off");
+          rows(0);
+        });
+      } else if (s === 2) {
+        end(1);
+        document.getElementById("cap-sub").textContent = SUBS[2];
+        lines[INNER].classList.add("gone");
+        lines[CUT].classList.add("gone");
+        rows(null);
+        var n = 0, order = d3.range(lines.length).filter(function (i) { return i !== INNER && i !== CUT; });
+        scan(order, 500, function (i) {
+          var l = lines[i];
+          if (!l.classList.contains("row")) return;
+          l.classList.add("ok");
+          // The last row line is the "..." standing for the rest of the page.
+          n = l.textContent.trim() === "..." ? PER_PAGE : n + 1;
+          rows(n);
+        }, function () { rows(PER_PAGE); });
+      } else if (s === 3) {
+        end(2);
+        document.getElementById("cap-sub").textContent = SUBS[3];
+        big.classList.remove("off");
+        var to = +total;
+        if (!isFinite(to)) return;
+        d3.select(countEl).transition().delay(200).duration(1200).ease(d3.easeCubicOut)
+          .tween("text", function () {
+            var f = d3.interpolateRound(0, to), node = this;
+            return function (t) { node.textContent = f(t); };
+          });
+      }
+    }
+    return { state: state };
+  }
+
   // ---- Sections 1, 4, 7, 8: counts quoted in the prose ----
   function fillCounts(data, cellOf, drawsOf) {
     fill("nModels", data.models.length);
+    fill("nEarlier", data.models.filter(function (m) { return m.group === "v1_rerun"; }).length);
     fill("nTargets", Object.keys(data.targets).length);
     var cap = data.exploratory && data.exploratory.caption;
     if (cap) { fill("capBack", cap.rows_back); fill("capEmpty", cap.silent_empty); fill("capPass", cap.pass); }
+    // The grey squares of section 3 that crash on the `html` parameter: baseline v2 cells only.
+    var nc = data.exploratory && data.exploratory.name_clash;
+    if (nc) {
+      var ncBase = nc.cells.filter(function (c) { return c.arm === "baseline" && c.protocol === "v2"; });
+      fill("clashN", d3.sum(ncBase, function (c) { return c.crashes; }));
+      fill("clashPass", d3.sum(ncBase, function (c) { return c.pass_patched; }));
+      fill("clashModels", new Set(ncBase.map(function (c) { return c.model; })).size);
+      fill("clashLoud", data.draws.filter(function (d) {
+        return /\|v2$/.test(d.cell) && d.cell.indexOf("|hint|") < 0 && d.outcome === "loud";
+      }).length);
+      var solCell = cellOf["clarkco|openai/gpt-6-sol|v2"];
+      var solClash = ncBase.filter(function (c) {
+        return c.target === "clarkco" && c.model === "openai/gpt-6-sol";
+      })[0];
+      if (solCell && solClash) { fill("clashSol", solClash.crashes); fill("clashSolN", solCell.n); }
+    }
     fill("nRedrawn", d3.sum(data.cells.filter(function (c) { return c.protocol === "v2"; }),
                             function (c) { return c.draws_redrawn; }));
     var sj = data.draws.filter(function (d) {
@@ -1050,8 +1824,8 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
 
   var PORTS = [
     { t: "clarkco", label: "Clark County", shape: d3.symbolCircle, color: "var(--ink)" },
-    { t: "stjohns", label: "St. Johns", shape: d3.symbolSquare, color: "var(--faint)" },
-    { t: "santabarbara", label: "Santa Barbara (held out)", shape: d3.symbolDiamond, color: "var(--pass)" }
+    { t: "stjohns", label: "St. Johns", shape: d3.symbolSquare, color: "var(--accent)" },
+    { t: "santabarbara", label: "Santa Barbara (held out)", shape: d3.symbolDiamond, color: "var(--amber)" }
   ];
 
   function keySwatch(shape, color) {
@@ -1060,11 +1834,11 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
   }
 
   // ---- Section 5: three portals per model ----
+  // States: 0, Clark only; 1, St. Johns marks move out from each model's
+  // Clark rate to its own; 2, Santa Barbara's do the same; 3, the two models
+  // the lead names stay lit.
   function portsChart(el, data, cellOf) {
-    el.innerHTML = "";
-    document.getElementById("ports-key").innerHTML = PORTS.map(function (p) {
-      return "<span>" + keySwatch(p.shape, p.color) + p.label + "</span>";
-    }).join("");
+    var st = 0, svg, X, rows, lit;
     var roster = data.models.filter(function (m) { return m.group === "roster"; });
     var rows = roster.map(function (m) {
       return { m: m, c: PORTS.map(function (p) { return cellOf[p.t + "|" + m.id + "|v2"]; }) };
@@ -1081,37 +1855,70 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     if (rev) lead.push(name(rev.m.id) + " did the reverse, " + rev.c[0].k + " of " + rev.c[0].n + " and " +
                        rev.c[2].k + " of " + rev.c[2].n);
     fill("portsLead", lead.length ? lead.join("; ") + ". A rate on one portal says little about the next." : "");
+    lit = new Set([fwd && fwd.m.id, rev && rev.m.id].filter(Boolean));
 
+    function draw() {
+    el.innerHTML = "";
+    document.getElementById("ports-key").innerHTML = PORTS.map(function (p) {
+      return "<span>" + keySwatch(p.shape, p.color) + p.label + "</span>";
+    }).join("");
     var W = Math.max(el.clientWidth || 600, 320);
     var labelW = Math.min(W * 0.5, widestText(el, "p-lbl", rows.map(function (r) { return name(r.m.id); })) + 14);
     var M = { t: 22, r: 14, b: 30 };
-    var rowH = 20, H = M.t + rows.length * rowH + M.b;
-    var X = d3.scaleLinear().domain([0, 1]).range([labelW, W - M.r]);
-    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+    var rowH = W < 560 ? 17 : 20, H = M.t + rows.length * rowH + M.b;
+    X = d3.scaleLinear().domain([0, 1]).range([labelW, W - M.r]);
+    svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
     svg.append("g").attr("class", "grid").attr("transform", "translate(0," + (H - M.b) + ")")
       .call(d3.axisBottom(X).ticks(5).tickSize(-(H - M.b - M.t + 6)).tickFormat(""))
       .select(".domain").remove();
     svg.append("g").attr("class", "axis").attr("transform", "translate(0," + (H - M.b) + ")")
       .call(d3.axisBottom(X).ticks(5).tickFormat(d3.format(".0%")).tickSizeOuter(0));
-    var g = svg.append("g").selectAll("g").data(rows).join("g")
+    var g = svg.append("g").selectAll("g").data(rows).join("g").attr("class", "p-row")
       .attr("transform", function (r, i) { return "translate(0," + (M.t + i * rowH + rowH / 2) + ")"; });
     g.append("text").attr("class", "p-lbl").attr("x", 0).attr("dy", "0.32em").text(function (r) { return name(r.m.id); });
     PORTS.forEach(function (p, j) {
       var off = (j - 1) * 5;
       var has = g.filter(function (r) { return r.c[j]; });
-      has.append("line").attr("class", "p-ci").attr("stroke", p.color)
+      has.append("line").attr("class", "p-ci p-ci" + j).attr("stroke", p.color)
         .attr("x1", function (r) { return X(r.c[j].ci95[0]); }).attr("x2", function (r) { return X(r.c[j].ci95[1]); })
-        .attr("y1", off).attr("y2", off).attr("opacity", 0.55);
-      has.append("path").attr("class", "p-mark")
+        .attr("y1", off).attr("y2", off);
+      has.append("path").attr("class", "p-mark p-mark" + j).property("_off", off)
         .attr("d", d3.symbol(p.shape, 46))
         .attr("fill", p.color).attr("stroke", "var(--bg)").attr("stroke-width", 1)
-        .attr("transform", function (r) { return "translate(" + X(r.c[j].rate) + "," + off + ")"; })
         .on("mousemove", function (ev, r) {
           var c = r.c[j];
           showTip(ev, "<b>" + name(r.m.id) + "</b>, " + p.label + "<br>" + c.k + " of " + c.n + " passed (95% " +
             pct(c.ci95[0]) + "&ndash;" + pct(c.ci95[1]) + ")");
         }).on("mouseleave", hideTip);
     });
+    apply(false);
+    }
+
+    function apply(animate) {
+      var dur = animate && !reduce ? 900 : 0;
+      PORTS.forEach(function (p, j) {
+        var shown = j <= st;
+        // A portal not yet shown has its marks stacked under Clark's: they
+        // must not answer the pointer there.
+        svg.selectAll(".p-mark" + j + ", .p-ci" + j).style("pointer-events", shown ? null : "none");
+        svg.selectAll(".p-mark" + j).interrupt().transition().duration(dur)
+          .delay(function (r, i) { return dur ? i * 25 : 0; })
+          .attr("opacity", shown ? 1 : 0)
+          .attr("transform", function (r) {
+            return "translate(" + X(shown ? r.c[j].rate : r.c[0].rate) + "," + this._off + ")";
+          });
+        svg.selectAll(".p-ci" + j).interrupt().transition().duration(dur).delay(shown ? dur * 0.6 : 0)
+          .attr("opacity", shown ? 0.55 : 0);
+      });
+      d3.selectAll("#ports-key span").classed("off", function (d, j) { return j > st; });
+      svg.selectAll(".p-row").classed("dim", function (r) { return st >= 3 && !lit.has(r.m.id); });
+    }
+
+    draw();
+    return {
+      state: function (i, prev) { st = i; apply(prev === i - 1); },
+      redraw: draw
+    };
   }
 
   // ---- Section 6: before and after ----
@@ -1134,7 +1941,8 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     fill("effectsLead", parts.join("; ") + ".");
 
     var W = Math.max(el.clientWidth || 600, 320);
-    var rowH = 17, M = { r: 14 };
+    var wide = W >= 560;
+    var rowH = 18, M = { r: wide ? 92 : 14 };
     var byName = function (a, b) { return d3.ascending(name(a.model), name(b.model)); };
     var panels = [
       { title: "A one-paragraph hint, Clark County", rows: hint.slice().sort(byName),
@@ -1168,16 +1976,129 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
         }).on("mouseleave", hideTip);
       g.append("text").attr("class", "p-lbl").attr("x", 0).attr("y", L.y).attr("dy", "0.32em").text(L.p.label(q));
       g.append("title").text(L.p.label(q));
+      if (wide) {
+        g.append("text").attr("class", "ef-k").attr("x", W).attr("y", L.y).attr("dy", "0.32em")
+          .attr("text-anchor", "end").text(q.from[0] + "/" + q.from[1] + " → " + q.to[0] + "/" + q.to[1]);
+      }
       var cls = q.claimed ? " claimed" : "";
+      var wait = (L.y / H) * 600;
       if (Math.abs(X(b) - X(a)) < 4) {
-        g.append("circle").attr("class", "ef-zero").attr("cx", X(a)).attr("cy", L.y).attr("r", 3);
+        g.append("circle").attr("class", "ef-zero").attr("cx", X(a)).attr("cy", L.y).attr("r", 3)
+          .property("_wait", wait);
         return;
       }
       var dir = b > a ? 1 : -1;
+      g.append("circle").attr("class", "ef-start" + cls).attr("cx", X(a)).attr("cy", L.y).attr("r", 3);
+      // `_x0` is the "before" end, where the replay (playEffects) starts.
       g.append("line").attr("class", "ef-arrow" + cls).attr("x1", X(a)).attr("x2", X(b) - dir * 5)
+        .property("_x0", X(a)).property("_x2", X(b) - dir * 5).property("_wait", wait)
         .attr("y1", L.y).attr("y2", L.y);
       g.append("path").attr("class", "ef-head" + cls)
-        .attr("d", "M" + X(b) + "," + L.y + " l" + (-dir * 7) + ",-4 l0,8 z");
+        .attr("d", "M0," + L.y + " l" + (-dir * 7) + ",-4 l0,8 z")
+        .attr("transform", "translate(" + X(b) + ",0)")
+        .property("_x0", X(a)).property("_x", X(b)).property("_wait", wait);
+    });
+  }
+
+  function playEffects(el) {
+    var dur = 700, wait = function () { return this._wait; };
+    var c = d3.select(el);
+    c.selectAll(".ef-arrow").attr("x2", function () { return this._x0; })
+      .transition().delay(wait).duration(dur).ease(d3.easeCubicOut)
+      .attr("x2", function () { return this._x2; });
+    c.selectAll(".ef-head").attr("opacity", 0).attr("transform", function () { return "translate(" + this._x0 + ",0)"; })
+      .transition().delay(wait).duration(dur).ease(d3.easeCubicOut)
+      .attr("opacity", 1).attr("transform", function () { return "translate(" + this._x + ",0)"; });
+    c.selectAll(".ef-zero").attr("opacity", 0).transition().delay(wait).duration(dur).attr("opacity", 1);
+  }
+
+  // ---- Section 6, end: best of five with the check ----
+  // One panel per portal, one row per roster model in the ports chart's
+  // order. An arrow from pass@1 to the chance the first accepted of up to
+  // five draws works; a tick at an oracle's pass@5. A model that never passed
+  // there gets a hollow red dot at 0, one that always passed a green dot at
+  // 100%. Arrows replay with playEffects.
+  function bestOf5Chart(el, data, cellOf) {
+    el.innerHTML = "";
+    var bo = (data.exploratory && data.exploratory.best_of_5) || { cells: [] };
+    var roster = data.models.filter(function (m) { return m.group === "roster"; });
+    var at = {};
+    bo.cells.forEach(function (c) {
+      if (c.arm === "baseline" && c.protocol === "v2") at[c.target + "|" + c.model] = c;
+    });
+    var shown = roster.filter(function (m) { return cellOf["clarkco|" + m.id + "|v2"]; });
+    shown.sort(function (a, b) {
+      return cellOf["clarkco|" + b.id + "|v2"].rate - cellOf["clarkco|" + a.id + "|v2"].rate || a.price_out - b.price_out;
+    });
+    var cells = [];
+    shown.forEach(function (m) { PORTS.forEach(function (p) { if (at[p.t + "|" + m.id]) cells.push(at[p.t + "|" + m.id]); }); });
+    var mid = cells.filter(function (c) { return c.k > 0 && c.k < c.n; });
+    fill("bo5Top", mid.filter(function (c) { return c.best5 >= 0.95; }).length + " of " + mid.length);
+    fill("bo5Base", pct(d3.median(mid, function (c) { return c.k / c.n; }) || 0));
+    var ratios = mid.filter(function (c) { return c.usd_per_success_1 && c.usd_per_success_5; })
+                    .map(function (c) { return c.usd_per_success_5 / c.usd_per_success_1; });
+    fill("bo5Cost", (d3.median(ratios) || 1).toFixed(2));
+    fill("bo5Orders", d3.format(",")(bo.orders || 0));
+    document.getElementById("bo5-key").innerHTML =
+      '<span><svg width="26" height="10" aria-hidden="true"><circle cx="4" cy="5" r="3" class="ef-start up"></circle>' +
+      '<line x1="7" x2="18" y1="5" y2="5" class="ef-arrow up"></line><path d="M24,5 l-7,-4 l0,8 z" class="ef-head up"></path></svg>one draw to best of five</span>' +
+      '<span><svg width="6" height="12" aria-hidden="true"><line x1="3" x2="3" y1="1" y2="11" class="ef-oracle"></line></svg>pass@5, an oracle</span>' +
+      '<span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.2" class="ef-zero never"></circle></svg>never passed</span>' +
+      '<span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3.2" class="ef-zero all"></circle></svg>always passed</span>';
+
+    var W = Math.max(el.clientWidth || 600, 320);
+    var cols = W >= 760 ? 3 : 1;
+    var rowH = cols === 3 ? 18 : 17, headH = 22, axisH = 24, gap = 22;
+    var labelW = Math.min(W * 0.42, widestText(el, "p-lbl", shown.map(function (m) { return name(m.id); })) + 12);
+    var panelW = cols === 3 ? (W - labelW - gap * 2) / 3 : W - labelW;
+    var bodyH = shown.length * rowH;
+    var H = cols === 3 ? headH + bodyH + axisH : 3 * (headH + bodyH + axisH) + 2 * gap;
+    var svg = d3.select(el).append("svg").attr("viewBox", [0, 0, W, H]).attr("width", W).attr("height", H);
+    var nt = panelW < 200 ? 2 : 4;
+
+    PORTS.forEach(function (p, j) {
+      var px = cols === 3 ? labelW + j * (panelW + gap) : labelW;
+      var py = cols === 3 ? 0 : j * (headH + bodyH + axisH + gap);
+      var X = d3.scaleLinear().domain([0, 1]).range([px + 6, px + panelW - 16]);
+      var y0 = py + headH;
+      svg.append("text").attr("class", "ef-panel").attr("x", px + 6).attr("y", py + 13).text(p.label);
+      svg.append("g").attr("class", "grid").attr("transform", "translate(0," + (y0 + bodyH) + ")")
+        .call(d3.axisBottom(X).ticks(nt).tickSize(-bodyH).tickFormat("")).select(".domain").remove();
+      svg.append("g").attr("class", "axis").attr("transform", "translate(0," + (y0 + bodyH) + ")")
+        .call(d3.axisBottom(X).ticks(nt).tickFormat(d3.format(".0%")).tickSizeOuter(0));
+      shown.forEach(function (m, i) {
+        var y = y0 + i * rowH + rowH / 2;
+        if (j === 0 || cols === 1) {
+          svg.append("text").attr("class", "p-lbl").attr("x", 0).attr("y", y).attr("dy", "0.32em").text(name(m.id));
+        }
+        var c = at[p.t + "|" + m.id];
+        if (!c) return;
+        var a = c.k / c.n, b = c.best5, wait = (y / H) * 700 + j * 120;
+        var g = svg.append("g").attr("class", "bo-cell").attr("tabindex", 0)
+          .on("mousemove", function (ev) {
+            showTip(ev, "<b>" + name(m.id) + "</b>, " + p.label + "<br>" + c.k + " of " + c.n + " draws passed (" + pct(a) + ")<br>" +
+              "First accepted of up to five works: " + pct(b) + "<br>pass@5, an oracle: " + pct(c.oracle5));
+          }).on("mouseleave", hideTip);
+        g.append("rect").attr("class", "ef-band").attr("x", px).attr("y", y - rowH / 2).attr("width", panelW)
+          .attr("height", rowH);
+        if (c.k === 0 || c.k === c.n) {
+          g.append("circle").attr("class", "ef-zero " + (c.k ? "all" : "never")).attr("cx", X(a)).attr("cy", y)
+            .attr("r", 3.2).property("_wait", wait);
+          return;
+        }
+        g.append("line").attr("class", "ef-oracle").attr("x1", X(c.oracle5)).attr("x2", X(c.oracle5))
+          .attr("y1", y - 5).attr("y2", y + 5);
+        g.append("circle").attr("class", "ef-start up").attr("cx", X(a)).attr("cy", y).attr("r", 3);
+        if (Math.abs(X(b) - X(a)) < 8) return;
+        var dir = b > a ? 1 : -1;
+        g.append("line").attr("class", "ef-arrow up").attr("x1", X(a) + dir * 3).attr("x2", X(b) - dir * 5)
+          .property("_x0", X(a) + dir * 3).property("_x2", X(b) - dir * 5).property("_wait", wait)
+          .attr("y1", y).attr("y2", y);
+        g.append("path").attr("class", "ef-head up")
+          .attr("d", "M0," + y + " l" + (-dir * 7) + ",-4 l0,8 z")
+          .attr("transform", "translate(" + X(b) + ",0)")
+          .property("_x0", X(a)).property("_x", X(b)).property("_wait", wait);
+      });
     });
   }
 
@@ -1232,18 +2153,49 @@ is on <a href="tables.html">one page of tables</a>, and in <a href="data.json">d
     });
   }
 
+  // A replay of the calls against a clock: a playhead sweeps the hour and
+  // each call appears as the sweep passes the time it ended. The sweep eases
+  // in and out, and each dot waits for the playhead itself, not the clock,
+  // so the two stay together at any easing. Kept under the 4 s the render
+  // check allows for the last dot.
+  var REPLAY = 3200;
+  function playWall(el) {
+    var svg = d3.select(el).select("svg");
+    var dots = svg.selectAll("circle").attr("opacity", 0);
+    var ax = svg.select(".axis .domain").node();
+    if (!ax) { dots.attr("opacity", 0.85); return; }
+    var b = ax.getBBox();
+    var head = svg.append("line").attr("class", "playhead").attr("stroke", "var(--ink)")
+      .attr("stroke-width", 1.2).attr("x1", b.x).attr("x2", b.x)
+      .attr("y1", 4).attr("y2", +svg.attr("height") - 30);
+    var queue = dots.nodes().sort(function (p, q) { return p.getAttribute("cx") - q.getAttribute("cx"); });
+    var i = 0;
+    var t = d3.timer(function (ms) {
+      var k = Math.min(1, ms / REPLAY), x = b.x + d3.easeSinInOut(k) * b.width;
+      head.attr("x1", x).attr("x2", x);
+      while (i < queue.length && +queue[i].getAttribute("cx") <= x) {
+        d3.select(queue[i++]).transition().duration(220).attr("opacity", 0.85);
+      }
+      if (k < 1) return;
+      t.stop();
+      d3.selectAll(queue.slice(i)).transition().duration(220).attr("opacity", 0.85);
+      head.transition().duration(800).ease(d3.easeCubicOut).attr("opacity", 0).remove();
+    });
+  }
+
   function legend() {
     var el = document.getElementById("legend");
     el.innerHTML = "";
     OUTCOMES.forEach(function (o) {
-      if (o[0] === "silent_partial") return;
       var span = document.createElement("span");
       var sw = document.createElement("i");
       sw.className = "sw";
       sw.style.background = o[2] === "none" ? "transparent" : o[2];
+      // The chart's lighter red: the same fill at the squares' opacity.
+      if (o[0] === "silent_partial") sw.style.opacity = 0.55;
       if (o[0] === "infra_error") sw.style.outline = "1px dashed var(--mut)";
       span.appendChild(sw);
-      span.appendChild(document.createTextNode(o[0] === "silent_empty" ? "Returned wrong or no rows, no error" : o[1]));
+      span.appendChild(document.createTextNode(o[1]));
       el.appendChild(span);
     });
   }
