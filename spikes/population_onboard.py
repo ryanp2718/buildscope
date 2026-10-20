@@ -33,6 +33,8 @@ Usage:
     python spikes/population_onboard.py smartgov         # in the browser
     python spikes/population_onboard.py logis
     python spikes/population_onboard.py clariti          # in the browser
+    python spikes/population_onboard.py amanda           # in the browser
+    python spikes/population_onboard.py posse            # in the browser
 """
 import csv
 import datetime
@@ -105,6 +107,55 @@ CL_SEARCH = "/s/advanced-search"
 CL_ROW = re.compile(r'(?is)<tr[^>]*class="slds-hint-parent"[^>]*>(.*?)</tr>')
 CL_CELL = re.compile(r'(?is)<t[dh][^>]*data-label="([^"]+)"[^>]*>(.*?)</t[dh]>')
 CL_PAGES = re.compile(r"Page \d+ of ([\d,]+)")
+
+# AMANDA's citizen portal (Austin's AB+C, Volusia's Connect Live) builds its
+# public search in the browser, set up per site. Austin's date range is on its
+# second tab and will not search on dates alone ("Please enter at least one
+# search field"), so it takes the one type allowed, Building Permit. Volusia's
+# Open Folders search takes its Permits folder type; its field asks for
+# YYYY-MM-DD, but only MM/DD/YYYY returned records (2026-10-20). Both filter on
+# the application date (one record opened on each). Each site's server answers
+# every route of the app but its root with 404 and the app, so each page's row
+# keeps that status.
+AM_SEARCH = "/citizenportal/app/public-search"
+AM_SITES = {
+    "abc.austintexas.gov": ("Property / Project Name / Types / Date Range",
+                            "Building Permit", "%m-%d-%Y"),
+    "connectlivepermits.org": ("", "Permits", "%m/%d/%Y"),
+}
+AM_SET_TYPE = """name => {
+    const s = document.getElementById('folderType_ID');
+    const o = Array.from(s.options).find(o => o.text.trim() == name);
+    s.value = o.value;
+    s.dispatchEvent(new Event('change', {bubbles: true}));
+    return o.value;
+}"""
+AM_FIRST = """prev => {
+    const c = document.querySelector('datatable-body-row datatable-body-cell');
+    return c && c.innerText.trim() && c.innerText.trim() != prev;
+}"""
+AM_ROW = re.compile(r"(?is)<datatable-body-row\b.*?</datatable-body-row>")
+AM_CELL = re.compile(r"(?is)<datatable-body-cell\b.*?</datatable-body-cell>")
+AM_HEAD = re.compile(r"(?is)<datatable-header-cell\b.*?</datatable-header-cell>")
+AM_TOTAL = re.compile(r"([\d,]+) Results?\b")
+
+# Philadelphia's eCLIPSE (Computronix POSSE) builds its Permit Search by Date
+# in the browser. The month, and Aug 3-14 with no type, both answer "More
+# results were found than can be displayed", as does the month with one type;
+# Aug 3-14 with Residential Building Permit, the type chosen by its name,
+# returns a list (2026-10-20). The list is an ag-grid whose cells name their
+# column in col-id.
+PX_SEARCH = "/phillylmsprod/pub/webui/#/search/3607494"
+PX_TYPE = "Residential Building Permit"
+PX_FROM, PX_TO = "Aug 3, 2026", "Aug 14, 2026"
+PX_ROW = re.compile(r'<div role="row" row-index="\d+"')
+PX_CELL = re.compile(r'(?is)<div role="gridcell" col-id="([^"]+)"[^>]*>(.*?)'
+                     r'(?=<div role="gridcell"|$)')
+PX_TOTAL = re.compile(r"\b\d+-\d+ of ([\d,]+)")
+PX_FIRST = """prev => {
+    const c = document.querySelector('[col-id=PermitNumber] a');
+    return c && c.innerText.trim() && c.innerText.trim() != prev;
+}"""
 
 START = acc.PFX + "txtGSStartDate"
 TYPE = acc.PFX + "ddlGSPermitType"
@@ -465,6 +516,129 @@ def check_clariti(p, final_url):
     return out
 
 
+def check_amanda(p, final_url):
+    """AMANDA's public search in the browser, set up as AM_SITES says for the
+    site, then the pager's page numbers. Austin's list shows no dates."""
+    name = "amd_%04d" % int(p["order"])
+    base = "/".join((final_url or p["url"]).split("/")[:3])
+    tab, kind, fmt = AM_SITES[base.split("/")[2]]
+    lo, hi = [datetime.datetime.strptime(d, "%m/%d/%Y").strftime(fmt) for d in (LO, HI)]
+    pages, seen, stated, header, dates = [], set(), "", [], []
+    with capture.Browser(p["place"], "AMANDA") as b:
+        if b.go(base + AM_SEARCH):
+            if tab:
+                b.act(lambda page: page.click("text=" + tab))
+            b.act(lambda page: page.locator("#folderType_ID").wait_for())
+            b.act(lambda page: page.evaluate(AM_SET_TYPE, kind))
+            b.act(lambda page: page.type("#inDateFrom_ID", lo, delay=30))
+            b.act(lambda page: page.type("#inDateTo_ID", hi, delay=30))
+            b.act(lambda page: page.locator("button:has-text('Search')").last.click())
+            b.act(lambda page: page.locator("datatable-body-row").first.wait_for())
+        first = ""
+        for n in range(1, PAGES + 1):
+            if n > 1:
+                def turn(page, n=n, first=first):
+                    page.locator("datatable-pager li.pages a",
+                                 has_text=re.compile(r"^\s*%d\s*$" % n)).first.click()
+                    page.wait_for_function(AM_FIRST, arg=first)
+                if not b.act(turn):
+                    break
+            html, row = b.save("%s_p%d" % (name, n), "T-INDEX")
+            if html is None:
+                break
+            rows = [[aspnet.text(c) for c in AM_CELL.findall(r)] for r in AM_ROW.findall(html)]
+            fresh = [r for r in rows if r and r[0] not in seen]
+            if not fresh:
+                break
+            if n == 1:
+                m = AM_TOTAL.search(aspnet.text(html))
+                stated = m.group(1).replace(",", "") if m else ""
+                header = [aspnet.text(h) for h in AM_HEAD.findall(html)]
+            first = fresh[0][0]
+            seen.update(r[0] for r in fresh)
+            pages.append(html)
+            if "Date" in header:
+                i = header.index("Date")
+                dates += [r[i] for r in fresh if i < len(r)]
+    dated = [d for d in dates if re.match(r"\d{4}-\d{2}-\d{2}$", d)]
+    hits = sum(1 for d in dated if d.startswith("2026-08-"))
+    out = {"search": "%s%s, %s, dates %s to %s" % (
+               AM_SEARCH, ", tab " + tab if tab else "", kind, lo, hi),
+           "pages": len(pages), "rows": len(seen), "stated_total": stated,
+           "date_field": "Application Date (the filter%s)" % (
+               "" if dates else "; the list shows no dates"),
+           "in_window": "%d of %d" % (hits, len(dated)) if dates else "not shown"}
+    if len(pages) >= 2:
+        out.update(usable="yes", reason="")
+    elif pages:
+        out.update(usable="no", reason="%d records: fewer than 2 pages" % len(seen))
+    else:
+        out.update(usable="", reason="no result list: %s" % row["verdict_reason"])
+    return out
+
+
+def check_posse(p, final_url):
+    """eCLIPSE's Permit Search by Date in the browser: Issued Date over the
+    shorter window and one type, as PX_ says; then Next page."""
+    name = "psx_%04d" % int(p["order"])
+    base = "/".join((final_url or p["url"]).split("/")[:3])
+    pages, seen, stated, dates = [], set(), "", []
+    with capture.Browser(p["place"], "Computronix POSSE") as b:
+        if b.go(base + PX_SEARCH):
+            b.act(lambda page: page.get_by_label("Issued Date From", exact=True).wait_for())
+            b.act(lambda page: page.get_by_label("Issued Date From", exact=True).fill(PX_FROM))
+            b.act(lambda page: page.get_by_label("Issued Date To", exact=True).fill(PX_TO))
+            b.act(lambda page: page.press("body", "Tab"))
+            b.act(lambda page: page.locator(
+                "[role=combobox][aria-labelledby$='-label']").last.click())
+            b.act(lambda page: page.locator(
+                "[role=option]", has_text=PX_TYPE).first.click())
+            b.act(lambda page: page.locator("button:has-text('SEARCH') >> visible=true").click())
+            b.act(lambda page: page.locator("[col-id=PermitNumber] a").first.wait_for())
+        first = ""
+        for n in range(1, PAGES + 1):
+            if n > 1:
+                def turn(page, first=first):
+                    page.locator("button[aria-label='Next page']").click()
+                    page.wait_for_function(PX_FIRST, arg=first)
+                if not b.act(turn):
+                    break
+            html, row = b.save("%s_p%d" % (name, n), "T-INDEX")
+            if html is None:
+                break
+            chunks = PX_ROW.split(html)[1:]
+            rows = [{k: aspnet.text(v) for k, v in PX_CELL.findall(c)} for c in chunks]
+            fresh = [r for r in rows if r.get("PermitNumber") and r["PermitNumber"] not in seen]
+            if not fresh:
+                break
+            if n == 1:
+                m = PX_TOTAL.search(aspnet.text(html))
+                stated = m.group(1).replace(",", "") if m else ""
+            first = fresh[0]["PermitNumber"]
+            seen.update(r["PermitNumber"] for r in fresh)
+            dates += [r.get("IssueDate", "") for r in fresh]
+            pages.append(html)
+    lo, hi = [datetime.datetime.strptime(d, "%b %d, %Y") for d in (PX_FROM, PX_TO)]
+    dated = []
+    for d in dates:
+        try:
+            dated.append(datetime.datetime.strptime(d, "%b %d, %Y"))
+        except ValueError:
+            pass
+    hits = sum(1 for d in dated if lo <= d <= hi)
+    out = {"search": "%s, Issued Date %s to %s, Permit Type %s" % (
+               PX_SEARCH, PX_FROM, PX_TO, PX_TYPE),
+           "pages": len(pages), "rows": len(seen), "stated_total": stated,
+           "date_field": "Issue Date", "in_window": "%d of %d" % (hits, len(dated))}
+    if len(pages) >= 2:
+        out.update(usable="yes", reason="")
+    elif pages:
+        out.update(usable="no", reason="%d records: fewer than 2 pages" % len(seen))
+    else:
+        out.update(usable="", reason="no result list: %s" % row["verdict_reason"])
+    return out
+
+
 def accela_export(p, op, u):
     """Download results for one usable portal, in a new session: the search
     as it was run, page 1, the export button's postback, then Export2CSV.ashx,
@@ -617,7 +791,8 @@ def main(argv):
     if argv[0] == "accela-export":
         return exports(set(argv[1:]))
     product = {"accela": "Accela", "smartgov": "SmartGov",
-               "logis": "LOGIS ePermits", "clariti": "Clariti"}[argv[0]]
+               "logis": "LOGIS ePermits", "clariti": "Clariti",
+               "amanda": "AMANDA", "posse": "Computronix POSSE"}[argv[0]]
     only = set(argv[1:])
     with open(SAMPLE, newline="", encoding="utf-8") as fh:
         queue = [r for r in csv.DictReader(fh) if r["product"] == product
@@ -644,6 +819,10 @@ def main(argv):
             result = check_logis(p, capture._opener(), final)
         elif product == "Clariti":
             result = check_clariti(p, final)
+        elif product == "AMANDA":
+            result = check_amanda(p, final)
+        elif product == "Computronix POSSE":
+            result = check_posse(p, final)
         else:
             result = check_smartgov(p, final)
         print("   %s" % result)

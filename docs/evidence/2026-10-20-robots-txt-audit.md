@@ -70,8 +70,10 @@ login only on 2026-10-20. The eight self-hosted EnerGov portals stay robots.txt 
 Telerik's CDN disallows every agent under either parser. reCAPTCHA's script is allowed, so the
 searches behind it count as blocked by a bot check, not as robots.txt disallows.
 
-The 23 pages saved from Apple Valley, Banning and Maricopa were deleted on 2026-10-20, at the
-owner's decision. Their manifest rows are kept as the record of each request.
+At the owner's decision, the pages saved from these hosts were deleted on 2026-10-20: 23 from
+Apple Valley, Banning and Maricopa, and 14 landing and probe pages from the others. Their manifest
+rows are kept as the record of each request. Oregon's 18 pages are kept, because the published
+spike and measurement results rest on them.
 
 ## What this does not establish
 

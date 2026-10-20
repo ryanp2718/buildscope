@@ -124,10 +124,12 @@ meets:
 - **Login only:** three Accela portals (Fresno, Santa Rosa, Avondale), the three Cityworks
   portals, the seven offices on MGO Connect and three eTRAKiT portals.
 - **Lookup only:** the three BS&A portals, Frisco's eTRAKiT, CivicGov, Cherokee County's CityView,
-  Munis, Londonderry's eSuite, and the own systems of Durham, Miami-Dade and Stark County.
+  Munis, Londonderry's eSuite, and the own systems of Durham, Miami-Dade, Stark County, Lake Wales
+  and Knox County.
 - **No online search:** St. Charles, whose eSuite search holds no building permits.
 
-Searches behind a CAPTCHA moved to blocked (Citizenserve, SagesGov). Fourteen portals moved to
+Searches behind a CAPTCHA moved to blocked (Citizenserve, SagesGov, and Rogers' own system, whose
+guest access needs an hCaptcha). Fourteen portals moved to
 robots.txt disallows: the eight EnerGov portals on offices' own servers, which need a script CDN,
 and six found by the [robots.txt audit](2026-10-20-robots-txt-audit.md) (SmartGov at Banning and
 Maricopa, LOGIS, Bay County's CityView, Orange County FL and Nashville). The owner's browser
@@ -136,20 +138,20 @@ disallows. The report gives the final funnel.
 
 | outcome | offices (estimated) | share of units |
 |---|---:|---:|
-| answered the crawler | 172 | 26.8% |
+| answered the crawler | 157 | 25.7% |
 | not located | 204 | 13.8% |
 | open data | 47 | 12.3% |
 | login only | 111 | 11.0% |
 | robots.txt disallows | 117 | 9.7% |
-| blocked (403 or a bot check) | 96 | 6.8% |
-| lookup only | 71 | 5.8% |
+| blocked (403 or a bot check) | 103 | 7.3% |
+| lookup only | 79 | 6.4% |
 | unreachable from this network | 33 | 5.0% |
 | vendor named, no address | 55 | 3.9% |
 | no online search | 74 | 2.9% |
 | PDF reports only | 20 | 2.0% |
 
-Open data moves 12.3% of units. Without it, portals that answered the crawler hold 31.1% and blocked
-ones 12.5%. With it, 39.1% of units sit with an office whose portal answered the crawler or that
+Open data moves 12.3% of units. Without it, portals that answered the crawler hold 30.0% and blocked
+ones 13.0%. With it, 38.0% of units sit with an office whose portal answered the crawler or that
 publishes its permits as a dataset. Answering is an upper bound on what a pipeline can read: a
 portal that answered may still have no usable list, which onboarding settles. Harris County's and
 Miami-Dade's searches are lookups. No office carries more than 2.0% of these units. The largest are Denton, Buckeye, Los Angeles, Harris
@@ -227,7 +229,7 @@ changed.
   portal each. The other five tries are deferred. Each product is reported as not estimated
   unless the owner saves its first portal in draw order later: Carlsbad (EnerGov), O'Fallon
   (Citizenserve), LaGrange (SagesGov), Banning (SmartGov) and Apple Valley (LOGIS).
-- An office's own system that refuses the crawler is not sampled (15, among them New York City,
+- An office's own system that refuses the crawler is not sampled (16, among them New York City,
   Los Angeles, San Francisco, San Jose, Jacksonville, Raleigh, Nashville and Orange County FL). Its units are reported as
   behind a portal that refuses an identified crawler. New York City, Los Angeles, San Francisco
   and Raleigh publish their permits as open data.
@@ -239,6 +241,17 @@ changed.
     and pages in the browser. Its robots.txt disallows the search (`/ApplicationPublic/`), which
     the robots.txt audit found after both portals' pages were saved. Both are robots.txt
     disallows, and their pages, like Apple Valley's, were deleted.
+  - **AMANDA** (Austin, Volusia; usable, 2026-10-20). Its public search filters on the
+    application date, the only date it offers. Austin's will not search on dates alone, so it
+    takes one type, Building Permit, and its list shows no dates (one record opened: applied
+    2026-08-28, issued 2026-09-02). Volusia's search covers open folders only. Both page in the
+    browser. Their servers answer every route of the app but its root with 404 and the app, so
+    each saved page's row carries a 404.
+  - **Philadelphia's eCLIPSE** (Computronix POSSE; usable, 2026-10-20). Its search on the issued
+    date answers "More results were found than can be displayed" for the month and for Aug 3-14
+    with no type, and for the month with one type. A search that refuses its results as too many
+    is taken as one that will not run without a type. Aug 3-14 with Residential Building Permit,
+    the type chosen by its name, lists 177.
   - **A search behind a CAPTCHA** (2026-10-20) is blocked by a bot check. The crawler does not try
     to pass one, seen or unseen: reCAPTCHA v3 at Citizenserve, reCAPTCHA at SagesGov, an image
     CAPTCHA at Bay County's CityView. Like a robots.txt refusal, it binds only a crawler.
