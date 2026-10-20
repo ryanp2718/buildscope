@@ -71,6 +71,7 @@ the distinction is exactly what a reader needs.
 | [2026-10-01 v2 run results](2026-10-01-v2-run-results.md) | Under a fair configuration, what does each of 26 models pass on three portals, does cost per success rank them differently from price, and do the rates carry over to a held-out portal? | Current |
 | [2026-10-01 Agent run pre-registration](2026-10-01-agent-run-preregistration.md) | Does a tool-using agent beat best-of-5 at best-of-5's spend, and does it add anything over a scripted loop? | Not run; replaced by 2026-10-04 |
 | [2026-10-04 Portal population pre-registration](2026-10-04-portal-population-preregistration.md) | What does a trusted extractor cost on the portals that actually issue US housing permits, by product and weighted to the population? | Draft; sample design approved |
+| [2026-10-20 robots.txt audit](2026-10-20-robots-txt-audit.md) | Did the crawler fetch only what robots.txt allows, read as RFC 9309 specifies, and which outcomes change? | Current |
 
 ## Naming
 

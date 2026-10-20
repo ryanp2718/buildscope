@@ -70,8 +70,9 @@ unreachable (no connection from this network), login only, lookup only (no list 
 permits: records are found by number, address or text, and the dates are only in each record), PDF
 reports only, no online search, vendor named but no address found, not located. An outcome found
 later that holds whoever fetches the portal replaces the probe's: lookup only, PDF reports only,
-login only or no online search found by the owner in a browser, and login only found at onboarding
-by the crawler or its browser.
+login only or no online search found by the owner in a browser, and login only, lookup only or no
+online search found at onboarding by the crawler or its browser. A robots.txt refusal or a CAPTCHA
+found at onboarding replaces it too, but binds only a crawler.
 
 **Open data** (owner's point, 2026-10-04). An office whose government publishes its permits as a
 dataset needs no extractor; a pipeline downloads it. New York City's DOB NOW finds one property at
@@ -118,33 +119,40 @@ office counts as uncovered, and coverage looks worse than a real pipeline would 
 
 **Interim funnel (2026-10-20)**, estimated for the 1,000 largest offices from offices 1-150 and the
 take-all stratum, design-weighted, before onboarding settles which portals are usable. Since
-2026-10-04, three Accela portals found at onboarding to ask every visitor to sign in (Fresno,
-Santa Rosa, Avondale) moved from answered to login only, as did the three Cityworks portals
-(Rexburg, Smyrna, Pflugerville) and the seven offices on MGO Connect, whose permit searches send
-every anonymous visitor to sign in (checked in the browser on 2026-10-20). The eight EnerGov portals on offices' own servers moved from answered to
-robots.txt disallows (below). The owner's browser checks of 2026-10-20 moved Surf City, Valdosta,
-Forney and Millbrae from blocked or robots.txt disallows. The report gives the final funnel.
+2026-10-04, onboarding has moved portals that answered the crawler to the outcome any visitor
+meets:
+- **Login only:** three Accela portals (Fresno, Santa Rosa, Avondale), the three Cityworks
+  portals, the seven offices on MGO Connect and three eTRAKiT portals.
+- **Lookup only:** the three BS&A portals, Frisco's eTRAKiT, CivicGov, Cherokee County's CityView,
+  Munis, Londonderry's eSuite, and the own systems of Durham, Miami-Dade and Stark County.
+- **No online search:** St. Charles, whose eSuite search holds no building permits.
+
+Searches behind a CAPTCHA moved to blocked (Citizenserve, SagesGov). Fourteen portals moved to
+robots.txt disallows: the eight EnerGov portals on offices' own servers, which need a script CDN,
+and six found by the [robots.txt audit](2026-10-20-robots-txt-audit.md) (SmartGov at Banning and
+Maricopa, LOGIS, Bay County's CityView, Orange County FL and Nashville). The owner's browser
+checks of 2026-10-20 moved Surf City, Valdosta, Forney and Millbrae from blocked or robots.txt
+disallows. The report gives the final funnel.
 
 | outcome | offices (estimated) | share of units |
 |---|---:|---:|
-| answered the crawler | 304 | 36.5% |
+| answered the crawler | 172 | 26.8% |
 | not located | 204 | 13.8% |
 | open data | 47 | 12.3% |
-| login only | 91 | 9.1% |
-| robots.txt disallows | 89 | 7.0% |
-| blocked (403 or a bot check) | 75 | 5.1% |
+| login only | 111 | 11.0% |
+| robots.txt disallows | 117 | 9.7% |
+| blocked (403 or a bot check) | 96 | 6.8% |
+| lookup only | 71 | 5.8% |
 | unreachable from this network | 33 | 5.0% |
 | vendor named, no address | 55 | 3.9% |
-| no online search | 67 | 2.7% |
-| lookup only | 15 | 2.6% |
+| no online search | 74 | 2.9% |
 | PDF reports only | 20 | 2.0% |
 
-Open data moves 12.3% of units. Without it, portals that answered the crawler hold 41.8% and blocked
-ones 10.8%. With it, 48.8% of units sit with an office whose portal answered the crawler or that
+Open data moves 12.3% of units. Without it, portals that answered the crawler hold 31.1% and blocked
+ones 12.5%. With it, 39.1% of units sit with an office whose portal answered the crawler or that
 publishes its permits as a dataset. Answering is an upper bound on what a pipeline can read: a
 portal that answered may still have no usable list, which onboarding settles. Harris County's and
-Miami's searches are lookups. No
-office carries more than 2.0% of these units. The largest are Denton, Buckeye, Los Angeles, Harris
+Miami-Dade's searches are lookups. No office carries more than 2.0% of these units. The largest are Denton, Buckeye, Los Angeles, Harris
 County and Fayetteville.
 
 Blocking follows the vendor. Tyler EnerGov on Tyler's hosting returned 403 on 6 of 6. The 8
@@ -153,7 +161,10 @@ robots.txt: each loads EnerGov's interface library from Telerik's CDN, whose rob
 every agent (checked 2026-10-20). All 6 OpenGov portals and MyGov's
 `public.mygov.us` disallow crawlers in robots.txt; MyGov's MGO Connect does not, but its permit
 search asks for a sign-in in all seven of its jurisdictions in the sample. iWorQ returned
-403 on 3 of 3.
+403 on 3 of 3. Citizenserve's search and public reports, and SagesGov's search, submit only with
+a reCAPTCHA token (3 of 3, 1 of 1). SmartGov's robots.txt disallows its search on both portals
+reached, and LOGIS's disallows its whole host. BS&A's record search needs a number, name, address
+or parcel (3 of 3).
 
 Behind the access, the owner's browser checks found more (2026-10-04):
 - **MyGov's `public.mygov.us`** is the permit application only at Mansfield and Midlothian. Both
@@ -208,24 +219,40 @@ changed.
 - A portal that refuses the crawler, or whose robots.txt disallows it, is replaced by the next
   portal on its product that the crawler can fetch.
 - A product with no portal the crawler can fetch (OpenGov, iWorQ, MyGov's `public.mygov.us`,
-  eProcess360, and since 2026-10-20 Tyler EnerGov) gets one portal saved by hand, with one try: the owner opens it in a browser, runs
+  eProcess360, and since 2026-10-20 Tyler EnerGov, Citizenserve, SagesGov, SmartGov and LOGIS)
+  gets one portal saved by hand, with one try: the owner opens it in a browser, runs
   the same search and saves the pages (`data/population/manual/README.txt`). If it has no usable
   list, the product is reported as not estimated. None of the four had one (2026-10-20), so
   OpenGov, iWorQ, `public.mygov.us` and eProcess360 are all reported as not estimated, from one
-  portal each. EnerGov's try is deferred: it is reported as not estimated unless the owner saves
-  its portal later (Carlsbad, first in draw order).
-- An office's own system that refuses the crawler is not sampled (13, among them New York City,
-  Los Angeles, San Francisco, San Jose, Jacksonville and Raleigh). Its units are reported as
+  portal each. The other five tries are deferred. Each product is reported as not estimated
+  unless the owner saves its first portal in draw order later: Carlsbad (EnerGov), O'Fallon
+  (Citizenserve), LaGrange (SagesGov), Banning (SmartGov) and Apple Valley (LOGIS).
+- An office's own system that refuses the crawler is not sampled (15, among them New York City,
+  Los Angeles, San Francisco, San Jose, Jacksonville, Raleigh, Nashville and Orange County FL). Its units are reported as
   behind a portal that refuses an identified crawler. New York City, Los Angeles, San Francisco
   and Raleigh publish their permits as open data.
 - A portal that answered the crawler but builds its search in the browser is fetched with
   Playwright, sending the crawler's identity and reading robots.txt for every request the page
   makes. Fresno's and Santa Rosa's Accela portals were checked this way on 2026-10-06: both send
   every visitor to Accela's sign-in, so they are login only.
-  - **SmartGov** (Banning, Maricopa; usable, 2026-10-20). Its Advanced Search filters on the
-    issued date, but the list shows each record's status and that status's date, so the window
-    cannot be read off the rows. One record was opened to confirm it: Banning's FSD26-0267 was
-    issued on 8/3/2026.
+  - **SmartGov** (Banning, Maricopa; 2026-10-20). Its Advanced Search filters on the issued date
+    and pages in the browser. Its robots.txt disallows the search (`/ApplicationPublic/`), which
+    the robots.txt audit found after both portals' pages were saved. Both are robots.txt
+    disallows, and their pages, like Apple Valley's, were deleted.
+  - **A search behind a CAPTCHA** (2026-10-20) is blocked by a bot check. The crawler does not try
+    to pass one, seen or unseen: reCAPTCHA v3 at Citizenserve, reCAPTCHA at SagesGov, an image
+    CAPTCHA at Bay County's CityView. Like a robots.txt refusal, it binds only a crawler.
+  - **A page built for a recognised browser.** ASP.NET serves an unrecognised User-Agent a page
+    without its partial-postback script. On LOGIS, Evolve, FastTrackGov and Munis, the search
+    button's own script then stops. There the crawler sends the postback the button would send,
+    with each field filled as the page's script fills it, as it fetches the Accela export. BS&A's
+    and Houston's page scripts read the browser from the User-Agent and stop. The crawler's
+    identity is not changed for either.
+  - **robots.txt read under RFC 9309** (from 2026-10-20). Until then the crawler read robots.txt
+    with Python's standard-library parser, which drops a rule's query and ignores wildcards. It
+    also asked for the file as HTML, and read a refusal as "no rules". The
+    [robots.txt audit](2026-10-20-robots-txt-audit.md) re-judged every recorded request and moved
+    six portals to robots.txt disallows.
   - **robots.txt on other hosts** (owner, 2026-10-20). The rule covers every host a page loads
     from, a library's CDN included, with no exception for static scripts. That is how Google's
     renderer treats a resource robots.txt blocks. A portal that cannot render without a
