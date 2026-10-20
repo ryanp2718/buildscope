@@ -7,8 +7,10 @@ Inputs:    [agentic extractor plan](2026-09-29-agentic-extractor-plan.md) (arms,
            [v2 run results](2026-10-01-v2-run-results.md) (the cells the rule reads), `data/infer/variance.json`
 Outputs:   none yet. The run will write `data/agent/` episode records under `eval-` run ids and the
            `buildscope-agent-eval` LangSmith project, and a results report that cites this one.
-Status:    **Draft for the owner's review.** Becomes binding when approved, before any paid call it
-           governs. Four choices are marked "to confirm"; nothing paid runs until they are settled.
+Status:    **Not run; replaced** by the portal population run (decided 2026-10-03;
+           [pre-registration](2026-10-04-portal-population-preregistration.md)). The owner
+           confirmed the four "to confirm" choices on 2026-10-03, and they carry over. Was: draft for
+           the owner's review.
 
 ## Questions
 
