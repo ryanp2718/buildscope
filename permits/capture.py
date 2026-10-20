@@ -311,6 +311,10 @@ def robots_for(url, op):
         rp = Protego.parse(r.read(500000).decode("utf-8-sig", "replace"))
     except urllib.error.HTTPError as e:
         rp = ALLOW_ALL if 400 <= e.code < 500 else DISALLOW_ALL
+        # A 5xx: nothing is fetched, and the page's row says the server
+        # failed rather than that it refused.
+        if rp is DISALLOW_ALL:
+            _robots_failed[key] = "http %d: robots.txt" % e.code
     except Exception as e:
         # No answer at all: nothing is fetched, and the page's row says the
         # host could not be reached rather than that it refused.
@@ -321,7 +325,8 @@ def robots_for(url, op):
 
 
 def robots_failed(url):
-    """Why the host's robots.txt got no answer, or "" if it got one."""
+    """Why the host's robots.txt could not be read (a 5xx or no answer), or
+    "" if it was."""
     return _robots_failed.get(_host_key(url), "")
 
 

@@ -395,12 +395,15 @@ class TestRobots(CaptureCase):
 
     def test_a_server_error_on_robots_txt_stops_the_crawler(self):
         """RFC 9309 section 2.3.1.4: unreachable rules mean complete
-        disallow, unlike a 4xx, which means there are none."""
+        disallow, unlike a 4xx, which means there are none. The row records
+        the server error, so a failing host is not counted as one that
+        refused."""
         ROUTES["/robots.txt"] = (503, "text/plain", "busy")
         html, row = capture.fetch(self.opener(), self.url("/index"),
                                   "busy", "TEST", "accela", "T-INDEX")
         self.assertIsNone(html)
-        self.assertEqual(row["verdict_reason"], "robots.txt disallows this path")
+        self.assertEqual(row["verdict_reason"], "http 503: robots.txt")
+        self.assertTrue(row["robots_ok"])
 
     def test_no_answer_from_robots_txt_is_recorded_as_a_transport_failure(self):
         """Nothing is fetched, but the row says the host could not be reached,

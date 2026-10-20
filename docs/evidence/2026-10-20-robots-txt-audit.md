@@ -32,9 +32,9 @@ fetched it with the crawler's page headers. Four defects:
   "assume everything is disallowed".
 
 `capture` now uses Protego, Scrapy's RFC 9309 parser. It asks for robots.txt as text and strips a
-byte-order mark. A 5xx means nothing is fetched. If robots.txt gets no answer at all, nothing is
-fetched either, and the row records a transport failure, so a host that is down is not counted as
-one that refused. `tests/test_capture.py` covers each case.
+byte-order mark. If robots.txt answers with a 5xx or gets no answer at all, nothing is fetched, and
+the row records the server error or the transport failure, so a host that is down is not counted
+as one that refused. `tests/test_capture.py` covers each case.
 
 ## Method
 
