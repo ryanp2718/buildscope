@@ -83,18 +83,51 @@ BASE_ROUTES = {
     "/admin/index": (200, "text/html", ACCELA_GRID),
 }
 
+# A portal that builds its result list in the page: the list arrives from an
+# API call after load, so a plain fetch of /app finds none. The page also
+# asks for a script robots.txt disallows and an image, neither of which a
+# browser session may request.
+APP = ("<html><body>" + FILLER +
+       '<div id="out"></div><button id="next">Next</button>'
+       '<img src="/logo.png"><script src="/admin/tracker.js"></script>'
+       '<script src="/app.js"></script>'
+       "<script>"
+       "function show(path) { fetch(path).then(r => r.text()).then(t => {"
+       " document.getElementById('out').innerHTML ="
+       " '<table id=\"ResultsGrid\">' + t + '</table>'; }); }"
+       "show('/api/list');"
+       "document.getElementById('next').onclick = () => show('/api/page2');"
+       "</script></body></html>")
+
+APP_ROUTES = {
+    "/app": (200, "text/html", APP),
+    "/api/list": (200, "text/html", GRID_ROWS),
+    "/api/page2": (200, "text/html", GRID_ROWS.replace("BLD2026-00",
+                                                       "BLD2026-01")),
+    "/admin/tracker.js": (200, "text/javascript", ""),
+    "/app.js": (200, "text/javascript", "var ready = true;",
+                {"Cache-Control": "max-age=3600"}),
+    "/logo.png": (200, "image/png", ""),
+}
+
 ROUTES = {}
 PORT = [0]
+SEEN = []             # (path, User-Agent) of every request the server saw
+ACCEPTS = []          # (path, Accept) of the same requests
 
 
 class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
-        status, ctype, body = ROUTES.get(
+        SEEN.append((self.path, self.headers.get("User-Agent")))
+        ACCEPTS.append((self.path, self.headers.get("Accept")))
+        status, ctype, body, *extra = ROUTES.get(
             self.path, (404, "text/html", "<html><body>gone</body></html>"))
         raw = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", ctype)
+        for k, v in (extra[0] if extra else {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -158,6 +191,7 @@ class CaptureCase(unittest.TestCase):
         # between tests makes one test's result depend on another's order.
         capture._spent[0] = 0
         capture._robots.clear()
+        capture._robots_failed.clear()
         capture._last.clear()
         capture._migrated.clear()
 
@@ -334,6 +368,50 @@ class TestRobots(CaptureCase):
         ROUTES["/robots.txt"] = (200, "text/plain", block.group(1))
         self.assertFalse(capture.allowed(self.url("/index"), self.opener()))
 
+    def test_a_rule_keeps_its_query(self):
+        """Google's `Disallow: /?` blocks "/?..." only. The standard library's
+        parser dropped the "?" and read it as `Disallow: /`, which refused
+        reCAPTCHA's script and every other page on www.google.com."""
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: *\nDisallow: /?\n")
+        op = self.opener()
+        self.assertTrue(capture.allowed(self.url("/index"), op))
+        self.assertFalse(capture.allowed(self.url("/?q=permits"), op))
+
+    def test_wildcards_follow_rfc_9309(self):
+        ROUTES["/robots.txt"] = (200, "text/plain",
+                                 "User-agent: *\nDisallow: /*.pdf$\n")
+        op = self.opener()
+        self.assertFalse(capture.allowed(self.url("/reports/aug.pdf"), op))
+        self.assertTrue(capture.allowed(self.url("/reports/aug.pdfx"), op))
+
+    def test_robots_is_asked_for_as_text(self):
+        """A server that honours Accept refused robots.txt with 406 when it
+        was asked for as HTML, and the crawler then read no rules at all."""
+        del ACCEPTS[:]
+        capture.allowed(self.url("/index"), self.opener())
+        accept = dict(ACCEPTS).get("/robots.txt") or ""
+        self.assertIn("text/plain", accept)
+
+    def test_a_server_error_on_robots_txt_stops_the_crawler(self):
+        """RFC 9309 section 2.3.1.4: unreachable rules mean complete
+        disallow, unlike a 4xx, which means there are none."""
+        ROUTES["/robots.txt"] = (503, "text/plain", "busy")
+        html, row = capture.fetch(self.opener(), self.url("/index"),
+                                  "busy", "TEST", "accela", "T-INDEX")
+        self.assertIsNone(html)
+        self.assertEqual(row["verdict_reason"], "robots.txt disallows this path")
+
+    def test_no_answer_from_robots_txt_is_recorded_as_a_transport_failure(self):
+        """Nothing is fetched, but the row says the host could not be reached,
+        so a host that is down is not counted as one that refused."""
+        html, row = capture.fetch(self.opener(), self.url("/x", dead_port()),
+                                  "dead", "TEST", "accela", "T-INDEX")
+        self.assertIsNone(html)
+        self.assertTrue(row["verdict_reason"].startswith("transport: robots.txt"),
+                        row["verdict_reason"])
+        self.assertTrue(row["robots_ok"])
+
 
 class TestTransportFailure(CaptureCase):
 
@@ -422,6 +500,151 @@ class TestPoliteness(CaptureCase):
         self.assertEqual(capture.pause_for(self.url("/index")), 3.0)
 
 
+@unittest.skipIf(capture.sync_playwright is None, "Playwright is not installed")
+class TestBrowser(CaptureCase):
+    """The browser path keeps `fetch()`'s rules: the crawler's identity on
+    every request, robots.txt for every request the page makes, the budget,
+    and a page never on disk without its row."""
+
+    def setUp(self):
+        super().setUp()
+        ROUTES.update(APP_ROUTES)
+        SEEN.clear()
+
+    def browser(self):
+        b = capture.Browser("TEST", "test")
+        try:
+            b.__enter__()
+        except capture.BrowserError as e:
+            self.skipTest("no browser to launch: %s" % e)
+        self.addCleanup(b.__exit__, None, None, None)
+        return b
+
+    def seen(self):
+        return [path for path, _ua in SEEN]
+
+    def test_the_page_is_saved_as_rendered_with_its_row(self):
+        b = self.browser()
+        self.assertTrue(b.go(self.url("/app")))
+        html, row = b.save("app_p1", "T-INDEX")
+        self.assertIn("BLD2026-0003", html)
+        self.assertEqual(row["verdict"], "ok", row["verdict_reason"])
+        self.assertEqual(row["request_method"], "BROWSER")
+        self.assertEqual(self.pages(), ["app_p1.html"])
+        self.assertEqual(len(self.rows()), 1)
+        self.assertEqual(capture.verify("T-INDEX", APP, 200)[0], "rejected")
+
+    def test_every_request_carries_the_crawler_identity(self):
+        b = self.browser()
+        b.go(self.url("/app"))
+        b.save("app_p1", "T-INDEX")
+        self.assertIn("/api/list", self.seen())
+        self.assertEqual({ua for _path, ua in SEEN},
+                         {crawler_identity.user_agent()})
+
+    def test_robots_is_read_for_the_pages_own_requests(self):
+        b = self.browser()
+        b.go(self.url("/app"))
+        _html, row = b.save("app_p1", "T-INDEX")
+        self.assertNotIn("/admin/tracker.js", self.seen())
+        self.assertIn("1 withheld for robots.txt", row["verdict_reason"])
+
+    def test_the_row_counts_the_requests_the_page_cost(self):
+        b = self.browser()
+        b.go(self.url("/app"))
+        _html, row = b.save("app_p1", "T-INDEX")
+        # The page, its cacheable script and its API call; robots.txt is
+        # read the ordinary way and not counted here.
+        self.assertIn("; 3 requests sent", row["verdict_reason"])
+
+    def test_images_are_never_requested(self):
+        b = self.browser()
+        b.go(self.url("/app"))
+        b.save("app_p1", "T-INDEX")
+        self.assertNotIn("/logo.png", self.seen())
+
+    def test_a_cacheable_script_is_fetched_once_per_session(self):
+        """Intercepting requests turns the browser's cache off; without the
+        session cache every page load fetched every script again."""
+        b = self.browser()
+        b.go(self.url("/app"))
+        b.go(self.url("/app"))
+        self.assertEqual(self.seen().count("/app"), 2)
+        self.assertEqual(self.seen().count("/app.js"), 1)
+
+    def test_a_disallowed_start_page_is_refused_and_recorded(self):
+        b = self.browser()
+        self.assertFalse(b.go(self.url("/admin/index")))
+        html, row = b.save("refused", "T-INDEX")
+        self.assertIsNone(html)
+        self.assertEqual(row["verdict_reason"], "robots.txt disallows this path")
+        self.assertEqual(self.pages(), [])
+        self.assertEqual(len(self.rows()), 1)
+        self.assertNotIn("/admin/index", self.seen())
+
+    def test_an_action_then_a_save_records_the_next_page(self):
+        b = self.browser()
+        b.go(self.url("/app"))
+        b.save("app_p1", "T-INDEX")
+        self.assertTrue(b.act(lambda page: page.click("#next")))
+        html, row = b.save("app_p2", "T-INDEX")
+        self.assertIn("BLD2026-0103", html)
+        self.assertEqual(row["verdict"], "ok", row["verdict_reason"])
+        self.assertEqual(self.pages(), ["app_p1.html", "app_p2.html"])
+
+    def test_a_failed_load_records_the_network_error(self):
+        """The host's robots.txt answered (seeded here); its page did not."""
+        url = self.url("/x", dead_port())
+        capture._robots[capture._host_key(url)] = capture.ALLOW_ALL
+        b = self.browser()
+        self.assertFalse(b.go(url))
+        html, row = b.save("dead", "T-INDEX")
+        self.assertIsNone(html)
+        self.assertEqual(row["verdict_reason"],
+                         "transport: net::ERR_CONNECTION_REFUSED")
+        self.assertEqual(self.pages(), [])
+
+    def test_no_answer_from_robots_txt_stops_the_browser(self):
+        b = self.browser()
+        self.assertFalse(b.go(self.url("/x", dead_port())))
+        html, row = b.save("dead", "T-INDEX")
+        self.assertIsNone(html)
+        self.assertTrue(row["verdict_reason"].startswith("transport: robots.txt"),
+                        row["verdict_reason"])
+        self.assertEqual(row["robots_ok"], True)
+
+    def test_a_page_loads_requests_count_against_the_budget(self):
+        capture.BUDGET = 2            # robots.txt, then the page; not its API call
+        b = self.browser()
+        with self.assertRaises(SystemExit) as cm:
+            b.go(self.url("/app"))
+        self.assertIn("budget", str(cm.exception))
+        self.assertNotIn("/api/list", self.seen())
+
+
+class TestFreshness(unittest.TestCase):
+    """How long the browser path keeps a script: what the server says, and
+    never longer."""
+
+    def test_max_age_sets_the_lifetime(self):
+        self.assertEqual(capture.fresh_until({"cache-control": "public, max-age=60"},
+                                             now=1000), 1060)
+
+    def test_no_store_no_cache_and_zero_are_not_kept(self):
+        for cc in ("no-store", "no-cache", "max-age=0"):
+            self.assertIsNone(capture.fresh_until({"cache-control": cc}, now=1000), cc)
+
+    def test_expires_in_the_future_sets_the_lifetime(self):
+        h = {"expires": "Thu, 01 Jan 2099 00:00:00 GMT"}
+        self.assertGreater(capture.fresh_until(h), time.time())
+        h = {"expires": "Thu, 01 Jan 2015 00:00:00 GMT"}
+        self.assertIsNone(capture.fresh_until(h))
+
+    def test_no_lifetime_named_is_not_kept(self):
+        self.assertIsNone(capture.fresh_until({}))
+        self.assertIsNone(capture.fresh_until({"expires": "0"}))
+
+
 class TestSchemaMigration(CaptureCase):
     """Appending a 16-field row under a 15-column header does not fail. csv
     writes the extra value and every later `DictReader` silently misaligns —
@@ -489,6 +712,27 @@ class TestVerdicts(unittest.TestCase):
         verdict, reason = capture.verify("T-INDEX", STRUCTURAL_GRID, 200)
         self.assertEqual(verdict, "ok", reason)
         self.assertIn("dated rows", reason)
+
+    def test_record_cards_without_a_table_still_verify(self):
+        """Tyler EnerGov (Kyle TX): ten permits as cards, no table. The
+        table-only fallback stamped it 'no rendered result list'."""
+        cards = "".join(
+            '<div class="row result"><div class="col"><label>Permit Number'
+            "</label><a>BLD2026-%04d</a></div><div class=\"col\"><label>"
+            "Issued Date</label><span>08/%02d/2026</span></div></div>" % (i, i)
+            for i in range(1, 6))
+        page = "<html><body>" + FILLER + "<div>" + cards + "</div></body></html>"
+        verdict, reason = capture.verify("T-INDEX", page, 200)
+        self.assertEqual(verdict, "ok", reason)
+        self.assertIn("5 dated record blocks", reason)
+
+    def test_repeated_blocks_without_dates_are_not_records(self):
+        """A menu repeats a template too; FILLER is 60 identical divs."""
+        page = ("<html><body>" + FILLER +
+                '<table><tr><td>27</td><td>28</td><td>29</td></tr></table>'
+                "</body></html>")
+        self.assertEqual(capture.verify("T-INDEX", page, 200),
+                         ("rejected", "no rendered result list"))
 
     def test_a_page_with_no_grid_at_all_is_rejected(self):
         verdict, _ = capture.verify("T-INDEX", "<html><body>" + FILLER +
