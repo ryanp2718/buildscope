@@ -32,6 +32,9 @@ Two steps:
            the file itself where only files may be fetched. A candidate turned
            down on review has no query and keeps its reason. Writes
            data/population/open_data.json.
+  --match  For each tested office with a dataset, its rows for the permit
+           numbers in the office's reference, compared field by field (MATCH).
+           Writes data/population/open_data_match.json.
 
 Same crawler as everything else: permits.capture, robots.txt honoured, the
 crawler's identity sent, the host's pause kept.
@@ -40,8 +43,10 @@ Usage:
     python spikes/population_open_data.py --find [ORDER=HOST ...]
     python spikes/population_open_data.py --datagov [ORDER ...]
     python spikes/population_open_data.py --check
+    python spikes/population_open_data.py --match   # the tested offices' references
 """
 import csv
+import datetime
 import io
 import json
 import os
@@ -65,6 +70,27 @@ DATASETS = os.path.join(DIR, "open_data.csv")
 OUT = os.path.join(DIR, "open_data.json")
 
 BUDGET = 200
+
+# --match: the second check of a reference that no model wrote. For each
+# tested office whose government publishes its permits, the dataset's rows for
+# the reference's permit numbers, and the fields both carry compared under a
+# mapping written per dataset (pre-registration, "Open data, where the office
+# publishes it"). Dates are compared as dates, an address as the dataset's
+# street line at the start of the page's, the rest as text, case and spacing
+# aside. Baltimore's and Tempe's portals list a record by the date it was
+# opened and their datasets hold issued permits, so their dates are not
+# compared and a record not yet issued is not in them. Austin's Sub Type / Work
+# Type is its dataset's class and work class joined.
+REFERENCE = os.path.join(DIR, "reference")
+MATCH_OUT = os.path.join(DIR, "open_data_match.json")
+MATCH = {
+    "17": ("CaseNumber", {"address": "Address"}),
+    "65": ("PermitNum", {"status": "StatusCurrent", "permit_type": "PermitTypeDesc"}),
+    "190": ("permit_number", {"status": "status_current", "address": "original_address1",
+                              "permit_type": ("permit_class", "work_class")}),
+    "319": ("permitnumber", {"issued_date": "permitissuedate", "status": "status",
+                             "address": "address", "permit_type": "permitdescription"}),
+}
 
 LINK = re.compile(r"(?is)<a\b[^>]*?href\s*=\s*[\"']([^\"'#][^\"']*)[\"'][^>]*>"
                   r"(.*?)</a>")
@@ -362,7 +388,93 @@ def check():
         json.dump(out, fh, indent=1, sort_keys=True)
 
 
+def as_date(v):
+    """A date from a page's or a dataset's way of writing it, or None."""
+    if isinstance(v, (int, float)):         # ArcGIS: ms since 1970, local midnight
+        return datetime.datetime.fromtimestamp(v / 1000.0, datetime.timezone.utc).date()
+    s = str(v).strip()
+    for fmt, n in (("%m/%d/%Y", 10), ("%b %d, %Y", 12), ("%Y-%m-%d", 10)):
+        try:
+            return datetime.datetime.strptime(s[:n], fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def agrees(field, ref, val):
+    if field == "issued_date":
+        return as_date(ref) == as_date(val)
+    a, b = " ".join(str(ref).split()).upper(), " ".join(str(val).split()).upper()
+    return a.startswith(b) if field == "address" else a == b
+
+
+def match():
+    with open(DATASETS, newline="", encoding="utf-8") as fh:
+        datasets = {r["order"]: r for r in csv.DictReader(fh) if r["query"]}
+    capture.retarget(os.path.join("population", "open_data"))
+    capture.BUDGET = capture.spent() + 2 * len(MATCH)
+    op = capture._opener()
+    out = {}
+    for order, (id_col, fields) in MATCH.items():
+        d = datasets[order]
+        with open(os.path.join(REFERENCE, "ref_%04d.json" % int(order)),
+                  encoding="utf-8") as fh:
+            ref = json.load(fh)
+        rows = [r for p in ref["pages"] for r in p["rows"]]
+        ids = ",".join("'%s'" % r["native_id"].replace("'", "''") for r in rows)
+        base = d["query"].split("?")[0]
+        if d["platform"] == "arcgis":
+            url = "%s?where=%s&outFields=*&f=json" % (
+                base, urllib.parse.quote("%s IN (%s)" % (id_col, ids)))
+        elif d["platform"] == "socrata":
+            url = "%s?$limit=5000&$where=%s" % (
+                base, urllib.parse.quote("%s in (%s)" % (id_col, ids)))
+        else:
+            url = "%s?q=%s" % (base, urllib.parse.quote(
+                "SELECT * FROM permits WHERE %s IN (%s)" % (id_col, ids)))
+        body, row = capture.fetch(op, url, "match_%04d" % int(order), d["place"], "",
+                                  "LANDING")
+        try:
+            doc = json.loads(body or "")
+        except ValueError:
+            doc = None
+        found = ([f["attributes"] for f in doc.get("features", [])] if isinstance(doc, dict)
+                 and "features" in doc else doc if isinstance(doc, list)
+                 else (doc or {}).get("rows", []))
+        by_id, repeats = {}, 0
+        for f in found:
+            repeats += f.get(id_col) in by_id
+            by_id.setdefault(f.get(id_col), f)
+        tally = {k: [0, 0] for k in fields}
+        mismatches = []
+        for r in rows:
+            f = by_id.get(r["native_id"])
+            if f is None:
+                continue
+            for field, col in fields.items():
+                val = (" - ".join(str(f.get(c) or "") for c in col) if isinstance(col, tuple)
+                       else f.get(col))
+                if r.get(field) is None or val in (None, ""):
+                    continue
+                tally[field][1] += 1
+                if agrees(field, r[field], val):
+                    tally[field][0] += 1
+                else:
+                    mismatches.append([r["native_id"], field, r[field], val])
+        out[order] = {"place": d["place"], "dataset": d["dataset"],
+                      "http_status": row["http_status"], "reference_rows": len(rows),
+                      "in_dataset": sum(r["native_id"] in by_id for r in rows),
+                      "repeated_ids": repeats, "fields": tally, "mismatches": mismatches}
+        print("%5s %-14s %3d of %3d in the dataset; %s" % (
+            order, d["place"][:14], out[order]["in_dataset"], len(rows), "; ".join(
+                "%s %d of %d" % (k, a, n) for k, (a, n) in tally.items())))
+    with open(MATCH_OUT, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, indent=1, ensure_ascii=False, default=str)
+
+
 def main(argv):
+    if argv[:1] == ["--match"]:
+        return match()
     if argv[:1] == ["--find"]:
         find(argv[1:])
     elif argv[:1] == ["--datagov"]:

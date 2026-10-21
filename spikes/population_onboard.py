@@ -23,6 +23,15 @@ a row in exports.csv, and checked against the 4 pages already saved: their
 records should be the export's first rows, in the same order (pre-registered
 as the alignment check before an export is relied on).
 
+`amanda-export` does the same for each usable AMANDA portal: the same search
+in the browser, then the result list's Export, a CSV the page builds from the
+search's own data.
+
+`reference` builds the answer key for each tested portal with an export, in
+data/population/reference/: each saved page's records taken from the export
+by permit number, mapped to the contract's fields by the export's headers, and
+the automatic checks on them.
+
 Everything goes through `permits.capture`: robots.txt honoured, the crawler's
 identity sent, the host's pause kept, one manifest row per response.
 
@@ -34,15 +43,19 @@ Usage:
     python spikes/population_onboard.py logis
     python spikes/population_onboard.py clariti          # in the browser
     python spikes/population_onboard.py amanda           # in the browser
+    python spikes/population_onboard.py amanda-export [ORDER ...]
+    python spikes/population_onboard.py reference        # from the exports, no request
     python spikes/population_onboard.py posse            # in the browser
 """
 import csv
 import datetime
 import hashlib
 import io
+import json
 import os
 import re
 import sys
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -138,6 +151,7 @@ AM_ROW = re.compile(r"(?is)<datatable-body-row\b.*?</datatable-body-row>")
 AM_CELL = re.compile(r"(?is)<datatable-body-cell\b.*?</datatable-body-cell>")
 AM_HEAD = re.compile(r"(?is)<datatable-header-cell\b.*?</datatable-header-cell>")
 AM_TOTAL = re.compile(r"([\d,]+) Results?\b")
+AM_EXPORT = "button[title^='Export']"     # Volusia's "Export", Austin's "Export Results"
 
 # Philadelphia's eCLIPSE (Computronix POSSE) builds its Permit Search by Date
 # in the browser. The month, and Aug 3-14 with no type, both answer "More
@@ -175,6 +189,48 @@ EXPORT_FIELDS = ["file", "order", "export", "rows", "id_column", "on_page",
                  "in_order", "sha256", "saved_at"]
 ID_HEADER = re.compile(r"(?i)\b(case|record|permit|application)\s*(number|no\.?|#|id)\b")
 EXPORT_TIMEOUT = 180     # seconds: a month's export took over 30 on Baltimore
+
+# The reference (answer key) from an export: a field is scored on a portal
+# only where its export has a column for it. Tempe's page shows its address in
+# an unheaded last column that its export leaves empty, so Tempe's address is
+# not scored. Accela headers name their field as the adapter reads a grid's
+# headers (`acc.ROLES`). Only the export and the record numbers the alignment
+# check used are read here: the adapter's own output is the pipeline's key in
+# the bias check, frozen before it is compared with an export (pre-registration,
+# "Without the owner's review"). AMANDA's headers differ by site and are named
+# one by one; Volusia's Name and Austin's Project Name hold the address.
+REFERENCE = os.path.join(DIR, "reference")
+# A value the export has but the page does not show is corrected to the page's
+# by hand, one row each with its reason: the page is what an extractor reads.
+CORRECTIONS = os.path.join(DIR, "reference_corrections.csv")
+ACC_FIELDS = {"date": "issued_date", "address": "address", "type": "permit_type",
+              "status": "status"}
+AM_FIELDS = {"Type": "permit_type", "Sub Type / Work Type": "permit_type",
+             "Date": "issued_date", "Name": "address", "Project Name": "address",
+             "Status": "status"}
+REF_ROLES = {
+    "Accela": lambda h: ACC_FIELDS.get(next(
+        (r for needle, r in acc.ROLES if needle in h.lower()), None)),
+    "AMANDA": lambda h: AM_FIELDS.get(h.strip()),
+}
+# Where a portal has no export its reference is a parser, column -> field:
+# Boise's is the Accela adapter, the pipeline's own; Phoenix's and
+# Philadelphia's read the cells their onboarding checks read, by the column
+# each names (data-label, col-id). Phoenix's Permit Type, not its Permit Work
+# Type, is the type; Philadelphia's rows carry three dates, and the issue date
+# is the one its search filters on.
+PARSED = {
+    "Accela": {"number": "native_id", "date": "issued_date", "address": "address",
+               "type": "permit_type", "status": "status"},
+    "Clariti": {"Permit Number": "native_id", "Permit Type": "permit_type",
+                "Address": "address", "Issued Start Date": "issued_date",
+                "Status": "status", "Registered Contractor Name": "contractor"},
+    "Computronix POSSE": {"PermitNumber": "native_id",
+                          "ObjectDefDescription": "permit_type",
+                          "Location": "address", "StatusDescription": "status",
+                          "IssueDate": "issued_date"},
+}
+PX_RANGE = re.compile(r"\b(\d+)-(\d+) of [\d,]+")
 
 
 def accela_base(url):
@@ -516,24 +572,32 @@ def check_clariti(p, final_url):
     return out
 
 
-def check_amanda(p, final_url):
-    """AMANDA's public search in the browser, set up as AM_SITES says for the
-    site, then the pager's page numbers. Austin's list shows no dates."""
-    name = "amd_%04d" % int(p["order"])
-    base = "/".join((final_url or p["url"]).split("/")[:3])
+def amanda_search(b, base):
+    """Run AMANDA's public search in browser b, set up as AM_SITES says for
+    the site; returns the search as usability.csv records it."""
     tab, kind, fmt = AM_SITES[base.split("/")[2]]
     lo, hi = [datetime.datetime.strptime(d, "%m/%d/%Y").strftime(fmt) for d in (LO, HI)]
+    if b.go(base + AM_SEARCH):
+        if tab:
+            b.act(lambda page: page.click("text=" + tab))
+        b.act(lambda page: page.locator("#folderType_ID").wait_for())
+        b.act(lambda page: page.evaluate(AM_SET_TYPE, kind))
+        b.act(lambda page: page.type("#inDateFrom_ID", lo, delay=30))
+        b.act(lambda page: page.type("#inDateTo_ID", hi, delay=30))
+        b.act(lambda page: page.locator("button:has-text('Search')").last.click())
+        b.act(lambda page: page.locator("datatable-body-row").first.wait_for())
+    return "%s%s, %s, dates %s to %s" % (AM_SEARCH, ", tab " + tab if tab else "",
+                                         kind, lo, hi)
+
+
+def check_amanda(p, final_url):
+    """AMANDA's public search in the browser, then the pager's page numbers.
+    Austin's list shows no dates."""
+    name = "amd_%04d" % int(p["order"])
+    base = "/".join((final_url or p["url"]).split("/")[:3])
     pages, seen, stated, header, dates = [], set(), "", [], []
     with capture.Browser(p["place"], "AMANDA") as b:
-        if b.go(base + AM_SEARCH):
-            if tab:
-                b.act(lambda page: page.click("text=" + tab))
-            b.act(lambda page: page.locator("#folderType_ID").wait_for())
-            b.act(lambda page: page.evaluate(AM_SET_TYPE, kind))
-            b.act(lambda page: page.type("#inDateFrom_ID", lo, delay=30))
-            b.act(lambda page: page.type("#inDateTo_ID", hi, delay=30))
-            b.act(lambda page: page.locator("button:has-text('Search')").last.click())
-            b.act(lambda page: page.locator("datatable-body-row").first.wait_for())
+        search = amanda_search(b, base)
         first = ""
         for n in range(1, PAGES + 1):
             if n > 1:
@@ -562,9 +626,7 @@ def check_amanda(p, final_url):
                 dates += [r[i] for r in fresh if i < len(r)]
     dated = [d for d in dates if re.match(r"\d{4}-\d{2}-\d{2}$", d)]
     hits = sum(1 for d in dated if d.startswith("2026-08-"))
-    out = {"search": "%s%s, %s, dates %s to %s" % (
-               AM_SEARCH, ", tab " + tab if tab else "", kind, lo, hi),
-           "pages": len(pages), "rows": len(seen), "stated_total": stated,
+    out = {"search": search, "pages": len(pages), "rows": len(seen), "stated_total": stated,
            "date_field": "Application Date (the filter%s)" % (
                "" if dates else "; the list shows no dates"),
            "in_window": "%d of %d" % (hits, len(dated)) if dates else "not shown"}
@@ -677,16 +739,64 @@ def accela_export(p, op, u):
     if text is None or row["content_type"] != "text/csv":
         return {"reference": "export: %s %s" % (row["http_status"],
                                                 row["content_type"])}
-    rows = [r for r in csv.reader(io.StringIO(text)) if any(r)]
-    header, body = rows[0], rows[1:]
-    col = next((i for i, h in enumerate(header) if ID_HEADER.search(h)), 0)
-    ids = [r[col] for r in body if col < len(r)]
     page_ids = []
     for n in range(1, PAGES + 1):
         path = os.path.join(capture.PAGES, "acc_%04d_p%d.html" % (order, n))
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
                 page_ids += [r["number"] for r in acc.parse_index(fh.read())[0]]
+    return {"reference": "export: " + keep_export(order, text, text.encode("utf-8"),
+                                                  page_ids, row["fetched_at"])}
+
+
+def amanda_export(p, final_url):
+    """The reference for a usable AMANDA portal: the result list's Export, a
+    CSV the page builds from the search's own data, after the same search in
+    a new session. The requests the Export click sends are counted, and any
+    to reCAPTCHA named."""
+    order = int(p["order"])
+    base = "/".join((final_url or p["url"]).split("/")[:3])
+    got, sent = {}, []
+    with capture.Browser(p["place"], "AMANDA") as b:
+        amanda_search(b, base)
+        b.page.on("request", lambda r: sent.append(r.url))
+
+        def export(page):
+            with page.expect_download(timeout=EXPORT_TIMEOUT * 1000) as d:
+                page.locator(AM_EXPORT).first.click()
+            got["raw"] = open(d.value.path(), "rb").read()
+        b.act(export)
+        _, row = b.save("amd_%04d_x" % order, "T-INDEX")
+    if "raw" not in got:
+        return {"reference": "export: no download: %s" % row["verdict_reason"]}
+    page_ids = []
+    for n in range(1, PAGES + 1):
+        path = os.path.join(capture.PAGES, "amd_%04d_p%d.html" % (order, n))
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                for r in AM_ROW.findall(fh.read()):
+                    cells = AM_CELL.findall(r)
+                    if cells:
+                        page_ids.append(aspnet.text(cells[0]))
+    captcha = [u for u in sent if "recaptcha" in u.lower()]
+    hosts = sorted({urllib.parse.urlsplit(u).hostname or u[:20] for u in sent})
+    how = keep_export(order, got["raw"].decode("utf-8-sig"), got["raw"], page_ids,
+                      row["fetched_at"])
+    return {"reference": "export, built in the page (the click sent %d request%s%s%s): %s"
+            % (len(sent), "" if len(sent) == 1 else "s",
+               " to " + ", ".join(hosts) if hosts else "",
+               ", %d to reCAPTCHA" % len(captcha) if captcha else "", how)}
+
+
+def keep_export(order, text, raw, page_ids, saved_at):
+    """Save an export as the portal's reference, with its row in exports.csv,
+    and say where the saved pages' records are in it: its first rows, in the
+    same order, is the alignment check pre-registered before an export is
+    relied on."""
+    rows = [r for r in csv.reader(io.StringIO(text)) if any(r)]
+    header, body = rows[0], rows[1:]
+    col = next((i for i, h in enumerate(header) if ID_HEADER.search(h)), 0)
+    ids = [r[col] for r in body if col < len(r)]
     aligned = ids[:len(page_ids)] == page_ids
     on_page = len(set(page_ids) & set(ids))
     # A snapshot with no date window (Manatee) gains records between the
@@ -698,8 +808,15 @@ def accela_export(p, op, u):
     at = [first[x] for x in page_ids if x in first]
     gaps = (not aligned and on_page == len(page_ids) and at == sorted(at)
             and at[-1] - len(page_ids) + 1)
+    # An export can list the search in another order than its pages (Austin's
+    # AMANDA); the pages are then its first rows once it is sorted by the id
+    # column as they are.
+    order_by = ""
+    if not aligned and not gaps and on_page == len(page_ids):
+        for desc in (True, False):
+            if sorted(ids, reverse=desc)[:len(page_ids)] == page_ids:
+                order_by = "descending" if desc else "ascending"
     fn = "crl_%04d_all.csv" % order
-    raw = text.encode("utf-8")
     os.makedirs(EXPORTS, exist_ok=True)
     new = not os.path.exists(EXPORT_INDEX)
     with io.open(EXPORT_INDEX, "a", newline="", encoding="utf-8") as fh:
@@ -708,9 +825,11 @@ def accela_export(p, op, u):
             w.writeheader()
         w.writerow({"file": fn, "order": order, "export": "all",
                     "rows": len(body), "id_column": header[col],
-                    "on_page": on_page, "in_order": "yes" if aligned or gaps else "no",
+                    "on_page": on_page,
+                    "in_order": ("yes" if aligned or gaps else
+                                 "sorted " + order_by if order_by else "no"),
                     "sha256": hashlib.sha256(raw).hexdigest(),
-                    "saved_at": row["fetched_at"]})
+                    "saved_at": saved_at})
     with open(os.path.join(EXPORTS, fn), "wb") as fh:
         fh.write(raw)
     if aligned:
@@ -718,10 +837,160 @@ def accela_export(p, op, u):
     elif gaps:
         how = ("are in it in the same order, with %d other rows among them "
                "(records added since the pages were saved)" % gaps)
+    elif order_by:
+        how = ("are its first rows, in order, once it is sorted by %s %s, as the "
+               "pages are" % (header[col], order_by))
     else:
         how = "are NOT its first rows: %d of them are in it" % on_page
-    return {"reference": "export: %d rows (%d unique %s); the %d saved page "
-            "rows %s" % (len(body), len(set(ids)), header[col], len(page_ids), how)}
+    return "%d rows (%d unique %s); the %d saved page rows %s" % (
+        len(body), len(set(ids)), header[col], len(page_ids), how)
+
+
+def page_records(product, html, parse=False):
+    """(permit number, record text, fields) for each record on a saved result
+    page, and the page's own count of its records. With parse, fields are the
+    contract's, read by the portal's parser (PARSED); otherwise None."""
+    def cells(found, names):
+        values = {names[k]: aspnet.text(v) or None for k, v in found if k in names}
+        return values if parse else None
+
+    if product == "Accela":
+        parsed = {r["number"]: r for r in acc.parse_index(html)[0]} if parse else {}
+        out = []
+        for frag in acc.ROWPAT.findall(html):
+            m = acc.NUMSPAN.search(frag)
+            if m:
+                rid = aspnet.text(m.group(1))
+                row = parsed.get(rid, {})
+                fields = ({f: row[k] or None for k, f in PARSED["Accela"].items()
+                           if k in row} if parse else None)
+                out.append((rid, aspnet.text(frag), fields))
+        m = acc.SHOWING.search(html)
+        return out, (int(m.group(2)) - int(m.group(1)) + 1) if m else None
+    if product == "Clariti":
+        rows = CL_ROW.findall(html)
+        out = [(aspnet.text(dict(CL_CELL.findall(r)).get("Permit Number", "")),
+                aspnet.text(r), cells(CL_CELL.findall(r), PARSED[product]))
+               for r in rows]
+        blocks = capture.record_blocks(html)
+        return out, blocks[2] if blocks else None
+    if product == "Computronix POSSE":
+        rows = PX_ROW.split(html)[1:]
+        out = [(aspnet.text(dict(PX_CELL.findall(r)).get("PermitNumber", "")),
+                aspnet.text(r), cells(PX_CELL.findall(r), PARSED[product]))
+               for r in rows]
+        m = PX_RANGE.search(aspnet.text(html))
+        return out, (int(m.group(2)) - int(m.group(1)) + 1) if m else None
+    # AMANDA states only the search's total; each record has one Detail button.
+    rows = [r for r in AM_ROW.findall(html) if AM_CELL.search(r)]
+    out = [(aspnet.text(AM_CELL.findall(r)[0]), aspnet.text(r), None) for r in rows]
+    return out, sum(1 for r in rows if re.search(r">\s*Detail\s*<", r))
+
+
+def reference(product, u, ex):
+    """One portal's reference: each saved page's records, taken from its
+    export by permit number under the fields REF_ROLES finds in the export's
+    headers, or read by its parser where it has no export (ex None). Checked
+    automatically: the page's own count of records, each value verbatim in
+    its record's text on the page, permit numbers unique."""
+    order = int(u["order"])
+    by_id, cols = {}, {}
+    if ex:
+        with open(os.path.join(EXPORTS, ex["file"]), "rb") as fh:
+            text = fh.read().decode("utf-8-sig")
+        rows = [r for r in csv.reader(io.StringIO(text)) if any(r)]
+        header, body = rows[0], rows[1:]
+        fields = {"native_id": ex["id_column"]}
+        for h in header:
+            role = REF_ROLES[product](h)
+            if role and role not in fields:
+                fields[role] = h
+        cols = {role: header.index(h) for role, h in fields.items()}
+        for r in body:
+            by_id.setdefault(r[cols["native_id"]].strip(), r)
+    fixes = {}
+    if os.path.exists(CORRECTIONS):
+        with open(CORRECTIONS, newline="", encoding="utf-8") as fh:
+            fixes = {(c["file"], c["native_id"], c["field"]): c
+                     for c in csv.DictReader(fh) if c["order"] == u["order"]}
+    pages, seen, dup = [], set(), 0
+    prefix = {"Accela": "acc", "AMANDA": "amd", "Clariti": "clr",
+              "Computronix POSSE": "psx"}[product]
+    for n in range(1, PAGES + 1):
+        name = "%s_%04d_p%d.html" % (prefix, order, n)
+        path = os.path.join(capture.PAGES, name)
+        if not os.path.exists(path):
+            break
+        with open(path, encoding="utf-8") as fh:
+            records, count = page_records(product, fh.read(), parse=not ex)
+        page = {"file": name, "count": count, "rows": [], "not_in_export": [],
+                "not_verbatim": [], "corrected": []}
+        for rid, rtext, parsed in records:
+            dup += rid in seen
+            seen.add(rid)
+            if parsed is not None:
+                rec = dict(parsed)
+            elif rid in by_id:
+                r = by_id[rid]
+                rec = {role: (" ".join(r[i].split()) or None) if i < len(r) else None
+                       for role, i in cols.items()}
+            else:
+                page["not_in_export"].append(rid)
+                continue
+            for role in rec:
+                fix = fixes.get((name, rid, role))
+                # Applied only while the source still says what was corrected.
+                if fix and (rec[role] or "") == fix["export"]:
+                    rec[role] = fix["reference"] or None
+                    page["corrected"].append([rid, role, fix["export"], rec[role]])
+            page["rows"].append(rec)
+            page["not_verbatim"] += [[rid, role, v] for role, v in rec.items()
+                                     if v and v not in rtext]
+        pages.append(page)
+    if not ex:
+        # A field is scored only where the page has a column for it, as on an
+        # export: Boise's grid has no record type.
+        fields = {f: k for k, f in PARSED[product].items()
+                  if any(f in r for p in pages for r in p["rows"])}
+    out = {"order": u["order"], "place": u["place"], "product": product,
+           "source": "export %s" % ex["file"] if ex else "parser",
+           "export_sha256": ex["sha256"] if ex else None, "fields": fields,
+           "duplicate_ids": dup, "pages": pages}
+    os.makedirs(REFERENCE, exist_ok=True)
+    with open(os.path.join(REFERENCE, "ref_%04d.json" % order), "w",
+              encoding="utf-8") as fh:
+        json.dump(out, fh, indent=1, ensure_ascii=False)
+    return out
+
+
+def references():
+    """The reference for every tested portal, and its checks."""
+    with open(EXPORT_INDEX, newline="", encoding="utf-8") as fh:
+        exs = {r["order"]: r for r in csv.DictReader(fh) if r["export"] == "all"}
+    with open(SAMPLE, newline="", encoding="utf-8") as fh:
+        tested = [r for r in csv.DictReader(fh) if r["role"] == "tested"]
+    capture.retarget(os.path.join("population", "corpus"))
+    print("%-5s %-28s %-7s %5s %5s %-8s %-13s %5s %-6s %s" % (
+        "order", "place", "source", "pages", "rows", "counts", "verbatim", "fixed",
+        "unique", "fields"))
+    for u in tested:
+        ex = exs.get(u["order"]) if u["product"] in REF_ROLES else None
+        if not ex and u["product"] not in PARSED:
+            print("%-5s %-28s no export and no parser" % (u["order"], u["place"][:28]))
+            continue
+        ref = reference(u["product"], u, ex)
+        pages = ref["pages"]
+        rows = sum(len(p["rows"]) for p in pages)
+        counts = sum(len(p["rows"]) == p["count"] and not p["not_in_export"]
+                     for p in pages)
+        cells = sum(1 for p in pages for r in p["rows"] for v in r.values() if v)
+        bad = sum(len(p["not_verbatim"]) for p in pages)
+        fixed = sum(len(p["corrected"]) for p in pages)
+        print("%-5s %-28s %-7s %5d %5d %d of %-3d %5d of %-5d %5d %-6s %s" % (
+            u["order"], u["place"][:28], "export" if ex else "parser", len(pages),
+            rows, counts, len(pages), cells - bad, cells, fixed,
+            "yes" if not ref["duplicate_ids"] else "no",
+            ", ".join(f for f in ref["fields"] if f != "native_id")))
 
 
 def set_outcome(order, outcome, reason):
@@ -764,32 +1033,37 @@ def record(p, result):
         w.writerows(sorted(have, key=lambda r: int(r["order"])))
 
 
-def exports(only):
-    """The reference for each usable Accela portal that has none yet."""
-    import json
+def exports(product, only):
+    """The export for each usable portal of product that has none yet."""
     with open(PROBE, encoding="utf-8") as fh:
         probe = json.load(fh)
     with open(USABILITY, newline="", encoding="utf-8") as fh:
-        todo = [u for u in csv.DictReader(fh) if u["product"] == "Accela"
+        todo = [u for u in csv.DictReader(fh) if u["product"] == product
                 and int(u["pages"] or 0) >= 2
                 and (u["order"] in only if only else not u["reference"])]
     with open(SAMPLE, newline="", encoding="utf-8") as fh:
         urls = {r["order"]: r["url"] for r in csv.DictReader(fh)}
     capture.retarget(os.path.join("population", "corpus"))
-    capture.BUDGET = capture.spent() + 5 * len(todo)
+    capture.BUDGET = capture.spent() + (5 if product == "Accela"
+                                        else BROWSER_PORTAL) * len(todo)
     for u in todo:
-        home = probe.get(u["order"], {}).get("final_url") or urls[u["order"]]
-        p = dict(u, home=home)
+        final = probe.get(u["order"], {}).get("final_url")
+        p = dict(u, home=final or urls[u["order"]], url=urls[u["order"]])
         print("-- %s %s" % (u["order"], u["place"]))
-        result = accela_export(p, capture._opener(), u)
+        if product == "Accela":
+            result = accela_export(p, capture._opener(), u)
+        else:
+            result = amanda_export(p, final)
         print("   %s" % result["reference"])
         record(p, result)
 
 
 def main(argv):
-    import json
-    if argv[0] == "accela-export":
-        return exports(set(argv[1:]))
+    if argv[0] == "reference":
+        return references()
+    if argv[0] in ("accela-export", "amanda-export"):
+        return exports({"accela-export": "Accela", "amanda-export": "AMANDA"}[argv[0]],
+                       set(argv[1:]))
     product = {"accela": "Accela", "smartgov": "SmartGov",
                "logis": "LOGIS ePermits", "clariti": "Clariti",
                "amanda": "AMANDA", "posse": "Computronix POSSE"}[argv[0]]

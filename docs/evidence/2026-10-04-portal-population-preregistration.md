@@ -347,11 +347,56 @@ browser is saved as rendered, whichever way it was got.
    as the page's script does (the export postback, then `Export2CSV.ashx` in the same session),
    and the 40 rows of the 4 saved pages are its first 40, in order, with the same dates, types and
    addresses. The alignment is checked again for every portal (`spikes/population_onboard.py`).
+   AMANDA's result list has an export too ("Export" on Volusia's, "Export Results" on Austin's):
+   a CSV the page builds from the search's own data, without a request to the server
+   (2026-10-20). Volusia's has 350 rows, and the 100 saved rows are its first 100, in order.
+   Austin's holds all 975 results in another order. Sorted by permit number, newest first, as
+   the list is, its first 40 rows are the saved rows, in order. On both, every value the list
+   shows matches the export's, apart from runs of spaces.
 2. Otherwise, a parser written for the portal, checked as below.
 
 Exports format some values differently from the page (dates, addresses split into columns). The
 mapping from export columns to the contract's fields is written per product before any extractor
 is scored on it.
+
+**The mapping, written 2026-10-20** (`spikes/population_onboard.py reference`, which writes each
+tested portal's reference to `data/population/reference/`):
+
+- **Accela exports:** columns map to fields by their headers, read as the Accela adapter reads
+  a grid's headers: the record number, Date (Application Date on Martin), Record Type, Address
+  and Status. The adapter's own output is not compared with any export here. It is the bias
+  check's fourth key and is frozen first.
+- **AMANDA exports:** named site by site. Volusia: File Number, Type, Date, Name, Status. Austin:
+  Permit/Case, Sub Type / Work Type, Project Name, Status. Name and Project Name hold the address.
+- **Without an export, a parser:** Boise, the Accela adapter. Phoenix, by the column each cell
+  names: Permit Number, Permit Type (not Permit Work Type), Address, Issued Start Date, Status,
+  Registered Contractor Name. Philadelphia: permit number, type, location, status and Issue
+  Date, the date its search filters on, of the three its rows carry.
+- **A field is scored on a portal only where the portal has a column for it,** as in v2, where
+  St. Johns' rows carry no type or status. Tempe's address is in an unheaded column that its
+  export leaves empty; Austin's list shows no date; Boise's grid has no type. No portal has a
+  structure code column, and only Phoenix has a contractor column.
+- **Each page's reference** is the export's rows for the page's records, matched by permit
+  number, or the parser's rows. Where the export has a value the page does not show, the page's
+  value is the reference, corrected by hand with a reason
+  (`data/population/reference_corrections.csv`): 15 Goodyear temporary records whose Status the
+  page leaves empty, and one Manatee status that changed between the page and the export.
+- **The automatic checks pass on all 16 tested portals** (1,100 records): every page's count of
+  records matches the page's own count (its "showing" line, its record links or its record
+  blocks), every value is verbatim in its record's text on the page, and no permit number
+  repeats.
+- **Open data, matched by permit number** (`spikes/population_open_data.py --match`, mapping
+  per dataset in `MATCH`), on the 4 tested offices that publish their permits:
+  - Philadelphia: 40 of 40 records are in the dataset; issue date, status, address and type
+    agree on all 40.
+  - Austin: 35 of 40; address and type agree on all 35, status on 33.
+  - Baltimore: 37 of 80; address agrees on all 37.
+  - Tempe: 10 of 40; type agrees on all 10, status on 9.
+
+  The rest are not yet issued, and these datasets hold issued permits only. The 3 status
+  differences are records whose status moved between the page and the dataset (Austin's
+  page says Final where the dataset still says Active). The page's value stays the
+  reference.
 
 **Checking the reference** (approved by the owner on 2026-10-04; the owner's part replaced on
 2026-10-20 by "Without the owner's review", below). Checking every row by hand would
@@ -445,40 +490,50 @@ owner, and no step of the check waits on the owner:
   kind of contested cell, is reported beside the headline. Any group the owner does review, in
   the fixed order, is settled.
 - **The checker's error rate, measured**, in place of the owner's seeded rows. The checker also
-  reads the portals whose reference is the portal's own export (the 11 Accela exports and Kyle's),
-  without seeing the export. A parser and checker can only agree on a wrong value where the
-  checker is wrong, so the checker's error rate against the exports bounds how often that happens.
-  It is measured on two products, Accela and EnerGov (Kyle, not scored but readable), and the
-  report says so.
+  reads the portals whose reference is the portal's own export (the 11 Accela exports, Austin's
+  and Volusia's AMANDA exports, and Kyle's), without seeing the export. A parser and checker can
+  only agree on a wrong value where the checker is wrong, so the checker's error rate against the
+  exports bounds how often that happens. It is measured on three products, Accela, AMANDA and
+  EnerGov (Kyle, not scored but readable), and the report says so (AMANDA added by the owner on
+  2026-10-20).
 - **Whether a Claude reference favours the Claude arm.** The parsers and the checker are Claude,
-  and so is one strong arm, Opus 5.5. It is measured on the 11 scored Accela portals with an
-  export, holding the portals and rows fixed so that only the answer key changes (revised
-  2026-10-20: comparing those portals' ranking with the ranking over all portals would have mixed
-  a difference between products into it). Every arm is scored four times on the same rows:
-  against the export, which no model wrote; against Sonnet 5.5's reading; against GPT-6 Sol's; and
-  against the reference the pipeline builds where there is no export. That last one is the Accela
-  parser's output (`permits/adapters/accela.py`, written 2026-09-22, before any export was
-  fetched), checked against Sonnet 5.5 as on every other portal and frozen before it is compared
-  with the export (added 2026-10-20: the checkers' keys alone leave out the parsers, which build
-  most references).
+  and so is one strong arm, Opus 5.5. It is measured on the 13 scored portals with an export, 11
+  Accela and 2 AMANDA (AMANDA added by the owner on 2026-10-20), holding the portals and rows fixed
+  so that only the answer key changes (revised 2026-10-20: comparing those portals' ranking with
+  the ranking over all portals would have mixed a difference between products into it). Every arm
+  is scored on the same rows against the export, which no model wrote; against Sonnet 5.5's
+  reading; and against GPT-6 Sol's. On the Accela portals it is also scored against the reference
+  the pipeline builds where there is no export. That is the Accela parser's output
+  (`permits/adapters/accela.py`, written 2026-09-22, before any export was fetched), checked
+  against Sonnet 5.5 as on every other portal and frozen before it is compared with the export
+  (added 2026-10-20: the checkers' keys alone leave out the parsers, which build most references).
+  The AMANDA portals have no such key: no AMANDA parser exists, and one written now would be
+  written after their exports were read.
   - **A second checker from another family** (owner, 2026-10-20): OpenAI's GPT-6 Sol
-    (`openai/gpt-6-sol`) reads the export portals only, the same way as Sonnet 5.5, about 780 rows
-    for about $1.50 at list price. An arm can gain from a checker's answer key because they share
+    (`openai/gpt-6-sol`) reads the export portals only, the same way as Sonnet 5.5, about 920 rows
+    for about $1.80 at list price. An arm can gain from a checker's answer key because they share
     a blind spot, or because some rows are hard for every model. The second checker tells the two
     apart.
-  - **The estimates**, each with a paired bootstrap interval over the 11 portals:
-    - the checker: each arm's gain in score from Sonnet 5.5's key over the export, minus its gain
-      from GPT-6 Sol's key. A Claude bias shows as that difference being larger for Opus 5.5 than
-      for the other arms;
-    - the whole reference: each arm's gain from the pipeline's key over the export, Opus 5.5
-      against the other arms. This one covers the parsers as well.
+  - **The estimates**, each with a paired bootstrap interval over the portals it covers:
+    - the checker, on the 13 portals: each arm's gain in score from Sonnet 5.5's key over the
+      export, minus its gain from GPT-6 Sol's key. A Claude bias shows as that difference being
+      larger for Opus 5.5 than for the other arms;
+    - the whole reference, on the 11 Accela portals: each arm's gain from the pipeline's key over
+      the export, Opus 5.5 against the other arms. This one covers the parsers as well.
 
-    Both are reported beside the headline, as measured on Accela only.
+    Both are reported beside the headline with the products each covers: Accela and AMANDA for
+    the checker, Accela only for the whole reference.
 
 ## Weighting
 
 - **Per product:** each approach's result pooled over that product's sampled portals, reported
   unweighted.
+  - **A product with one tested portal** (owner, 2026-10-20) is reported as that portal's
+    result, named as such, not as an estimate for the product. Resampling portals within it gives
+    no spread between portals. That is Clariti (Phoenix), POSSE (Philadelphia), eTRAKiT if Denton
+    is usable, and every hand-saved product. The population views still use it for its product's
+    share, and the report lists the products that rest on one portal with their weight in each
+    view.
 - **Two population views**, both reported. Pages saved by hand answer whether a model can read a
   layout, but no polite pipeline could fetch them (owner's point, 2026-10-04).
   - **Layout view:** the per-product results weighted by each product's share of all usable
