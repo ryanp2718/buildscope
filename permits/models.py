@@ -440,6 +440,15 @@ _SPECS = [
               date(2026, 9, 22), (4.0, 20.0), (4.0, 20.0),
               ReasoningControl.ADAPTIVE, supports_reasoning=True,
               temperature=1.0, max_output=128000, cache_read=0.05),
+    # The population run's checker (pre-registration, 2026-10-20), not a
+    # scored arm. Anthropic's API default effort is `high`. Cache hits are
+    # left at the 0.1x default: Anthropic's model notes give $0.20 a million,
+    # the catalogue $0.10, and the higher one bounds both. Release date and
+    # prices from the catalogue, read 2026-10-27.
+    ModelSpec("claude-sonnet-5-5", ANT, "anthropic", Tier.MID, "sonnet-5-5",
+              date(2026, 9, 28), (2.0, 10.0), (2.0, 10.0),
+              ReasoningControl.ADAPTIVE, supports_reasoning=True,
+              temperature=1.0, max_output=128000),
     # Closed weights; every endpoint is OpenAI's model under licence. Default
     # effort `medium` (developers.openai.com model pages). The endpoints
     # accept no sampling parameter, so none is sent.

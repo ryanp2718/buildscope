@@ -40,7 +40,9 @@ class TestTheRegistryIsComplete(unittest.TestCase):
     def test_every_release_date_is_real(self):
         for m, s in R.items():
             self.assertIsInstance(s.released, date, m)
-            self.assertLessEqual(s.released, date(2026, 9, 26), m)
+            # The catalogue was read on 2026-09-25, and for Sonnet 5.5 on
+            # 2026-10-27.
+            self.assertLessEqual(s.released, date(2026, 10, 27), m)
 
     def test_every_model_the_harness_ever_called_resolves(self):
         """The ledger and the variance cells are named by model id, and the

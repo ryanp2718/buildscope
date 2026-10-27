@@ -52,7 +52,6 @@ the response cache and the checkpoints never cross portals. Traces go to
 `buildscope-agent-eval` for a run id starting `eval-`.
 """
 import argparse
-import glob
 import os
 import sys
 import time
@@ -62,16 +61,11 @@ sys.path.insert(0, ROOT)
 
 from langgraph.checkpoint.sqlite import SqliteSaver           # noqa: E402
 from permits import arms, fileio, infer                       # noqa: E402
-from permits import harness as H                              # noqa: E402
 from permits.agent import graph as G                          # noqa: E402
-from permits.agent import tools as T                          # noqa: E402
-from permits.agent import verify                              # noqa: E402
 from permits.cells import Outcome                             # noqa: E402
+from permits.population import EVAL, load_portals             # noqa: E402
 
-POP = os.path.join(ROOT, "data", "population")
-REFS = os.path.join(POP, "reference")
-PAGES = os.path.join(POP, "corpus", "pages")
-OUT = os.path.join(POP, "eval")
+OUT = EVAL
 EPISODES = os.path.join(OUT, "episodes.json")
 CHECKPOINTS = os.path.join(OUT, "checkpoints.sqlite")
 
@@ -99,73 +93,6 @@ SCORED = (Outcome.PERFECT, Outcome.IMPERFECT, Outcome.RAISED,
 
 class StageStopped(Exception):
     """The stage's limit refused a call."""
-
-
-# ------------------------------------------------------------ portals
-class Portal:
-    """One test portal: its reference, stripped pages, excerpt and check."""
-
-    def __init__(self, path):
-        d = fileio.read_json(path)
-        self.order, self.place = int(d["order"]), d["place"]
-        self.product, self.source = d["product"], d["source"]
-        self.key = "p%04d" % self.order
-        self.target = H.Target(self.key, self.key, self.product, None,
-                               {f: f for f in sorted(d["fields"])},
-                               self.place, split="test")
-        raw = [(p["file"], os.path.join(PAGES, p["file"])) for p in d["pages"]]
-        self.corpus = [q for _, q in H.stripped_corpus(self.target, raw)]
-        self.refs = {p["file"]: p["rows"] for p in d["pages"]}
-        bad = [nm for nm, ok in H.validate_scorer(self.target,
-                                                  d["pages"][0]["rows"])
-               if not ok]
-        if bad:
-            raise SystemExit("scorer broken for %s: %s; no calls made"
-                             % (self.key, ", ".join(bad)))
-        self.expected = verify.expected_records(
-            [H.read(q) for q in self.corpus])
-        self.window, _frac, _at = H.window(H.read(raw[0][1]), arms.SYNTH_WINDOW)
-        self.user = ("Portal page excerpt (one page of the result grid, "
-                     "stripped of scripts, styles and non-structural "
-                     "attributes):\n\n" + self.window)
-        self._ws = None
-
-    @property
-    def loaded(self):
-        return self.target, self.corpus, self.refs, self.user
-
-    def counts(self):
-        """Records per page in the reference."""
-        return [len(self.refs[os.path.basename(q)]) for q in self.corpus]
-
-    def in_window(self):
-        """Reference records of the first page whose permit number is in
-        the excerpt: an excerpt with none shows the model no record."""
-        rows = self.refs[os.path.basename(self.corpus[0])]
-        return sum(1 for r in rows if r["native_id"] in self.window), len(rows)
-
-    def check(self, path):
-        """The check's verdict on a module on disk: (accepted, what failed)."""
-        if self._ws is None:
-            self._ws = T.Workspace(self.corpus,
-                                   os.path.join(OUT, "work", "check", self.key),
-                                   expected=list(self.expected))
-        res = self._ws.run(H.read(path))
-        failed = sorted(res.failed)
-        if res.audit:
-            failed.append("audit")
-        if res.error:
-            failed.append("error")
-        return res.accepted, failed
-
-
-def load_portals(orders=None):
-    out = []
-    for f in sorted(glob.glob(os.path.join(REFS, "ref_*.json"))):
-        p = Portal(f)
-        if orders is None or p.order in orders:
-            out.append(p)
-    return out
 
 
 # ------------------------------------------------------------ records

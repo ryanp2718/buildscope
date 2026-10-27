@@ -600,6 +600,14 @@ on page 1 after the change: Austin 9 of 10 (was 0), Philadelphia 8 of 10 (was 0)
 (was 5). The runner is `scripts/population_eval.py`; `--run` refuses without this
 pre-registration's OSF link, which goes into every record.
 
+**The checkers' input** (stage 1, `scripts/population_check.py`, written 2026-10-27). Each call is
+v2's direct-extraction request: the contract and one whole page, which the checker reads into a
+JSON list of records. The page is the stripped page with every attribute and option list removed:
+the tags stay, so empty cells keep their columns, and all 5,334 reference values on the 64 pages
+are still in it verbatim. That is under a quarter of the stripped page's tokens and brings stage 1
+to its expected spend (Sonnet 5.5 about $4.30, GPT-6 Sol about $3.40 at list); with the stripped
+page it priced at about $18, over its limit.
+
 | arm | models | per portal |
 |---|---|---|
 | cheap one-shot | gpt-oss-120b, Gemini 3.5 Flash-Lite, DeepSeek V4 Flash, GPT-6 Luna, MiMo V2.6 Flash (the agent-run rule) | 10 draws |
