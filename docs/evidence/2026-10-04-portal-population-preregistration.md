@@ -587,6 +587,19 @@ per dollar.
 and an excerpt of the portal's first saved page, stripped as in v2 (24,000 characters). It is run
 on every saved page of that portal and scored against the reference.
 
+**The excerpt on a page with no table grid** (found 2026-10-27 by the runner's preflight, which
+counts the reference's page-1 records inside each portal's excerpt, before any model saw a test
+portal). v2's rule places the excerpt by counting table rows. Volusia's and Austin's AMANDA lists
+and Philadelphia's POSSE list have none, so their excerpt was the page's head, which on Austin and
+Philadelphia ends before the first record: 0 of 10 records shown. A one-shot draw there could only
+fail, whatever the model. On a page with no table grid the excerpt is now placed by the check's
+record rule (`verify.record_spans`, the same signature `expected_records` counts, frozen
+beforehand on the development portals). Every page with a grid keeps its excerpt byte for byte:
+all 84 pages of the v2 targets and every Accela and Clariti test page are unchanged. Records shown
+on page 1 after the change: Austin 9 of 10 (was 0), Philadelphia 8 of 10 (was 0), Volusia 9 of 25
+(was 5). The runner is `scripts/population_eval.py`; `--run` refuses without this
+pre-registration's OSF link, which goes into every record.
+
 | arm | models | per portal |
 |---|---|---|
 | cheap one-shot | gpt-oss-120b, Gemini 3.5 Flash-Lite, DeepSeek V4 Flash, GPT-6 Luna, MiMo V2.6 Flash (the agent-run rule) | 10 draws |

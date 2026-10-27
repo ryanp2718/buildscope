@@ -15,6 +15,7 @@ import re
 
 from permits import strip as _strip
 from permits.adapters import accela, stjohns
+from permits.agent import verify
 from permits.sandbox import TD, data_rows
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -237,6 +238,14 @@ def window(html, budget, step=1000):
     instead. Where version three worked the window is unchanged, byte for
     byte, on every stored page of both development targets; a different
     selection rule was tried first and moved every Clark window.
+
+    **A page with no table grid** (2026-10-27, the portal population run's
+    preflight, before any model saw a test portal): with no data rows every
+    count is zero and the window was the page's head. On Austin's AMANDA
+    list and Philadelphia's POSSE list that head ends before the first
+    record. Such a page's window is placed by `verify.record_spans`, the
+    check's record rule, frozen beforehand on the development portals. Every
+    page with a grid keeps its window byte for byte.
     """
     s = strip(html)
     if len(s) <= budget:
@@ -253,6 +262,17 @@ def window(html, budget, step=1000):
     if grid and sum(1 for a, b in grid
                     if a >= best and b <= best + span) < MIN_GRID_ROWS:
         best = grid[0][0]
+    if not grid:
+        # No table grid at all (AMANDA's and POSSE's lists, 2026-10-27):
+        # every count above is zero and the window was the page's head,
+        # which on Austin and Philadelphia ends before the first record.
+        # Place it by the check's record rule instead, the same way.
+        recs = verify.record_spans(s)
+        best_n = 0
+        for i in range(0, max(1, len(s) - span) + step, step):
+            n = sum(1 for a, b in recs if a >= i and b <= i + span)
+            if n > best_n:
+                best, best_n = i, n
     return (s[:head] + "\n...[document elided]...\n" + s[best:best + span],
             float(budget) / len(s), best)
 

@@ -83,13 +83,42 @@ MIN_RECORDS = 3
 ALTERNATING = re.compile(r"(?i)odd|even|alternat\w*|alt\b")
 
 
-def record_groups(html: str) -> collections.Counter[tuple[str, str]]:
+class _Located(_Tree):
+    """`_Tree` with each element's start and end offsets in the markup."""
+
+    def __init__(self, markup: str) -> None:
+        super().__init__()
+        self._markup = markup
+        self._lines = [0] + [m.end() for m in re.finditer("\n", markup)]
+        self.feed(markup)
+        self.close()
+
+    def _at(self) -> int:
+        line, col = self.getpos()
+        return self._lines[line - 1] + col
+
+    def handle_starttag(self, tag, attrs):
+        parent = self.stack[-1]
+        super().handle_starttag(tag, attrs)
+        node = parent["kids"][-1]
+        node["start"] = self._at()
+        node["end"] = self._markup.find(">", node["start"]) + 1
+
+    def handle_endtag(self, tag):
+        for i in range(len(self.stack) - 1, 0, -1):
+            if self.stack[i]["sig"][0] == tag:
+                end = self._markup.find(">", self._at()) + 1
+                for n in self.stack[i:]:
+                    n["end"] = end
+                del self.stack[i:]
+                return
+
+
+def _sibling_groups(root: dict[str, Any]) -> dict[tuple[str, str], list]:
     """For each element signature (tag, class with alternating-row tokens
     masked), the largest group of siblings with that signature whose members
     each hold at least RECORD_FIELDS non-empty text nodes."""
-    tree = _Tree()
-    tree.feed(html)
-    order, todo = [], [tree.root]
+    order, todo = [], [root]
     while todo:
         n = todo.pop()
         order.append(n)
@@ -97,14 +126,37 @@ def record_groups(html: str) -> collections.Counter[tuple[str, str]]:
     for n in reversed(order):
         n["leaves"] = (sum(1 for t in n["text"] if t.strip())
                        + sum(k["leaves"] for k in n["kids"]))
-    best: collections.Counter[tuple[str, str]] = collections.Counter()
+    best: dict[tuple[str, str], list] = {}
     for n in order:
-        sigs = collections.Counter(
-            (k["sig"][0], ALTERNATING.sub("*", k["sig"][1]))
-            for k in n["kids"] if k["leaves"] >= RECORD_FIELDS)
-        for sig, count in sigs.items():
-            best[sig] = max(best[sig], count)
+        sigs = collections.defaultdict(list)
+        for k in n["kids"]:
+            if k["leaves"] >= RECORD_FIELDS:
+                sigs[(k["sig"][0], ALTERNATING.sub("*", k["sig"][1]))].append(k)
+        for sig, group in sigs.items():
+            if len(group) > len(best.get(sig, ())):
+                best[sig] = group
     return best
+
+
+def record_groups(html: str) -> collections.Counter[tuple[str, str]]:
+    """The size of each signature's largest group (`_sibling_groups`)."""
+    tree = _Tree()
+    tree.feed(html)
+    return collections.Counter(
+        {sig: len(g) for sig, g in _sibling_groups(tree.root).items()})
+
+
+def record_spans(html: str) -> list[tuple[int, int]]:
+    """(start, end) of each record on one page, by `expected_records`' rule
+    for that page alone: the members of the winning signature's largest
+    group. Empty where no group reaches MIN_RECORDS."""
+    tree = _Located(html)
+    groups = {sig: g for sig, g in _sibling_groups(tree.root).items()
+              if len(g) >= MIN_RECORDS}
+    if not groups:
+        return []
+    group = max(groups.values(), key=len)
+    return [(n["start"], n["end"]) for n in group if n.get("end")]
 
 
 def expected_records(pages_html: list[str]) -> list[int]:

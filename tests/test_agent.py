@@ -416,6 +416,36 @@ class TestTheRecordCount(unittest.TestCase):
     def test_no_list_counts_none(self):
         self.assertEqual(verify.expected_records(["<p>No results</p>"]), [0])
 
+    def test_record_spans_cover_each_card(self):
+        spans = verify.record_spans(self.CARDS)
+        self.assertEqual(len(spans), 4)
+        for n, (a, b) in enumerate(spans):
+            self.assertTrue(self.CARDS[a:b].startswith("<div class='card'>"))
+            self.assertTrue(self.CARDS[a:b].endswith("</div>"))
+            self.assertIn("P-%d" % n, self.CARDS[a:b])
+
+    def test_record_spans_match_the_count(self):
+        self.assertEqual(len(verify.record_spans(self.GRID)),
+                         verify.expected_records([self.GRID])[0])
+        self.assertEqual(verify.record_spans("<p>No results</p>"), [])
+
+
+class TestTheExcerptWithoutAGrid(unittest.TestCase):
+    """`harness.window` on a page with no table grid is placed by the
+    record rule, not left at the page's head."""
+
+    def test_window_reaches_records_past_a_long_head(self):
+        from permits import harness as H
+        cards = "".join("<div class='card'><span>P-%d</span><span>Building"
+                        "</span><span>Issued</span></div>" % i
+                        for i in range(30))
+        page = ("<html><body><p>%s</p><div class='list'>%s</div></body>"
+                "</html>" % ("menu text " * 3000, cards))
+        win, _frac, at = H.window(page, 4000)
+        self.assertGreater(at, 0)
+        self.assertIn("P-0", win)
+        self.assertIn("P-9", win)
+
 
 if __name__ == "__main__":
     unittest.main()

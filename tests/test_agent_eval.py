@@ -26,7 +26,9 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import agent_eval as AE                                       # noqa: E402
+from permits import arms                                       # noqa: E402
 from permits import harness as H                              # noqa: E402
+from permits.agent import tools as T                          # noqa: E402
 from permits.cells import Outcome                             # noqa: E402
 from tests.test_agent import BAD, GOOD, FakeClient, _page     # noqa: E402
 
@@ -103,16 +105,16 @@ class TestBestOfK(unittest.TestCase):
                 self.assertAlmostEqual(b["list_usd"], spend, places=12)
                 self.assertAlmostEqual(b["success"], success, places=12)
                 self.assertAlmostEqual(
-                    b["usd"], AE.expected_spend([d.usd for d in draws],
+                    b["usd"], arms.expected_spend([d.usd for d in draws],
                                                 [d.accepted for d in draws],
                                                 k), places=12)
 
     def test_edges(self):
         prices = [0.01, 0.02, 0.03]
-        self.assertAlmostEqual(AE.expected_spend(prices, [True] * 3, 5), 0.02)
-        self.assertAlmostEqual(AE.expected_spend(prices, [False] * 3, 5), 0.06)
+        self.assertAlmostEqual(arms.expected_spend(prices, [True] * 3, 5), 0.02)
+        self.assertAlmostEqual(arms.expected_spend(prices, [False] * 3, 5), 0.06)
         with self.assertRaises(ValueError):
-            AE.expected_spend(prices, [True], 5)
+            arms.expected_spend(prices, [True], 5)
         self.assertEqual(AE.best_of_k(_stored((0.01, True, True)), 20)["k"], 1)
 
     def test_the_interval_is_reproducible_and_contains_the_estimate(self):
@@ -130,7 +132,7 @@ class TestScoring(unittest.TestCase):
         self.dir, self.paths, self.refs = _corpus()
 
     def _score(self, code):
-        return AE.score_code(TARGET, code, self.paths, self.refs,
+        return arms.score_code(TARGET, code, self.paths, self.refs,
                              os.path.join(self.dir, "out", "m.py"))
 
     def test_outcomes(self):
@@ -237,7 +239,7 @@ class TestEpisodes(unittest.TestCase):
         self.assertNotIn("drafts", rec)
         self.assertEqual(
             {h: s["outcome"] for h, s in rec["draft_scores"].items()},
-            {AE.T.digest(BAD): "imperfect", AE.T.digest(GOOD): "perfect"})
+            {T.digest(BAD): "imperfect", T.digest(GOOD): "perfect"})
         # Read at a cap of $0.005 only the first turn runs, and it hands
         # back the bad draft.
         self.assertFalse(AE.at_cap(rec, 0.005)["perfect"])
