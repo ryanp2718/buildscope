@@ -11,14 +11,14 @@ Inputs:    `data/frame/bps_frame.csv` (Census BPS, last 12 months); CISA's .gov 
 Outputs:   `data/population/` (private): `draw.csv`, `portals.csv`, `sites.csv`, `links.json`,
            `probe.json`, `manual/`, `corpus/`. Later the run's records and a results report that
            cites this one.
-Status:    **Draft.** The sample design (the cap, the Accela exception, the weighting, the two-page
+Status:    **Final, approved by the owner on 2026-10-27**, to be registered on OSF before the first
+           paid call of stage 1. History: the sample design (the cap, the Accela exception, the weighting, the two-page
            minimum and the take-all stratum) was approved by the owner on 2026-10-04. Changed by the
            owner on 2026-10-05 to save the owner's time: which portals are saved by hand,
            model-assisted checks of parser references, and a cap on the review after scoring.
            On 2026-10-20 the owner approved taking the owner out of the reference check, the
-           browser's pacing, and applying robots.txt to every host a page loads from. The rest is
-           for review. Nothing paid runs until the sections under "To be written before any paid
-           call" are written and approved.
+           browser's pacing, and applying robots.txt to every host a page loads from. On 2026-10-27
+           the owner approved the arms, the generalized check, the loop and agent, and the stages.
 
 ## Why this run
 
@@ -530,8 +530,8 @@ owner, and no step of the check waits on the owner:
   unweighted.
   - **A product with one tested portal** (owner, 2026-10-20) is reported as that portal's
     result, named as such, not as an estimate for the product. Resampling portals within it gives
-    no spread between portals. That is Clariti (Phoenix), POSSE (Philadelphia), eTRAKiT if Denton
-    is usable, and every hand-saved product. The population views still use it for its product's
+    no spread between portals. That is Clariti (Phoenix), POSSE (Philadelphia) and every
+    hand-saved product. The population views still use it for its product's
     share, and the report lists the products that rest on one portal with their weight in each
     view.
 - **Two population views**, both reported. Pages saved by hand answer whether a model can read a
@@ -575,15 +575,78 @@ Confirmed by the owner on 2026-10-03:
 - A spend limit for each stage.
 - St. Johns is out.
 
-## To be written before any paid call
+## Arms, the check, the loop and the stages (written 2026-10-27)
 
-- **Arms and models.** The strong one-shot models (Gemini 3.8 Flash, Opus 5.5) and the cheap ones,
-  chosen by the agent-run pre-registration's rule.
-- **The check, generalized beyond `<tr>` grids.** Designed on the development portals and frozen
-  before any test portal's pages are seen by a model.
-- **The repair loop and the agent.**
-- **Stages with stop rules and spend limits.** Estimated earlier at $15-40 in all: a Clark pilot
-  (~$1), cheap one-shot on every portal, strong one-shot, then loop and agent where there is room.
+The owner approved these sections and every stage below on 2026-10-27, asking for the most rigour
+per dollar.
+
+**The test set is final: 16 portals.** Denton's eTRAKiT failed to load on 2026-10-20 and again on
+2026-10-27, so it is recorded as unreachable, and eTRAKiT has no portal the crawler can fetch.
+
+**Arms.** Each arm writes an extractor for a portal from the v2 frozen prompt (`harness.SYNTH_SYSTEM`)
+and an excerpt of the portal's first saved page, stripped as in v2 (24,000 characters). It is run
+on every saved page of that portal and scored against the reference.
+
+| arm | models | per portal |
+|---|---|---|
+| cheap one-shot | gpt-oss-120b, Gemini 3.5 Flash-Lite, DeepSeek V4 Flash, GPT-6 Luna, MiMo V2.6 Flash (the agent-run rule) | 10 draws |
+| strong one-shot | Claude Opus 5.5, Gemini 3.8 Flash | 5 draws, then 5 more where the first 5 disagree |
+| scripted repair loop | the five cheap models | 5 episodes, $0.15 list cap, where the cell has room |
+| agent | the five cheap models | 5 episodes, told the cell's B5, where the cell has room |
+
+- **Strong one-shot draws** (changed from the 10 confirmed on 2026-10-03, to spend where the outcome
+  is uncertain). In v2, Opus 5.5 passed 31 of 35 Clark draws and Gemini 3.8 Flash 34 of 35, at
+  $0.07-0.09 a draw. A portal whose first 5 draws all pass, or all fail, gains little from 5 more,
+  and the intervals resample portals, which carry most of the variance. A portal whose first 5
+  disagree gets 5 more. Both rates and which portals were extended are reported.
+- **A cell has room** when its cheap one-shot pass@1 is below 1. Cells at 1 are reported with the
+  one-shot result.
+- **B5** is best-of-5's expected list-priced spend for the cell, computed from its cheap one-shot draws
+  (`agent_eval.best_of_k`), as in the agent-run pre-registration.
+- **Trusted extractor:** an extractor the check accepts that matches the reference on every page
+  (recall and precision 1 on every page, with the fields scored as written under "The mapping").
+  **Cost per trusted extractor** for a one-shot arm comes from drawing until the check accepts, which
+  is best-of-k with the check, computed from the stored draws. For the loop and the agent it is the
+  episode's spend over its trusted rate.
+
+**The check, generalized** (frozen 2026-10-27, commit `0fab476`, before it was measured on any test
+portal). The checks are those of v2's verifier: rows, ids, clean, dates. Its row count is now
+`verify.expected_records`: the largest group of same-template siblings that each hold at least three
+fields, with alternating row styles taken as one template. It was designed on the development
+portals only: Clark (57 of 57 pages match the adapter), St. Johns (14 of 14), Kyle's record cards
+(10 a page, as its export) and York's Evolve list (454 rows). The `<tr>` rule counts 48 rows a page
+on Kyle.
+
+- **Measured on the 16 test portals after freezing** (not tuned on them): its count matches the
+  reference on 58 of 64 pages. The misses are Philadelphia (8 counted against 10, all 4 pages)
+  and Boise (19 against 20 on 2 pages). On those two portals the check rejects a correct extractor,
+  so the arms that need the check cannot deliver there. This is reported as the check's own false
+  rejection, with every result also given without those two portals.
+
+**The repair loop and the agent** are `permits/agent/graph.py`, unchanged from the agent run: the
+scripted loop drafts, runs the check, and on a rejection sends the check's report and a sample of
+the rows from three pages. The agent has the tools `list_pages`, `read_page`, `search_page`,
+`run_extractor`, `check` and `submit`, with a 30-turn limit. Both use the generalized check. Spend
+is list-priced, with billed dollars beside it, and the outcome is the submitted module. Each
+episode keeps LangGraph checkpoints and is traced to the `buildscope-agent-eval` LangSmith project.
+
+**Stages, in order, each with a billed spend limit.** A stage stops at its limit; stages run in
+this order, so a stop loses what matters least.
+
+| stage | what | expected | limit |
+|---|---|---:|---:|
+| 0 | Clark pilot: scripted loop for gpt-oss-120b and Gemini 3.5 Flash-Lite; one tool round-trip episode for each cheap model not yet run with tools (development, not data) | $1 | $3 |
+| 1 | reference check: Sonnet 5.5 reads every saved row, GPT-6 Sol the export portals | $7 | $12 |
+| 2 | cheap one-shot | $4 | $8 |
+| 3 | strong one-shot | $15-25 | $35 |
+| 4 | scripted repair loop | $4-8 | $12 |
+| 5 | agent told B5 | $4-8 | $12 |
+
+The expected spend is about $35-55 and the limits total $82. They come from each model's v2 cost
+per draw times 1.3, and from the smoke runs' episodes, which billed 0.12-0.25 of list. Opus 5.5
+and Sonnet 5.5 bill to Anthropic; every other model bills through OpenRouter. If stage 3's spend
+after its first model projects past its limit, its extension draws are dropped. If stage 4's or
+5's projection after the first model passes its limit, it drops to 3 episodes a cell.
 
 ## What this does not establish
 
