@@ -21,6 +21,10 @@ the ones the scorer passes. Moved here from `spikes/verifier_offline.py` on
 - clean: every value is a string or None, and none contains markup.
 - dates: at least 90% of the non-null `issued_date` values look like a date.
 
+For the portal population run the rows check counts records with
+`expected_records`, a rule for any list layout (record cards as well as
+grids), frozen on 2026-10-27; see that function.
+
 **Notes** do not decide acceptance. They were written after the offline
 validation, from failure cases 5 and 6 in `docs/design/failure-cases.md`, so
 they are post hoc, and each has a legitimate exception a check could not
@@ -39,6 +43,7 @@ import collections
 import re
 from typing import Any
 
+from permits.capture import _Tree
 from permits.sandbox import TD, data_rows
 
 HAS_TD = re.compile(r"(?i)<td\b")
@@ -62,6 +67,61 @@ def expected_rows(pages_html: list[str]) -> list[int]:
     common = collections.Counter(n for s in shapes for n in s).most_common(1)
     mode = common[0][0] if common else None
     return [sum(1 for n in s if n == mode) for s in shapes]
+
+
+# ------------------------------------------- the generalized record count
+# Frozen 2026-10-27 for the portal population run, before any test portal's
+# pages were measured with it. Designed on the development portals only:
+# Clark (Accela grid, 57 of 57 pages match the adapter), St. Johns (WATS
+# grid, 14 of 14), Kyle (EnerGov record cards, 10 a page as its export) and
+# York (Evolve, 454 rows on one page). The `<tr>` rule above counts 48 rows
+# a page on Kyle, from tables that are not the result list.
+RECORD_FIELDS = 3
+MIN_RECORDS = 3
+# Alternating row styles (Accela's ACA_TabRow_Odd / _Even, ASP.NET's
+# AlternatingRowStyle) are one template.
+ALTERNATING = re.compile(r"(?i)odd|even|alternat\w*|alt\b")
+
+
+def record_groups(html: str) -> collections.Counter[tuple[str, str]]:
+    """For each element signature (tag, class with alternating-row tokens
+    masked), the largest group of siblings with that signature whose members
+    each hold at least RECORD_FIELDS non-empty text nodes."""
+    tree = _Tree()
+    tree.feed(html)
+    order, todo = [], [tree.root]
+    while todo:
+        n = todo.pop()
+        order.append(n)
+        todo.extend(n["kids"])
+    for n in reversed(order):
+        n["leaves"] = (sum(1 for t in n["text"] if t.strip())
+                       + sum(k["leaves"] for k in n["kids"]))
+    best: collections.Counter[tuple[str, str]] = collections.Counter()
+    for n in order:
+        sigs = collections.Counter(
+            (k["sig"][0], ALTERNATING.sub("*", k["sig"][1]))
+            for k in n["kids"] if k["leaves"] >= RECORD_FIELDS)
+        for sig, count in sigs.items():
+            best[sig] = max(best[sig], count)
+    return best
+
+
+def expected_records(pages_html: list[str]) -> list[int]:
+    """Records per page, for any list layout: the counts of the one
+    signature whose groups of MIN_RECORDS or more hold the most records
+    across the portal's pages. A record repeats a template and carries
+    several fields; a menu item carries one."""
+    groups = [record_groups(h) for h in pages_html]
+    total: collections.Counter[tuple[str, str]] = collections.Counter()
+    for g in groups:
+        for sig, count in g.items():
+            if count >= MIN_RECORDS:
+                total[sig] += count
+    if not total:
+        return [0] * len(pages_html)
+    sig = total.most_common(1)[0][0]
+    return [g.get(sig, 0) for g in groups]
 
 
 def check_page(rows: list[Any], expected: int) -> set[str]:

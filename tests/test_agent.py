@@ -28,6 +28,7 @@ from langgraph.types import Command                           # noqa: E402
 from permits import infer                                     # noqa: E402
 from permits.agent import graph as G                          # noqa: E402
 from permits.agent import tools as T                          # noqa: E402
+from permits.agent import verify                              # noqa: E402
 
 
 def _page(ids):
@@ -388,6 +389,32 @@ class TestTracingSwitch(unittest.TestCase):
         os.environ["LANGSMITH_API_KEY"] = "from_env"
         self.assertTrue(G.enable_tracing(self._file("from_file")))
         self.assertEqual(os.environ["LANGSMITH_API_KEY"], "from_env")
+
+
+class TestTheRecordCount(unittest.TestCase):
+    """`verify.expected_records`: the rows check for any list layout."""
+
+    GRID = ("<table><tr><td>Showing 1-3 of 9</td><td>x</td><td>y</td></tr>"
+            "<tr class='Head'><td>No.</td><td>Date</td><td>Status</td></tr>"
+            + "".join("<tr class='Row_%s'><td>P-%d</td><td>8/%d/2026</td>"
+                      "<td>Issued</td></tr>" % ("Odd" if i % 2 else "Even", i, i)
+                      for i in range(3))
+            + "</table><ul>" + "<li><a>Home</a></li>" * 6 + "</ul>")
+    CARDS = ("<div class='list'>" + "".join(
+        "<div class='card'><span>P-%d</span><span>Building</span>"
+        "<span>Issued</span></div>" % i for i in range(4)) + "</div>"
+        "<table>" + "<tr><td>Label</td><td><input></td></tr>" * 5
+        + "</table>")
+
+    def test_alternating_rows_are_one_template(self):
+        self.assertEqual(verify.expected_records([self.GRID]), [3])
+
+    def test_record_cards_beat_a_form_table(self):
+        # A form's rows repeat too, but carry fewer than three fields.
+        self.assertEqual(verify.expected_records([self.CARDS]), [4])
+
+    def test_no_list_counts_none(self):
+        self.assertEqual(verify.expected_records(["<p>No results</p>"]), [0])
 
 
 if __name__ == "__main__":
