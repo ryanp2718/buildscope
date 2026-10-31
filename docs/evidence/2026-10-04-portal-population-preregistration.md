@@ -21,6 +21,8 @@ Status:    **Final, approved by the owner on 2026-10-27**, to be registered on O
            the owner approved the arms, the generalized check, the loop and agent, and the stages.
            On 2026-10-31 the owner saved Carlsbad's EnerGov list by hand and it joined the test
            set, with the excerpt rule extended to its page and stage 1's limit raised to $14.
+           The same day the owner approved the predictions (P2 primary) and the funnel grouped
+           by whom an outcome binds.
 
 ## Why this run
 
@@ -43,6 +45,36 @@ Secondary: the agent against the scripted loop; the Clark hint comparison; wheth
 checked by a Claude model favours the Claude arm, measured where the reference is the portal's own
 export (owner's point, 2026-10-20; see "Without the owner's review"). Descriptive: the
 funnel, the share of offices and of housing units whose permits a polite crawler can reach.
+
+## Predictions (owner, 2026-10-31)
+
+Written before any arm has run on a test portal; only the Clark pilot (stage 0) has run. The
+headline estimate stays question 1. Of the predictions, P2 is primary, because it decides whether
+a pipeline can hand over extractors without a person reviewing them. P1 and P3 are secondary and
+reported as such, without a correction for multiple tests. Each interval is the 95% interval of
+"Intervals" under "Weighting", and each prediction states what is reported if it fails.
+
+- **P2 (primary): the check accepts few wrong extractors.** Among the extractors the check
+  accepts, every arm's pooled (one-shot draws, loop and agent submissions), on all 17 test
+  portals, unweighted, fewer than 5% fail the reference on some page. Confirmed if the interval's
+  upper end is below 5%; consistent if the estimate is below 5% and the interval reaches past it;
+  refuted if the estimate is 5% or more. Basis: 0.7% [0.2, 2.0] of 836 v2 draws on the three
+  development targets. If refuted, the report names the products and fields where the check
+  accepted wrong extractors: the check counts records and tests ids, cleanliness and dates, not
+  which column a value came from, and those are the layouts where a pipeline without labels needs
+  a field-level check.
+- **P1: cheap models with the check cost less per trusted extractor than a strong one-shot.** The
+  scripted repair loop, pooled over the five cheap models, against Opus 5.5 one-shot and against
+  Gemini 3.8 Flash one-shot, each by question 1's measure, in the pipeline view, weighted to the
+  population, each approach's cost a ratio of totals over the portals. Confirmed against a strong
+  model if the interval of the loop's cost over that model's lies below 1. Basis: on Clark,
+  gpt-oss-120b passed 0 of 10 one-shot draws and 3 of 3 loop episodes at about $0.004 billed each;
+  Opus 5.5 costs about $0.08 per success there. If refuted, the report gives the products where
+  the strong one-shot is cheaper and by how much.
+- **P3: at the same spend, the loop beats drawing again.** Question 3's comparison: the loop's
+  trusted rate against best-of-k one-shot draws of the same model at the loop's spend, paired by
+  portal. Confirmed if the interval of the difference lies above 0. If refuted, the report says
+  that redrawing matches repair at equal spend, so the loop's value is in delivery, not cost.
 
 ## The population and the draw
 
@@ -137,6 +169,16 @@ and six found by the [robots.txt audit](2026-10-20-robots-txt-audit.md) (SmartGo
 Maricopa, LOGIS, Bay County's CityView, Orange County FL and Nashville). The owner's browser
 checks of 2026-10-20 moved Surf City, Valdosta, Forney and Millbrae from blocked or robots.txt
 disallows. The report gives the final funnel.
+
+**The funnel by whom an outcome binds** (owner, 2026-10-31). The report also groups the final
+funnel's outcomes, by offices and by share of units, into: open to a polite crawler (answered,
+open data); closed only by this crawler's rules (robots.txt disallows, blocked), which a crawler
+with looser rules might pass; closed to any visitor without an account or a lookup key (login
+only, lookup only, no online search, PDF reports only); and the rest (unreachable from this
+network, not located, vendor named with no address). On the interim funnel that is 38%, 17%, 22%
+and 23% of units. The second group is not all lost to the crawler's rules: of the five products
+the crawler could not reach that the owner opened in a browser, four had no usable list there
+either (EnerGov, at Carlsbad, had one).
 
 | outcome | offices (estimated) | share of units |
 |---|---:|---:|
