@@ -208,10 +208,16 @@ ACC_FIELDS = {"date": "issued_date", "address": "address", "type": "permit_type"
 AM_FIELDS = {"Type": "permit_type", "Sub Type / Work Type": "permit_type",
              "Date": "issued_date", "Name": "address", "Project Name": "address",
              "Status": "status"}
+# EnerGov's Export Current View (Carlsbad, saved by hand 2026-10-31): one
+# export per page, its headers the page's labels. Issued Date is the date the
+# search filters on.
+EG_FIELDS = {"Type": "permit_type", "Issued Date": "issued_date",
+             "Address": "address", "Status": "status"}
 REF_ROLES = {
     "Accela": lambda h: ACC_FIELDS.get(next(
         (r for needle, r in acc.ROLES if needle in h.lower()), None)),
     "AMANDA": lambda h: AM_FIELDS.get(h.strip()),
+    "Tyler EnerGov": lambda h: EG_FIELDS.get(h.strip()),
 }
 # Where a portal has no export its reference is a parser, column -> field:
 # Boise's is the Accela adapter, the pipeline's own; Phoenix's and
@@ -231,6 +237,10 @@ PARSED = {
                           "IssueDate": "issued_date"},
 }
 PX_RANGE = re.compile(r"\b(\d+)-(\d+) of [\d,]+")
+# EnerGov's result list: one <div class="row ng-scope"> per record, its
+# permit number in the label-CaseNumber cell.
+EG_ROW = re.compile(r'<div[^>]*\bclass="row ng-scope"')
+EG_NUMBER = re.compile(r'(?s)name="label-CaseNumber".*?<span[^>]*>([^<]+)</span>')
 
 
 def accela_base(url):
@@ -881,6 +891,12 @@ def page_records(product, html, parse=False):
                for r in rows]
         m = PX_RANGE.search(aspnet.text(html))
         return out, (int(m.group(2)) - int(m.group(1)) + 1) if m else None
+    if product == "Tyler EnerGov":
+        rows = [r for r in EG_ROW.split(html)[1:] if EG_NUMBER.search(r)]
+        out = [(aspnet.text(EG_NUMBER.search(r).group(1)), aspnet.text(r), None)
+               for r in rows]
+        blocks = capture.record_blocks(html)
+        return out, blocks[2] if blocks else None
     # AMANDA states only the search's total; each record has one Detail button.
     rows = [r for r in AM_ROW.findall(html) if AM_CELL.search(r)]
     out = [(aspnet.text(AM_CELL.findall(r)[0]), aspnet.text(r), None) for r in rows]
@@ -896,10 +912,17 @@ def reference(product, u, ex):
     order = int(u["order"])
     by_id, cols = {}, {}
     if ex:
-        with open(os.path.join(EXPORTS, ex["file"]), "rb") as fh:
-            text = fh.read().decode("utf-8-sig")
-        rows = [r for r in csv.reader(io.StringIO(text)) if any(r)]
-        header, body = rows[0], rows[1:]
+        # One export of the whole search, or one per page (EnerGov), read as
+        # one: a record on two pages has the same values in both.
+        header, body = None, []
+        for f in ex["files"]:
+            with open(os.path.join(EXPORTS, f), "rb") as fh:
+                text = fh.read().decode("utf-8-sig")
+            rows = [r for r in csv.reader(io.StringIO(text)) if any(r)]
+            if header not in (None, rows[0]):
+                raise SystemExit("%s: headers differ from %s" % (f, ex["files"][0]))
+            header = rows[0]
+            body += rows[1:]
         fields = {"native_id": ex["id_column"]}
         for h in header:
             role = REF_ROLES[product](h)
@@ -915,7 +938,7 @@ def reference(product, u, ex):
                      for c in csv.DictReader(fh) if c["order"] == u["order"]}
     pages, seen, dup = [], set(), 0
     prefix = {"Accela": "acc", "AMANDA": "amd", "Clariti": "clr",
-              "Computronix POSSE": "psx"}[product]
+              "Computronix POSSE": "psx", "Tyler EnerGov": "man"}[product]
     for n in range(1, PAGES + 1):
         name = "%s_%04d_p%d.html" % (prefix, order, n)
         path = os.path.join(capture.PAGES, name)
@@ -953,8 +976,9 @@ def reference(product, u, ex):
         fields = {f: k for k, f in PARSED[product].items()
                   if any(f in r for p in pages for r in p["rows"])}
     out = {"order": u["order"], "place": u["place"], "product": product,
-           "source": "export %s" % ex["file"] if ex else "parser",
-           "export_sha256": ex["sha256"] if ex else None, "fields": fields,
+           "source": "export %s" % " ".join(ex["files"]) if ex else "parser",
+           "export_sha256": " ".join(ex["sha256s"]) if ex else None,
+           "access": "by hand" if prefix == "man" else "crawler", "fields": fields,
            "duplicate_ids": dup, "pages": pages}
     os.makedirs(REFERENCE, exist_ok=True)
     with open(os.path.join(REFERENCE, "ref_%04d.json" % order), "w",
@@ -965,8 +989,19 @@ def reference(product, u, ex):
 
 def references():
     """The reference for every tested portal, and its checks."""
+    # A portal's export of the whole search, or else its exports of each
+    # saved page (EnerGov's Export Current View).
     with open(EXPORT_INDEX, newline="", encoding="utf-8") as fh:
-        exs = {r["order"]: r for r in csv.DictReader(fh) if r["export"] == "all"}
+        index = list(csv.DictReader(fh))
+    exs = {}
+    for o in {r["order"] for r in index}:
+        rs = ([r for r in index if r["order"] == o and r["export"] == "all"]
+              or sorted((r for r in index if r["order"] == o
+                         and re.match(r"p\d$", r["export"])),
+                        key=lambda r: r["export"]))
+        exs[o] = {"files": [r["file"] for r in rs],
+                  "sha256s": [r["sha256"] for r in rs],
+                  "id_column": rs[0]["id_column"]}
     with open(SAMPLE, newline="", encoding="utf-8") as fh:
         tested = [r for r in csv.DictReader(fh) if r["role"] == "tested"]
     capture.retarget(os.path.join("population", "corpus"))

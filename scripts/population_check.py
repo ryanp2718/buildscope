@@ -11,7 +11,7 @@ the owner's review").
 
 **Checkers.** Claude Sonnet 5.5 reads every page of all 16 test portals.
 OpenAI's GPT-6 Sol reads the portals whose reference is the portal's own
-export (11 Accela, 2 AMANDA), the same way. Neither sees the reference or
+export (11 Accela, 2 AMANDA, 1 EnerGov), the same way. Neither sees the reference or
 the export. Each call is the contract (`harness.CONTRACT`) and the whole
 page, as v2's direct-extraction arm asked, with the model's default
 reasoning. The page is the stripped page with every attribute dropped and
@@ -51,7 +51,7 @@ OUT = os.path.join(POP, "checker")
 SONNET = "claude-sonnet-5-5"
 SOL = "openai/gpt-6-sol"
 CHECKERS = (SONNET, SOL)
-LIMIT = 12.0
+LIMIT = 14.0
 SYSTEM = H.CONTRACT + """
 YOUR TASK: return the records from the page below.
 

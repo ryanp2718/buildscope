@@ -446,6 +446,24 @@ class TestTheExcerptWithoutAGrid(unittest.TestCase):
         self.assertIn("P-0", win)
         self.assertIn("P-9", win)
 
+    def test_window_passes_a_table_that_holds_no_record(self):
+        # EnerGov's saved list: a date picker's calendar table, then the
+        # records as blocks (Carlsbad, 2026-10-31).
+        from permits import harness as H
+        calendar = "<table>" + "".join(
+            "<tr>" + "".join("<td><button>%d</button></td>" % (7 * w + d)
+                             for d in range(7)) + "</tr>"
+            for w in range(6)) + "</table>"
+        cards = "".join("<div class='card'><span>P-%d</span><span>Building"
+                        "</span><span>Issued</span></div>" % i
+                        for i in range(30))
+        page = ("<html><body><p>%s</p>%s<p>%s</p><div class='list'>%s</div>"
+                "</body></html>" % ("menu text " * 300, calendar,
+                                     "filter text " * 3000, cards))
+        win, _frac, _at = H.window(page, 4000)
+        self.assertIn("P-0", win)
+        self.assertNotIn("<button>", win.split("...[document elided]...")[1])
+
 
 if __name__ == "__main__":
     unittest.main()

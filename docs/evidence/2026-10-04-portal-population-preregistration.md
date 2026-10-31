@@ -19,6 +19,8 @@ Status:    **Final, approved by the owner on 2026-10-27**, to be registered on O
            On 2026-10-20 the owner approved taking the owner out of the reference check, the
            browser's pacing, and applying robots.txt to every host a page loads from. On 2026-10-27
            the owner approved the arms, the generalized check, the loop and agent, and the stages.
+           On 2026-10-31 the owner saved Carlsbad's EnerGov list by hand and it joined the test
+           set, with the excerpt rule extended to its page and stage 1's limit raised to $14.
 
 ## Why this run
 
@@ -226,9 +228,11 @@ changed.
   the same search and saves the pages (`data/population/manual/README.txt`). If it has no usable
   list, the product is reported as not estimated. None of the four had one (2026-10-20), so
   OpenGov, iWorQ, `public.mygov.us` and eProcess360 are all reported as not estimated, from one
-  portal each. The other five tries are deferred. Each product is reported as not estimated
-  unless the owner saves its first portal in draw order later: Carlsbad (EnerGov), O'Fallon
-  (Citizenserve), LaGrange (SagesGov), Banning (SmartGov) and Apple Valley (LOGIS).
+  portal each. The other five tries were deferred. On 2026-10-30 the owner chose to make only
+  EnerGov's, the largest of the five by offices in the draw: Carlsbad, saved 2026-10-31 (its
+  issued-date search, 63 permits, 4 pages, each page with its own export), usable. Citizenserve,
+  SagesGov, SmartGov and LOGIS are reported as not estimated, with their first portals in draw
+  order named: O'Fallon, LaGrange, Banning and Apple Valley.
 - An office's own system that refuses the crawler is not sampled (16, among them New York City,
   Los Angeles, San Francisco, San Jose, Jacksonville, Raleigh, Nashville and Orange County FL). Its units are reported as
   behind a portal that refuses an identified crawler. New York City, Los Angeles, San Francisco
@@ -381,10 +385,11 @@ tested portal's reference to `data/population/reference/`):
   value is the reference, corrected by hand with a reason
   (`data/population/reference_corrections.csv`): 15 Goodyear temporary records whose Status the
   page leaves empty, and one Manatee status that changed between the page and the export.
-- **The automatic checks pass on all 16 tested portals** (1,100 records): every page's count of
+- **The automatic checks pass on all 17 tested portals** (1,140 records): every page's count of
   records matches the page's own count (its "showing" line, its record links or its record
   blocks), every value is verbatim in its record's text on the page, and no permit number
-  repeats.
+  repeats, except across Carlsbad's pages: its list's default order shows 3 permits on two pages
+  each, and each page's export lists them as its page does.
 - **Open data, matched by permit number** (`spikes/population_open_data.py --match`, mapping
   per dataset in `MATCH`), on the 4 tested offices that publish their permits:
   - Philadelphia: 40 of 40 records are in the dataset; issue date, status, address and type
@@ -497,8 +502,9 @@ owner, and no step of the check waits on the owner:
   EnerGov (Kyle, not scored but readable), and the report says so (AMANDA added by the owner on
   2026-10-20).
 - **Whether a Claude reference favours the Claude arm.** The parsers and the checker are Claude,
-  and so is one strong arm, Opus 5.5. It is measured on the 13 scored portals with an export, 11
-  Accela and 2 AMANDA (AMANDA added by the owner on 2026-10-20), holding the portals and rows fixed
+  and so is one strong arm, Opus 5.5. It is measured on the 14 scored portals with an export, 11
+  Accela, 2 AMANDA and 1 EnerGov (AMANDA added by the owner on 2026-10-20, Carlsbad's EnerGov on
+  2026-10-31), holding the portals and rows fixed
   so that only the answer key changes (revised 2026-10-20: comparing those portals' ranking with
   the ranking over all portals would have mixed a difference between products into it). Every arm
   is scored on the same rows against the export, which no model wrote; against Sonnet 5.5's
@@ -507,22 +513,22 @@ owner, and no step of the check waits on the owner:
   (`permits/adapters/accela.py`, written 2026-09-22, before any export was fetched), checked
   against Sonnet 5.5 as on every other portal and frozen before it is compared with the export
   (added 2026-10-20: the checkers' keys alone leave out the parsers, which build most references).
-  The AMANDA portals have no such key: no AMANDA parser exists, and one written now would be
-  written after their exports were read.
+  The AMANDA and EnerGov portals have no such key: no parser exists for either, and one written
+  now would be written after their exports were read.
   - **A second checker from another family** (owner, 2026-10-20): OpenAI's GPT-6 Sol
     (`openai/gpt-6-sol`) reads the export portals only, the same way as Sonnet 5.5, about 920 rows
     for about $1.80 at list price. An arm can gain from a checker's answer key because they share
     a blind spot, or because some rows are hard for every model. The second checker tells the two
     apart.
   - **The estimates**, each with a paired bootstrap interval over the portals it covers:
-    - the checker, on the 13 portals: each arm's gain in score from Sonnet 5.5's key over the
+    - the checker, on the 14 portals: each arm's gain in score from Sonnet 5.5's key over the
       export, minus its gain from GPT-6 Sol's key. A Claude bias shows as that difference being
       larger for Opus 5.5 than for the other arms;
     - the whole reference, on the 11 Accela portals: each arm's gain from the pipeline's key over
       the export, Opus 5.5 against the other arms. This one covers the parsers as well.
 
-    Both are reported beside the headline with the products each covers: Accela and AMANDA for
-    the checker, Accela only for the whole reference.
+    Both are reported beside the headline with the products each covers: Accela, AMANDA and
+    EnerGov for the checker, Accela only for the whole reference.
 
 ## Weighting
 
@@ -580,8 +586,12 @@ Confirmed by the owner on 2026-10-03:
 The owner approved these sections and every stage below on 2026-10-27, asking for the most rigour
 per dollar.
 
-**The test set is final: 16 portals.** Denton's eTRAKiT failed to load on 2026-10-20 and again on
+**The test set is final: 17 portals.** Denton's eTRAKiT failed to load on 2026-10-20 and again on
 2026-10-27, so it is recorded as unreachable, and eTRAKiT has no portal the crawler can fetch.
+Carlsbad (EnerGov) joined on 2026-10-31, saved by hand. Tyler's hosting refuses the crawler, so
+Carlsbad is in the per-product and layout results, not in the pipeline view the headline comes
+from (each reference records how its pages were got). The check was designed partly on Kyle's
+EnerGov pages, and Carlsbad's results say so.
 
 **Arms.** Each arm writes an extractor for a portal from the v2 frozen prompt (`harness.SYNTH_SYSTEM`)
 and an excerpt of the portal's first saved page, stripped as in v2 (24,000 characters). It is run
@@ -597,16 +607,26 @@ record rule (`verify.record_spans`, the same signature `expected_records` counts
 beforehand on the development portals). Every page with a grid keeps its excerpt byte for byte:
 all 84 pages of the v2 targets and every Accela and Clariti test page are unchanged. Records shown
 on page 1 after the change: Austin 9 of 10 (was 0), Philadelphia 8 of 10 (was 0), Volusia 9 of 25
-(was 5). The runner is `scripts/population_eval.py`; `--run` refuses without this
+(was 5).
+
+- **A table that holds no record** (found 2026-10-31 by the same preflight, on Carlsbad, before
+  any model saw it). EnerGov lists records as blocks, and its saved page also holds the date
+  picker's calendar, a table, so the table rule placed the excerpt on the calendar: 0 of 10
+  records. Where the excerpt holds no record of the check's rule and the page has some, it is now
+  placed by that rule, as on a page with no grid. Carlsbad shows 4 of 10 (each record is about
+  3,800 characters), and Kyle's development pages move the same way. Every page 1, the only
+  page whose excerpt a model is shown, is unchanged on the v2 targets and the other 16 test
+  portals; of all their pages, only Clark's page 38 (2026-03-02) moves. The runner is `scripts/population_eval.py`; `--run` refuses without this
 pre-registration's OSF link, which goes into every record.
 
 **The checkers' input** (stage 1, `scripts/population_check.py`, written 2026-10-27). Each call is
 v2's direct-extraction request: the contract and one whole page, which the checker reads into a
 JSON list of records. The page is the stripped page with every attribute and option list removed:
-the tags stay, so empty cells keep their columns, and all 5,334 reference values on the 64 pages
-are still in it verbatim. That is under a quarter of the stripped page's tokens and brings stage 1
-to its expected spend (Sonnet 5.5 about $4.30, GPT-6 Sol about $3.40 at list); with the stripped
-page it priced at about $18, over its limit.
+the tags stay, so empty cells keep their columns, and all 5,534 reference values on the 68 pages
+are still in it verbatim (8 of them written as HTML entities, as on the page). That is under a
+quarter of the stripped page's tokens and brings stage 1 to its expected spend (with Carlsbad,
+Sonnet 5.5 about $4.56 and GPT-6 Sol about $6.10 at the prices the registry records); with the
+stripped page it priced at about $18, over its limit.
 
 | arm | models | per portal |
 |---|---|---|
@@ -638,8 +658,8 @@ portals only: Clark (57 of 57 pages match the adapter), St. Johns (14 of 14), Ky
 (10 a page, as its export) and York's Evolve list (454 rows). The `<tr>` rule counts 48 rows a page
 on Kyle.
 
-- **Measured on the 16 test portals after freezing** (not tuned on them): its count matches the
-  reference on 58 of 64 pages. The misses are Philadelphia (8 counted against 10, all 4 pages)
+- **Measured on the 17 test portals after freezing** (not tuned on them): its count matches the
+  reference on 62 of 68 pages (Carlsbad 4 of 4, measured 2026-10-31). The misses are Philadelphia (8 counted against 10, all 4 pages)
   and Boise (19 against 20 on 2 pages). On those two portals the check rejects a correct extractor,
   so the arms that need the check cannot deliver there. This is reported as the check's own false
   rejection, with every result also given without those two portals.
@@ -657,13 +677,13 @@ this order, so a stop loses what matters least.
 | stage | what | expected | limit |
 |---|---|---:|---:|
 | 0 | Clark pilot: scripted loop for gpt-oss-120b and Gemini 3.5 Flash-Lite; one tool round-trip episode for each cheap model not yet run with tools (development, not data) | $1 | $3 |
-| 1 | reference check: Sonnet 5.5 reads every saved row, GPT-6 Sol the export portals | $7 | $12 |
+| 1 | reference check: Sonnet 5.5 reads every saved row, GPT-6 Sol the export portals | $7-11 | $14 |
 | 2 | cheap one-shot | $4 | $8 |
 | 3 | strong one-shot | $15-25 | $35 |
 | 4 | scripted repair loop | $4-8 | $12 |
 | 5 | agent told B5 | $4-8 | $12 |
 
-The expected spend is about $35-55 and the limits total $82. They come from each model's v2 cost
+The expected spend is about $35-55 and the limits total $84. They come from each model's v2 cost
 per draw times 1.3, and from the smoke runs' episodes, which billed 0.12-0.25 of list. Opus 5.5
 and Sonnet 5.5 bill to Anthropic; every other model bills through OpenRouter. If stage 3's spend
 after its first model projects past its limit, its extension draws are dropped. If stage 4's or

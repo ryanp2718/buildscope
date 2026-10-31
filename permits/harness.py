@@ -246,6 +246,17 @@ def window(html, budget, step=1000):
     record. Such a page's window is placed by `verify.record_spans`, the
     check's record rule, frozen beforehand on the development portals. Every
     page with a grid keeps its window byte for byte.
+
+    **A table that is not the records** (2026-10-31, Carlsbad's EnerGov list,
+    before any model saw it). EnerGov lists records as blocks, and its saved
+    page also holds the date picker's calendar, a 7-cell table, so the grid
+    rule found that table and the window held none of the ten records; Kyle's
+    pages do the same. Where the window holds no record of the check's rule
+    and the page has some, it is placed by that rule, as on a page with no
+    grid. Every page 1, the only page whose window a model is shown, keeps
+    its window byte for byte on v2's targets and the other test portals. Of
+    all their pages, one other window moves: Clark's page 38 (2026-03-02),
+    from its search form to two of its five records.
     """
     s = strip(html)
     if len(s) <= budget:
@@ -262,12 +273,14 @@ def window(html, budget, step=1000):
     if grid and sum(1 for a, b in grid
                     if a >= best and b <= best + span) < MIN_GRID_ROWS:
         best = grid[0][0]
-    if not grid:
+    recs = verify.record_spans(s)
+    if not grid or (recs and not any(a >= best and b <= best + span
+                                     for a, b in recs)):
         # No table grid at all (AMANDA's and POSSE's lists, 2026-10-27):
         # every count above is zero and the window was the page's head,
         # which on Austin and Philadelphia ends before the first record.
-        # Place it by the check's record rule instead, the same way.
-        recs = verify.record_spans(s)
+        # Or a grid that holds no record (EnerGov's date picker,
+        # 2026-10-31). Place it by the check's record rule instead.
         best_n = 0
         for i in range(0, max(1, len(s) - span) + step, step):
             n = sum(1 for a, b in recs if a >= i and b <= i + span)
