@@ -34,7 +34,10 @@ scripted repair loop, 5 episodes at a $0.15 list cap, for each cheap cell
 with room (stage 2's pass@1 below 1). 5: the agent, 5 episodes told the
 cell's B5 (best-of-5's expected list-priced spend from its stage-2 draws).
 Models run one after another, so a stage that stops at its limit loses its
-last model's cells first.
+last model's cells first. Stages 4 and 5 can instead run one process per
+model (`--models`), each held to an equal share of the stage's limit: a
+change from the pre-registration made for wall-clock time only, since every
+episode is independent and the limit was far off.
 
 **Spend.** A stage's limit is billed dollars, as `infer.Budget` counts
 them, and a stage resumed after a stop gets its limit less what its records
@@ -271,12 +274,17 @@ def run_stage(client, args, state, portals, saver):
                              range(STRONG_DRAWS, STRONG_DRAWS + STRONG_MORE),
                              saver)
         return
-    # Stages 4 and 5: the cheap cells with room.
+    # Stages 4 and 5: the cheap cells with room. With `--models` each model
+    # runs in its own process, so a cut already decided by another is read
+    # back here; the projection still counts every model's cells.
     cells = [(m, room(state, args, portals, m)) for m in models]
     total = sum(len(c) for _, c in cells)
-    n = EPISODES_PER_CELL
+    full = state["decisions"].get("%s|%d|full" % (args.run_id, stage))
+    n = EPISODES_CUT if full is False else EPISODES_PER_CELL
     first = None
     for m, cs in cells:
+        if args.models and m not in args.models:
+            continue
         for p, draws in cs:
             cap = LOOP_CAP if arm == "scripted" else b5(draws)
             run_cell(client, args, state, stage, p, m, range(n), saver, cap)
@@ -409,8 +417,10 @@ def parse_args(argv=None):
     ap.add_argument("--max-spend", type=float, default=None,
                     help="billed limit; the stage's own by default")
     ap.add_argument("--models", default=None,
-                    help="stage 3 only: the strong models to run now, comma "
-                         "separated, in the stage's order")
+                    help="the stage's models to run now, comma separated. "
+                         "Stage 3: in the stage's order. Stages 4 and 5: one "
+                         "process per model, each with an equal share of "
+                         "the stage's limit")
     ap.add_argument("--no-trace", action="store_true")
     args = ap.parse_args(argv)
     if not args.report and args.stage is None:
@@ -426,9 +436,11 @@ def parse_args(argv=None):
                     if args.portals else None)
     if args.models:
         args.models = [m.strip() for m in args.models.split(",")]
-        if args.stage != 3 or set(args.models) - set(STRONG):
-            ap.error("--models is for stage 3 and takes %s"
-                     % ", ".join(STRONG))
+        if args.stage not in (3, 4, 5) or (
+                set(args.models) - set(STAGES[args.stage][1])):
+            ap.error("--models takes the stage's own models: %s"
+                     % ", ".join(STAGES.get(args.stage, (0, ()))[1]))
+    args.split = bool(args.models) and args.stage in (4, 5)
     return args
 
 
@@ -446,8 +458,24 @@ def main(argv=None):
     if not args.run:
         print("\ndry run: nothing sent. Add --run to spend.")
         return 0
-    prior = spent(records(state, args.run_id, args.stage))
-    client = infer.Client(ROOT, max(0.0, args.max_spend - prior))
+    limit, prior = args.max_spend, spent(records(state, args.run_id,
+                                                 args.stage))
+    lock = os.path.join(OUT, "%s.run" % args.run_id)
+    checkpoints = CHECKPOINTS
+    if args.split:
+        # One process per model: each gets an equal share of the stage's
+        # limit, its own lock and its own checkpoint file.
+        tag = "+".join(infer.short_model(m) for m in args.models)
+        limit = (args.max_spend * len(args.models)
+                 / len(STAGES[args.stage][1]))
+        prior = spent([r for m in args.models
+                       for r in records(state, args.run_id, args.stage, m)])
+        lock = os.path.join(OUT, "%s-s%d-%s.run" % (args.run_id, args.stage,
+                                                   tag))
+        checkpoints = os.path.join(OUT, "checkpoints-%s.sqlite" % tag)
+        print("this process: %s, $%.2f of the stage's $%.2f limit"
+              % (tag, limit, args.max_spend))
+    client = infer.Client(ROOT, max(0.0, limit - prior))
     for m in args.models or STAGES[args.stage][1]:
         if not client.key_for(m):
             raise SystemExit("no key for %s. Nothing has been sent." % m)
@@ -457,9 +485,8 @@ def main(argv=None):
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
     code = 0
-    with fileio.run_lock(os.path.join(OUT, "%s.run" % args.run_id),
-                         "run %s" % args.run_id), \
-            SqliteSaver.from_conn_string(CHECKPOINTS) as saver:
+    with fileio.run_lock(lock, "run %s" % args.run_id), \
+            SqliteSaver.from_conn_string(checkpoints) as saver:
         try:
             run_stage(client, args, state, portals, saver)
         except StageStopped as e:

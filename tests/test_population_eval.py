@@ -129,6 +129,20 @@ class TestEpisodesWhereThereIsRoom(StageCase):
         with self.assertRaises(SystemExit):
             self.run_stage(_args(4, 12.0), Fake(lambda o, m, e: False))
 
+    def test_one_process_runs_only_its_models(self):
+        self._stage2(lambda o, m, e: e == 0)
+        calls = self.run_stage(_args(5, 12.0, [PE.CHEAP[2]]),
+                               Fake(lambda o, m, e: False))
+        self.assertEqual({c[2] for c in calls}, {PE.CHEAP[2]})
+        self.assertEqual(len(calls), 4 * PE.EPISODES_PER_CELL)
+
+    def test_a_cut_made_by_another_process_is_read_back(self):
+        self._stage2(lambda o, m, e: e == 0)
+        PE.decide(PE.load_state(), "t", 4, "full", False)
+        calls = self.run_stage(_args(4, 12.0, [PE.CHEAP[3]]),
+                               Fake(lambda o, m, e: False))
+        self.assertEqual(len(calls), 4 * PE.EPISODES_CUT)
+
 
 class TestGuard(unittest.TestCase):
 
@@ -140,10 +154,16 @@ class TestGuard(unittest.TestCase):
         self.assertEqual(a.max_spend, 8.0)
         self.assertEqual(a.project, PE.arms.EVAL_PROJECT)
 
-    def test_models_only_for_stage_3(self):
-        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
-            PE.parse_args(["--run-id", "x", "--stage", "2",
-                           "--models", PE.STRONG[0]])
+    def test_models_are_the_stages_own(self):
+        for stage, m in (("2", PE.CHEAP[0]), ("5", PE.STRONG[0])):
+            with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+                PE.parse_args(["--run-id", "x", "--stage", stage,
+                               "--models", m])
+        a = PE.parse_args(["--run-id", "x", "--stage", "5",
+                           "--models", PE.CHEAP[4]])
+        self.assertTrue(a.split)
+        self.assertFalse(PE.parse_args(["--run-id", "x", "--stage", "3",
+                                        "--models", PE.STRONG[1]]).split)
 
 
 if __name__ == "__main__":
