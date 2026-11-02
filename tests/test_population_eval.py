@@ -23,7 +23,8 @@ PORTALS = [SimpleNamespace(key="p%04d" % o, order=o, product="Accela")
 
 def _args(stage, limit, models=None):
     return SimpleNamespace(run_id="t", stage=stage, max_spend=limit,
-                           models=models, registered="osf", project="dev")
+                           models=models, registered="osf", project="dev",
+                           split=bool(models) and stage in (4, 5))
 
 
 class Fake:
@@ -131,10 +132,25 @@ class TestEpisodesWhereThereIsRoom(StageCase):
 
     def test_one_process_runs_only_its_models(self):
         self._stage2(lambda o, m, e: e == 0)
+        PE.decide(PE.load_state(), "t", 5, "full", True)
         calls = self.run_stage(_args(5, 12.0, [PE.CHEAP[2]]),
                                Fake(lambda o, m, e: False))
         self.assertEqual({c[2] for c in calls}, {PE.CHEAP[2]})
         self.assertEqual(len(calls), 4 * PE.EPISODES_PER_CELL)
+
+    def test_a_later_model_waits_for_the_first_models_cut(self):
+        # Episodes 0-2 of every cell first, then the decision, then 3-4.
+        self._stage2(lambda o, m, e: e == 0)
+
+        def decided(_):
+            PE.decide(PE.load_state(), "t", 5, "full", True)
+        with mock.patch.object(PE.time, "sleep", side_effect=decided) as s:
+            calls = self.run_stage(_args(5, 12.0, [PE.CHEAP[1]]),
+                                   Fake(lambda o, m, e: False))
+        self.assertEqual(s.call_count, 1)
+        eps = [c[3] for c in calls]
+        self.assertEqual(len(eps), 4 * PE.EPISODES_PER_CELL)
+        self.assertEqual(max(eps[:4 * PE.EPISODES_CUT]), PE.EPISODES_CUT - 1)
 
     def test_a_cut_made_by_another_process_is_read_back(self):
         self._stage2(lambda o, m, e: e == 0)

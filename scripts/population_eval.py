@@ -35,9 +35,12 @@ with room (stage 2's pass@1 below 1). 5: the agent, 5 episodes told the
 cell's B5 (best-of-5's expected list-priced spend from its stage-2 draws).
 Models run one after another, so a stage that stops at its limit loses its
 last model's cells first. Stages 4 and 5 can instead run one process per
-model (`--models`), each held to an equal share of the stage's limit: a
-change from the pre-registration made for wall-clock time only, since every
-episode is independent and the limit was far off.
+model (`--models`), for wall-clock time only: every episode is independent,
+the processes draw on the stage's one limit through a shared file
+(`infer.SharedBudget`), and the cut is still decided on the first model's
+spend, the other models running their first 3 episodes a cell while they
+wait for it. What changes from the pre-registration is which cells a stage
+that stops at its limit loses: those in flight, not the last model's.
 
 **Spend.** A stage's limit is billed dollars, as `infer.Budget` counts
 them, and a stage resumed after a stop gets its limit less what its records
@@ -134,6 +137,17 @@ def decide(state, run_id, stage, name, value):
         return cur
     state["decisions"] = fileio.update_json(
         EPISODES, merge, default={"episodes": {}})["decisions"]
+    return state["decisions"][k]
+
+
+def await_decision(state, run_id, stage, name, poll=60):
+    """A decision another process makes: read the file until it is there."""
+    k = "%s|%d|%s" % (run_id, stage, name)
+    while k not in state["decisions"]:
+        print("  waiting for the stage %d decision %r from the first "
+              "model's process" % (stage, name))
+        time.sleep(poll)
+        state["decisions"] = load_state()["decisions"]
     return state["decisions"][k]
 
 
@@ -274,21 +288,31 @@ def run_stage(client, args, state, portals, saver):
                              range(STRONG_DRAWS, STRONG_DRAWS + STRONG_MORE),
                              saver)
         return
-    # Stages 4 and 5: the cheap cells with room. With `--models` each model
-    # runs in its own process, so a cut already decided by another is read
-    # back here; the projection still counts every model's cells.
+    # Stages 4 and 5: the cheap cells with room. The cut is decided once the
+    # first model's cells are in. Split across processes (`--models`), only
+    # the first model's process decides it; the others run the episodes
+    # every cell gets either way, then wait for the decision.
     cells = [(m, room(state, args, portals, m)) for m in models]
     total = sum(len(c) for _, c in cells)
+    decider = next((m for m, cs in cells if cs), None)
     full = state["decisions"].get("%s|%d|full" % (args.run_id, stage))
     n = EPISODES_CUT if full is False else EPISODES_PER_CELL
     first = None
     for m, cs in cells:
         if args.models and m not in args.models:
             continue
-        for p, draws in cs:
-            cap = LOOP_CAP if arm == "scripted" else b5(draws)
-            run_cell(client, args, state, stage, p, m, range(n), saver, cap)
-        if cs and first is None:
+        passes = [range(n)]
+        if args.split and m != decider and full is None:
+            passes = [range(EPISODES_CUT), None]
+        for eps in passes:
+            if eps is None:
+                full = await_decision(state, args.run_id, stage, "full")
+                eps = range(EPISODES_CUT, EPISODES_PER_CELL if full
+                            else EPISODES_CUT)
+            for p, draws in cs:
+                cap = LOOP_CAP if arm == "scripted" else b5(draws)
+                run_cell(client, args, state, stage, p, m, eps, saver, cap)
+        if cs and first is None and m == decider:
             first = m
             got = records(state, args.run_id, stage, m)
             proj = spent(got) / len(cs) * total
@@ -458,24 +482,22 @@ def main(argv=None):
     if not args.run:
         print("\ndry run: nothing sent. Add --run to spend.")
         return 0
-    limit, prior = args.max_spend, spent(records(state, args.run_id,
-                                                 args.stage))
+    prior = spent(records(state, args.run_id, args.stage))
+    client = infer.Client(ROOT, max(0.0, args.max_spend - prior))
     lock = os.path.join(OUT, "%s.run" % args.run_id)
     checkpoints = CHECKPOINTS
     if args.split:
-        # One process per model: each gets an equal share of the stage's
-        # limit, its own lock and its own checkpoint file.
+        # One process per model, each with its own lock and checkpoint
+        # file, all drawing on the stage's one limit through a shared file.
         tag = "+".join(infer.short_model(m) for m in args.models)
-        limit = (args.max_spend * len(args.models)
-                 / len(STAGES[args.stage][1]))
-        prior = spent([r for m in args.models
-                       for r in records(state, args.run_id, args.stage, m)])
         lock = os.path.join(OUT, "%s-s%d-%s.run" % (args.run_id, args.stage,
                                                    tag))
         checkpoints = os.path.join(OUT, "checkpoints-%s.sqlite" % tag)
-        print("this process: %s, $%.2f of the stage's $%.2f limit"
-              % (tag, limit, args.max_spend))
-    client = infer.Client(ROOT, max(0.0, limit - prior))
+        client.budget = infer.SharedBudget(
+            args.max_spend, os.path.join(OUT, "%s-s%d-spend.json"
+                                         % (args.run_id, args.stage)), prior)
+        print("this process: %s, sharing the stage's $%.2f limit"
+              % (tag, args.max_spend))
     for m in args.models or STAGES[args.stage][1]:
         if not client.key_for(m):
             raise SystemExit("no key for %s. Nothing has been sent." % m)

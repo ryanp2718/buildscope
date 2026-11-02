@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -103,6 +104,38 @@ class TestBudget(unittest.TestCase):
         b = infer.Budget(0.10)
         b.record(0.09)
         with self.assertRaises(infer.Refused):
+            b.check("claude-opus-5", 1000, 1000)
+
+    def _shared(self, path, who, start=0.0):
+        b = infer.SharedBudget(0.10, path, start)
+        b.who = who
+        return b
+
+    def test_shared_spend_counts_every_process(self):
+        path = os.path.join(tempfile.mkdtemp(), "spend.json")
+        a, b = self._shared(path, "1", 0.02), self._shared(path, "2", 0.99)
+        a.check("claude-opus-5", 1000, 1000)
+        a.record(0.06)
+        with self.assertRaises(infer.Refused):    # 0.02 + 0.06 + 0.03
+            b.check("claude-opus-5", 1000, 1000)
+        self.assertAlmostEqual(b.spent, 0.0)      # its own session's spend
+
+    def test_a_call_in_flight_holds_its_worst_case(self):
+        path = os.path.join(tempfile.mkdtemp(), "spend.json")
+        a, b = self._shared(path, "1", 0.05), self._shared(path, "2")
+        a.check("claude-opus-5", 1000, 1000)      # holds $0.03
+        with self.assertRaises(infer.Refused):
+            b.check("claude-opus-5", 1000, 1000)
+        a.record(0.001)                           # releases the hold
+        b.check("claude-opus-5", 1000, 1000)
+
+    def test_a_dead_process_hold_expires(self):
+        path = os.path.join(tempfile.mkdtemp(), "spend.json")
+        a, b = self._shared(path, "1", 0.05), self._shared(path, "2")
+        with mock.patch.object(infer.time, "time", return_value=0.0):
+            a.check("claude-opus-5", 1000, 1000)
+        with mock.patch.object(infer.time, "time",
+                               return_value=infer.SharedBudget.HOLD_S + 1):
             b.check("claude-opus-5", 1000, 1000)
 
     def test_refusal_names_both_numbers(self):

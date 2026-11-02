@@ -573,6 +573,55 @@ class Budget:
         self.calls += 1
 
 
+class SharedBudget(Budget):
+    """One ceiling for several processes, kept in a locked JSON file.
+
+    Between `check` and `record` each process holds its call's worst case in
+    the file, so two processes cannot both pass the check on the same last
+    dollars. A process makes one call at a time, so it holds at most one
+    amount, replaced on its next check. A hold older than `HOLD_S` is left
+    by a process that died mid-call and is dropped.
+    """
+
+    HOLD_S = 3600.0
+
+    def __init__(self, ceiling_usd: float, path: str,
+                 start_usd: float = 0.0) -> None:
+        super().__init__(ceiling_usd)
+        self.path = path
+        self.who = str(os.getpid())
+        fileio.update_json(path, lambda cur: cur if "spent" in cur else
+                           {"spent": float(start_usd), "held": {}})
+
+    def check(self, model: str, in_tokens: int, max_tokens: int) -> None:
+        worst = estimate(model, in_tokens, max_tokens)
+        now = time.time()
+
+        def merge(cur: dict[str, Any]) -> dict[str, Any]:
+            held = {k: v for k, v in cur.get("held", {}).items()
+                    if k != self.who and now - v[1] < self.HOLD_S}
+            others = sum(v[0] for v in held.values())
+            if cur["spent"] + others + worst > self.ceiling:
+                raise Refused(
+                    "shared budget ceiling $%.2f would be exceeded: spent "
+                    "$%.4f by all processes, $%.4f held by calls in flight, "
+                    "this call could bill $%.4f"
+                    % (self.ceiling, cur["spent"], others, worst))
+            held[self.who] = [worst, now]
+            cur["held"] = held
+            return cur
+        fileio.update_json(self.path, merge)
+
+    def record(self, usd: float) -> None:
+        super().record(usd)
+
+        def merge(cur: dict[str, Any]) -> dict[str, Any]:
+            cur["spent"] = cur.get("spent", 0.0) + usd
+            cur.get("held", {}).pop(self.who, None)
+            return cur
+        fileio.update_json(self.path, merge)
+
+
 class Ledger:
     """Append-only JSONL. One row per call that reached the API."""
 
