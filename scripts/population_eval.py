@@ -42,6 +42,14 @@ spend, the other models running their first 3 episodes a cell while they
 wait for it. What changes from the pre-registration is which cells a stage
 that stops at its limit loses: those in flight, not the last model's.
 
+**Stage 6 is exploratory**, not in the pre-registration: the agent at the
+loop's $0.15 list cap, 3 episodes a cell, on the same cells as stages 4 and
+5. It runs under its own run id, so its records, response cache, workspaces
+and checkpoints stay apart from stage 5's, and reads its cells from the
+registered run's stage-2 draws:
+
+    python scripts/population_eval.py --run-id eval-pop-1x --cells-from eval-pop-1 --stage 6
+
 **Spend.** A stage's limit is billed dollars, as `infer.Budget` counts
 them, and a stage resumed after a stop gets its limit less what its records
 already spent. A call the limit would refuse stops the stage, and that draw
@@ -87,7 +95,11 @@ EPISODES_CUT = 3
 LOOP_CAP = 0.15
 TURNS = 30
 STAGES = {2: ("oneshot", CHEAP, 8.0), 3: ("oneshot", STRONG, 35.0),
-          4: ("scripted", CHEAP, 12.0), 5: ("agent", CHEAP, 12.0)}
+          4: ("scripted", CHEAP, 12.0), 5: ("agent", CHEAP, 12.0),
+          6: ("agent", CHEAP, 13.0)}
+# Not pre-registered: the agent at the loop's cap, so the agent and the
+# loop are compared at the same per-episode budget.
+EXPLORATORY = (6,)
 # The pre-registration's expected spend: the v2 cost per draw times 1.3.
 PAD = 1.3
 # Where the check's count misses the reference (measured after it was
@@ -207,7 +219,8 @@ def run_one(client, args, stage, portal, model, episode, saver, cap):
     return dict(rec, run_id=args.run_id, cache_run=run, stage=stage,
                 order=portal.order, product=portal.product,
                 accepted=accepted, check_failed=failed, trusted=trusted,
-                registered=args.registered)
+                registered=args.registered,
+                exploratory=stage in EXPLORATORY)
 
 
 def run_cell(client, args, state, stage, portal, model, episodes, saver,
@@ -235,7 +248,7 @@ def room(state, args, portals, model):
     """The cells with room for one cheap model: (portal, stage-2 draws)."""
     out = []
     for p in portals:
-        draws = cell_draws(state, args.run_id, p, model)
+        draws = cell_draws(state, args.cells_from, p, model)
         if len(draws) < CHEAP_DRAWS:
             raise SystemExit("%s x %s has %d of %d stage-2 draws: finish "
                              "stage 2 first" % (p.key, model, len(draws),
@@ -287,6 +300,15 @@ def run_stage(client, args, state, portals, saver):
                     run_cell(client, args, state, 3, p, m,
                              range(STRONG_DRAWS, STRONG_DRAWS + STRONG_MORE),
                              saver)
+        return
+    if stage == 6:
+        # Exploratory: a fixed 3 episodes a cell at the loop's cap, no cut.
+        for m in models:
+            if args.models and m not in args.models:
+                continue
+            for p, _ in room(state, args, portals, m):
+                run_cell(client, args, state, 6, p, m, range(EPISODES_CUT),
+                         saver, LOOP_CAP)
         return
     # Stages 4 and 5: the cheap cells with room. The cut is decided once the
     # first model's cells are in. Split across processes (`--models`), only
@@ -368,11 +390,13 @@ def print_plan(args, state, portals):
             except SystemExit as e:
                 print("  %-28s %s" % (m, e))
                 continue
-            caps = [LOOP_CAP if arm == "scripted" else b5(d) for _, d in cs]
+            caps = [LOOP_CAP if arm == "scripted" or stage == 6 else b5(d)
+                    for _, d in cs]
             hosts = arms.host_prices(m)
             ratio = (sum(n * r for n, r in hosts.values())
                      / sum(n for n, _ in hosts.values())) if hosts else 1.0
-            est = sum(caps) * EPISODES_PER_CELL * ratio
+            est = sum(caps) * (EPISODES_CUT if stage == 6
+                               else EPISODES_PER_CELL) * ratio
             print("  %-28s %2d cells with room, caps $%.4f-%.4f list, at "
                   "most $%.2f billed at v2's billed/list %.2f"
                   % (m, len(cs), min(caps or [0]), max(caps or [0]), est,
@@ -432,6 +456,9 @@ def parse_args(argv=None):
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--stage", type=int, choices=sorted(STAGES))
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--cells-from", default=None,
+                    help="the run id whose stage-2 draws pick the cells; "
+                         "this run id by default. Stage 6 needs another")
     ap.add_argument("--portals", default=None,
                     help="office orders, comma separated; default all 16")
     ap.add_argument("--run", action="store_true",
@@ -454,17 +481,21 @@ def parse_args(argv=None):
                  "pre-registration's OSF link")
     if args.stage is not None and args.max_spend is None:
         args.max_spend = STAGES[args.stage][2]
+    args.cells_from = args.cells_from or args.run_id
+    if args.stage == 6 and args.cells_from == args.run_id:
+        ap.error("stage 6 is exploratory: give it its own --run-id and the "
+                 "registered run's id as --cells-from")
     args.project = (arms.EVAL_PROJECT if args.run_id.startswith(arms.EVAL_PREFIX)
                     else arms.DEV_PROJECT)
     args.portals = ({int(x) for x in args.portals.split(",")}
                     if args.portals else None)
     if args.models:
         args.models = [m.strip() for m in args.models.split(",")]
-        if args.stage not in (3, 4, 5) or (
+        if args.stage not in (3, 4, 5, 6) or (
                 set(args.models) - set(STAGES[args.stage][1])):
             ap.error("--models takes the stage's own models: %s"
                      % ", ".join(STAGES.get(args.stage, (0, ()))[1]))
-    args.split = bool(args.models) and args.stage in (4, 5)
+    args.split = bool(args.models) and args.stage in (4, 5, 6)
     return args
 
 

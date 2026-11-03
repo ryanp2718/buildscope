@@ -21,10 +21,11 @@ PORTALS = [SimpleNamespace(key="p%04d" % o, order=o, product="Accela")
            for o in (1, 2, 3, 4)]
 
 
-def _args(stage, limit, models=None):
-    return SimpleNamespace(run_id="t", stage=stage, max_spend=limit,
-                           models=models, registered="osf", project="dev",
-                           split=bool(models) and stage in (4, 5))
+def _args(stage, limit, models=None, run_id="t", cells_from="t"):
+    return SimpleNamespace(run_id=run_id, cells_from=cells_from, stage=stage,
+                           max_spend=limit, models=models, registered="osf",
+                           project="dev",
+                           split=bool(models) and stage in (4, 5, 6))
 
 
 class Fake:
@@ -158,6 +159,29 @@ class TestEpisodesWhereThereIsRoom(StageCase):
         calls = self.run_stage(_args(4, 12.0, [PE.CHEAP[3]]),
                                Fake(lambda o, m, e: False))
         self.assertEqual(len(calls), 4 * PE.EPISODES_CUT)
+
+
+class TestExploratoryStage(StageCase):
+
+    def test_three_episodes_at_the_loop_cap_on_the_registered_cells(self):
+        self.run_stage(_args(2, 8.0), Fake(lambda o, m, e: o == 1 or e == 0))
+        calls = self.run_stage(_args(6, 13.0, run_id="tx"),
+                               Fake(lambda o, m, e: False))
+        self.assertNotIn(1, {c[1] for c in calls})
+        self.assertEqual(len(calls), 5 * 3 * PE.EPISODES_CUT)
+        self.assertTrue(all(c[0] == 6 and c[4] == PE.LOOP_CAP
+                            for c in calls))
+        recs = PE.records(PE.load_state(), "tx")
+        self.assertEqual({r["stage"] for r in recs}, {6})
+
+    def test_it_needs_its_own_run_id(self):
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            PE.parse_args(["--run-id", "eval-pop-1", "--stage", "6"])
+        a = PE.parse_args(["--run-id", "eval-pop-1x", "--cells-from",
+                           "eval-pop-1", "--stage", "6", "--models",
+                           PE.CHEAP[0]])
+        self.assertTrue(a.split)
+        self.assertEqual(a.max_spend, 13.0)
 
 
 class TestGuard(unittest.TestCase):
