@@ -35,12 +35,12 @@ both; for loop and agent episodes the module must also be the one submitted. The
 built from each portal's own CSV export or a parser, and two models re-read the saved rows: 0
 of the 4,394 values compared disagreed.
 
-## Redaction
+## Pseudonymization
 
-The pages are public records, but this release should not be a convenient copy of who is
-building what where. `permits/redact.py` changes text one token at a time with a keyed hash that
-is not published, so the same word becomes the same pseudonym in a page, its reference, its
-excerpt and an extractor's string literals:
+The pages are public records, published by each city; pseudonymization keeps this release from
+republishing the names, addresses and permit numbers on them. `permits/redact.py` changes text
+one token at a time with a keyed hash that is not published, so the same word becomes the same
+pseudonym in a page, its reference, its excerpt and an extractor's string literals:
 
 - permit numbers, addresses, contractor names, parcel numbers, record ids in links, email
   addresses and phone numbers are pseudonymized, keeping their shape (letters and separators of
@@ -54,9 +54,10 @@ excerpt and an extractor's string literals:
   page's structure, the check's record counts and the scores are unchanged.
 
 **Every stored extractor was re-scored on the redacted pages** and gets the same outcome, recall,
-precision and check verdict as in the run (`scripts/build_release.py --validate`). Redaction is
-heuristic: a name that is also an ordinary word ("Wall", "Park") can remain. Please report
-anything identifying via the project's contact page, https://ryanp2718.github.io/buildscope/.
+precision and check verdict as in the run (`scripts/build_release.py --validate`). Pseudonymization
+is heuristic: a name that is also an ordinary word ("Wall", "Park") can remain. Please report a
+name or address that got through via the project's contact page,
+https://ryanp2718.github.io/buildscope/.
 
 ## Using it
 
